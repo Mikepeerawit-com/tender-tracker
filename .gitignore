@@ -1,0 +1,47 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# next.js
+.next/
+out/
+build/
+next-env.d.ts
+
+# production
+dist/
+
+# environment — never commit WeCom Corp ID / Secret / Agent ID
+.env
+.env*.local
+.env.production
+
+# supabase
+.branches
+.temp
+supabase/.temp/
+
+# vercel
+.vercel
+
+# testing
+coverage/
+
+# typescript
+*.tsbuildinfo
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# macos
+.DS_Store
