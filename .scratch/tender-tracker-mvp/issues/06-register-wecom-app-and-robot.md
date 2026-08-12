@@ -74,3 +74,42 @@ So step 4 changes. Posting a plain message is no longer sufficient:
 4. Note the observed rate limit behaviour if you can — docs say **20 messages/minute per webhook**, which the daily digest and reminder batching are designed around.
 
 If `mentioned_mobile_list` does **not** work for Taihue's group, ticket 08 must be reopened: targeted reminders, the "nag only Assignees who haven't quoted" rule, and per-Assignee outcome notifications all collapse back to broadcast, and the notification design needs rethinking. **Test this before anything else in this ticket** — it is cheaper than the trusted-domain test and carries more of the product.
+
+---
+
+## Partial progress 2026-08-12 — still open
+
+A console session was run (`wizard-06-wecom.sh`). Findings, with a per-check status
+table and the exact remaining tests: **[`research/06-wecom-console.md`](../research/06-wecom-console.md)**.
+
+**Settled:**
+- Group robot created; plain webhook delivery works. No domain, no filing, no IP
+  whitelist — `buildspec_1`'s notification transport is safe.
+- **`mentioned_mobile_list` works.** Ticket 08's targeting design stands, no reopen
+  needed. The format is **E.164 with a leading `+`** (`+66…`); `66…`, `0…` and the
+  bare national number are all **silently accepted and silently do nothing**, and
+  `@all` does not notify either. `users.mobile` must be stored and validated as
+  E.164 with `+`, and `errcode 0` must never be read as proof of delivery.
+- Self-built app registered. Corp ID / Agent ID / Secret in `.env` at the repo root
+  (gitignored). That is the recorded credential-storage decision.
+- Org state is **未验证 / Unverified**.
+- **企业可信IP is enforced.** `gettoken` succeeds but *every* business API returns
+  **60020**. Vercel serverless is disqualified for WeCom-facing code; budget a
+  ~$5/mo fixed-IP VM, or cut self-built-app APIs and keep only the robot.
+- **可信域名 is rejected on ICP filing-entity grounds — WeCom web-OAuth login is
+  not available for v1.** The console demands *"a domain name whose filing entity
+  is the same as or related to the current company entity"* (备案主体). A Thai
+  entity cannot obtain an ICP filing. **Ticket 07 should take email/password** and
+  key identity on `wecom_userid`. See `06-trusted-domain.png`.
+
+**Still open — none of these block tickets 07, 08 or 12:**
+1. Second-person mention, the 20/min rate limit, and a proper non-member-number
+   test were not done. All three are cheap and low-risk.
+
+**Two contradictions with the research worth carrying forward:**
+- The org is 未验证, yet the trusted-domain control was **usable**. Research/03 and
+  ticket 02 both say 配置可信域名 requires 已验证/认证. Ticket 07 should not assume
+  verification state blocks it.
+- `gettoken` is **exempt** from the IP whitelist. Testing it alone returns
+  `errcode 0` and looks like the constraint has evaporated. It has not — this
+  ticket's own step 3 proposed exactly that misleading test.
