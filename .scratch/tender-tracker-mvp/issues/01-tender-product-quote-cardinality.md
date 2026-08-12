@@ -1,7 +1,7 @@
 # 01 — Tender, product and quote cardinality
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -19,3 +19,19 @@ Settle the vocabulary in `CONTEXT.md` while you're here — `tender`, `RFQ`, `li
 Probe with concrete scenarios: a client sends one RFQ for 3 different catheters; one supplier quotes 2 of the 3 with a substitute for the third; a second supplier quotes all 3 exactly but with a longer lead time. What does the app show, and what does "won" mean if the client buys two lines from one supplier and one from another?
 
 This decision is upstream of the comparison view, the dashboard, search, and the storage model for photos. It is the first ticket for a reason.
+
+---
+
+## Resolution
+
+**A Tender has many Tender Items; a Quote prices exactly one Item.** See [ADR-0002](../../../docs/adr/0002-tender-item-cardinality.md).
+
+Decided on evidence: item counts per RFQ **vary by client**, so the model must carry the harder case. The rejected alternative (one Tender = one product) would have duplicated client, deadline and owner across rows, firing several independent reminder streams for a single client conversation and reporting "5 active tenders" where the business sees one opportunity.
+
+- **No supplier-quotation parent table** in v1. A supplier pricing three Items produces three Quote rows.
+- `match_type` and `alternative_product_name` live on the Quote (per-Item), so "Requested: X / Quoted: Y" is well-defined.
+- **Quantity and unit** are added to the Tender Item — `buildspec_1` had no quantity field at all. Quotes carry a **unit price** plus their own `quoted_unit`; extended price is computed, never stored.
+- **Unit mismatch refuses to rank.** Where a Quote's `quoted_unit` differs from its Item's `unit`, the comparison view shows "unit mismatch — compare manually" rather than silently converting. Being loudly unhelpful beats being quietly wrong.
+- **Suppliers become a table** (`id, org_id, name, country`), not a typed name — per-Item Quotes mean one supplier spans many rows, and free-text names would split a supplier across columns in the comparison view.
+- **Outcome is per Item, not per Tender** — clients do split awards. This cascaded into ticket 05.
+- Vocabulary settled in `CONTEXT.md`: Tender, Tender Item, Quote, Bid, Alternative, Selected.

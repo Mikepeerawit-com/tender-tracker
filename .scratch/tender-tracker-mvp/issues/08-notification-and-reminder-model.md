@@ -1,8 +1,8 @@
 # 08 — Notification delivery and the reminder model
 
 Type: grilling
-Status: open
-Blocked by: 06
+Status: resolved
+Blocked by: 06 — *unblocked in practice; the docs settled what 06 was needed for. 06 remains worth doing as empirical confirmation, but no longer gates this ticket.*
 
 ## Question
 
@@ -31,3 +31,36 @@ So while ticket 07's branch may collapse, **this one stands as specced**. Two co
 
 - Question 1 above (owner vs everyone) gets *more* important, not less. If WeCom login dies, the group robot becomes the only WeCom integration in the product, and its broadcast-to-everyone nature is then the whole notification story rather than one channel among several.
 - Vercel Cron remains viable for the trigger (question 5) — 03's recommendation is to keep Vercel, and the webhook call needs no stable egress IP.
+
+---
+
+## Resolution
+
+**The ticket's central premise was wrong.** Question 1 assumed a group robot "posts to the whole group **by construction** — there is no targeting", and concluded that per-person notification would require WeCom login, which tickets 02/03 found administratively dead. That is false. The [official message docs](https://developer.work.weixin.qq.com/document/path/91770) confirm `mentioned_mobile_list` — **@mentioning specific group members by phone number**. No WeCom userid, no OAuth, no trusted domain, no ICP filing. Targeted notification is available today via a `users.mobile` column.
+
+Two constraints came with it: **only the `text` message type supports mentions** (so no markdown formatting in any message that @s someone), and each webhook is capped at **20 messages per minute**.
+
+**1. Who is notified — targeted, per milestone.**
+- `internal_quote` reminders @mention **only Assignees who have entered no Quotes yet**. A reminder that pings people who already did the work trains everyone to mute the robot within weeks.
+- `client_submission` and `decision_chase` go to the Tender **Owner**.
+- Outcome events notify **every Assignee who quoted that Item**, not just the winner — the losers' only feedback on how their supplier compared comes from this message. Differentiated wording ("your quote was selected and won" vs "the tender was won on Nok's quote").
+- Outcome notifications fire on `won` and `lost` only; `no_bid` and `cancelled` are silent.
+
+**2. Message content — financially silent.** Format: *"Tender #1042 — Bangkok Hospital — 'PICC catheter 4Fr' — WON @Somchai"*. Client, Item, outcome, @mention. **No prices, no margin, no supplier name** — supplier identity is commercially sensitive. Financial detail lives in the app, which the @mention drives people to.
+
+**3. The bell must be a real `notifications` table** — `(id, org_id, user_id, type, tender_id, tender_item_id, body, read_at, created_at)`. The cheap live-query option died with the outcome-event requirement: "your quote won" is a discrete event with per-user read state and cannot be derived from tender data.
+
+**5. Vercel Cron**, per 03.
+
+**Beyond the ticket's original scope:**
+- **A daily Digest** posted to the group listing every open Tender and its next milestone. Reminders only fire at thresholds, so they do nothing for the stated problem of *losing track of what's ongoing*; the Digest attacks that directly, costs one message a day, and reuses the same cron.
+- **`reminders` gains `milestone`** (`internal_quote | client_submission | decision_chase`) plus **both** `days_before` (nullable) and `remind_on` (nullable), exactly one populated — decision-chase is **off by default** and set manually by the Owner on an absolute date, since clients rarely state one.
+- **Escalation on `client_submission`**: defaults of 7, 3, 1 days plus morning-of; a Submission Missed Tender stays loudly on the dashboard rather than dropping out of the active list; and one group post when a submission is missed.
+- **Batched per Tender** (not per Item) for WeCom; in-app notifications stay per-Item so the bell can deep-link.
+- **No Supplier Found** — an Assignee's explicit record that they couldn't source an Item, which silences the nag. Without it, "didn't try" and "nobody could supply it" are indistinguishable and the sourcing reminder chases people forever for work that cannot be done.
+
+**4. Failure and change semantics — all three are silent-failure bugs, all three fixed.** See [ADR-0005](../../../docs/adr/0005-reminder-delivery-semantics.md).
+
+- **Missed cron → catch up, never skip.** Store a computed `due_date` per reminder row; query `due_date <= today AND NOT sent`, never `= today`. Exact date equality means one bad deploy day drops those reminders forever — unacceptable for a product built to stop missed submissions. Caught-up reminders whose milestone date has *already passed* are suppressed; Submission Missed covers that case more loudly.
+- **Deadline moves → recompute and reset.** Recompute `due_date` on any deadline change and clear `sent`/`sent_at` where the new date is in the future. `buildspec_1`'s write-once `sent` boolean meant pushing a deadline back permanently silenced the Tender. Rows recomputing to a past date keep their flag, so pulling a deadline forward doesn't re-spam.
+- **Timezone → org-level, `Asia/Bangkok` default.** Every date boundary computes in it; cron runs 01:00 UTC (08:00 Bangkok). Explicitly not per-user — a deadline belongs to the Tender, not the viewer, and per-user timezones would silently break every shared metric. Explicitly not server-local, since Vercel is UTC and would roll the day seven hours early.
