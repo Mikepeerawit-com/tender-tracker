@@ -59,3 +59,18 @@ Neither research agent could resolve this from documentation — WeCom publishes
 **Check 3 above is now partly answered by docs, so downgrade it.** 03 found the policy: self-built apps created after **2022-06-20 20:00** must whitelist calling IPs (max 120, IPv4, no CIDR, third-party-provider IPs rejected). So 60020 is expected, not uncertain. Still worth confirming empirically, but it no longer decides anything on its own — and note the cheap answer is a ~$5/mo fixed-IP VM as a thin WeCom API proxy, not Vercel Static IPs at $100/mo.
 
 **Check the robot first, though.** 03 confirmed group robot webhooks need **no domain, no filing, and no IP whitelist**. That part of the buildspec is safe regardless of how the above goes, so step 4 (POST a test message) should still succeed even if everything else in this ticket hits a wall.
+
+---
+
+## Revised after ticket 08 resolved — step 4 must now test an @mention, not just a message
+
+08 established that the **entire notification design depends on targeting individuals via `mentioned_mobile_list`** — @mentioning a specific group member by phone number, per the [message docs](https://developer.work.weixin.qq.com/document/path/91770). This needs no WeCom login, no trusted domain and no ICP filing, which is why 08 resolved despite 07's branch looking dead. It is now the single most load-bearing WeCom fact in the project, and **it has never been tested against a real group.**
+
+So step 4 changes. Posting a plain message is no longer sufficient:
+
+1. **POST a `text` message including `mentioned_mobile_list` with your own mobile number**, and confirm you are actually @mentioned in the group — a real notification, not just text that looks like a mention. Record the exact payload and response.
+2. **Confirm what happens when the number belongs to someone not in that group.** Expected: silently ignored. If it errors instead, the notification design needs a guard. Either result is a finding.
+3. **Confirm the mention renders for a second person**, not just the sender.
+4. Note the observed rate limit behaviour if you can — docs say **20 messages/minute per webhook**, which the daily digest and reminder batching are designed around.
+
+If `mentioned_mobile_list` does **not** work for Taihue's group, ticket 08 must be reopened: targeted reminders, the "nag only Assignees who haven't quoted" rule, and per-Assignee outcome notifications all collapse back to broadcast, and the notification design needs rethinking. **Test this before anything else in this ticket** — it is cheaper than the trusted-domain test and carries more of the product.
