@@ -119,3 +119,30 @@ _Avoid_: cost, cost price, ex-works price
 **Margin**:
 Selling price minus Landed Cost, on a Tender Item. Always computed, never entered.
 Internal-only.
+
+### Identity
+
+**Org Admin**:
+The single user who may invite others into the organisation. A capability, not a rank —
+an Org Admin has no extra visibility and no say over Tenders they don't own. Stored as
+a boolean, true for exactly one row, deliberately not a role enum.
+_Avoid_: admin, owner, superuser, manager
+
+**Invite**:
+The email an Org Admin sends to bring a new user into the organisation. The only way an
+account comes into existence, and the only email the app sends. Scanning a WeCom QR code
+never creates an account.
+_Avoid_: signup, registration, onboarding link
+
+**Connected WeCom**:
+A user who has linked their WeCom identity to their existing account, and may thereafter
+log in by scanning instead of typing a password. Linking happens once, while already
+signed in — never inferred at login. A user who is not Connected loses nothing but
+convenience.
+_Avoid_: WeCom user, linked account, SSO user
+
+**Disabled**:
+A user whose access has been revoked but whose row remains, because they own Tenders and
+entered Quotes that must stay readable. Users are never deleted. Disabling is a manual
+step — nothing checks WeCom membership automatically.
+_Avoid_: deleted, removed, deactivated, archived user
