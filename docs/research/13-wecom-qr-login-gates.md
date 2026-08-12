@@ -128,6 +128,33 @@ host still discriminates the three outcomes. And because the domain is on Cloudf
 outcome 2 is genuinely completable later — serving a `WW_verify_*.txt` is a DNS record
 and a static file away, unlike an ICP filing which is unobtainable.
 
+### Test A cannot be measured headlessly — attempted and ruled out
+
+Before checklisting this to a human, four probes were run to see whether the console's
+verdict could be observed from outside. **It cannot.** Recorded so a future session
+does not repeat them.
+
+| Probe | redirect_uri | Result |
+|---|---|---|
+| `login.work.weixin.qq.com/wwlogin/sso/login` | `https://taihue.com/...` | 200, 252160 bytes |
+| `login.work.weixin.qq.com/wwlogin/sso/login` | random unrelated domain | 200, **252160 bytes — identical** |
+| `open.work.weixin.qq.com/wwopen/sso/qrConnect` | `https://taihue.com/cb` | 200, 4057 bytes, body text "企业微信登录" |
+| `open.work.weixin.qq.com/wwopen/sso/qrConnect` | random unrelated domain | 200, **4057 bytes — identical** |
+
+**Neither endpoint validates `redirect_uri` at page-render time.** Responses are
+byte-identical for an authorized-in-principle domain and an arbitrary one, so there is
+no signal to read.
+
+Validation happens at two later points, both requiring a human:
+
+1. **Console save** — the filing-entity check. This *is* Test A. WeCom exposes no admin
+   API for self-built-app configuration; 授权回调域 exists only in the web UI.
+2. **Post-scan redirect** — requires a real person to scan a QR code with a phone.
+
+Test A is therefore irreducibly HITL. This is a property of WeCom, not of the tooling —
+the Chrome extension's refusal to load `work.weixin.qq.com` is a separate and lesser
+obstacle that merely decides *which* human runs it.
+
 Outcomes, per the ticket:
 
 1. Accepted outright → QR login viable.
