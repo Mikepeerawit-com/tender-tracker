@@ -60,6 +60,31 @@ code to be looked at.
 Without call 2 this test would have been unreadable, since 60020 on a bogus code
 could otherwise have been argued either way.
 
+### The result does not depend on which endpoint QR login actually uses
+
+A fair objection to the above: the ticket and ADR-0006 both *assume* the QR flow
+redeems its `code` at `auth/getuserinfo`. If it used some other endpoint, Test B would
+have measured the wrong thing.
+
+The documentation could not be consulted to settle this — `developer.work.weixin.qq.com`
+is blocked to the browser tooling, and its doc pages are Vue SPAs whose body loads
+async, so `curl` returns a 1.2 MB shell containing no documentation text. Rather than
+infer, the question was closed empirically by sweeping **every endpoint the flow could
+plausibly use**:
+
+| Endpoint | errcode |
+|---|---|
+| `auth/getuserinfo` | **60020** |
+| `auth/getuserdetail` | **60020** |
+| `user/getuserinfo` (legacy alias) | **60020** |
+| `service/get_login_info` | **60020** |
+| `gettoken` (control) | **0** |
+
+**The whole `auth/*` family is gated.** `gettoken` remains the only exemption found
+across nine distinct endpoints now tested between this ticket and ticket 06. So the
+conclusion holds whichever endpoint the QR flow turns out to call, and identifying it
+precisely is a `buildspec_2` implementation detail rather than a gate on this decision.
+
 ### The official docs are wrong here
 
 The WeCom documentation for `auth/getuserinfo` lists only `40029` and `50001` as
