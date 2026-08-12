@@ -7,7 +7,7 @@ What survives is narrower and still valuable: WeCom as a **faster way to log in*
 ## Decisions
 
 - **Email/password ships first and stays permanently.** It is the floor. Every user can always log in with it, whatever state WeCom, the app's egress IP, or the WeCom console is in. "Nobody can log in" is not a recoverable position for the tool the business runs tenders on.
-- **WeCom QR login ships as a convenience path**, using the **Authorized callback domain** field under **WeCom Authorized Login** — a *different* console field from the **Trusted domain name** that ticket 06 got rejected on, and one nothing has yet tested. Whether it carries the same filing gate is the open measurement below.
+- **WeCom QR login ships as a convenience path**, using the **Authorized callback domain** field under **WeCom Authorized Login** — a *different* console field from the **Trusted domain name** that ticket 06 got rejected on. **Ticket 13 confirmed it carries no filing gate.** It is viable but not free (see the measurement below), and whether it makes the v1 cut is now ticket 11's call.
 - **Accounts are created by invitation, never by scanning.** The Org Admin invites by email; the invitee sets a password. A QR scan whose `wecom_userid` matches no row does **not** create an account — it directs the person to sign up. WeCom membership is not, by itself, an entry ticket.
 - **WeCom is linked while logged in, never matched at login.** A signed-in user hits "Connect WeCom", scans once, and their `wecom_userid` is written to their existing row. `users.wecom_userid` is nullable and `UNIQUE`. There is no attempt to match an incoming WeCom identity to an existing account by name or any other guess.
 - **No prefill in v1.** QR login yields a `userid` and nothing else. Name requires the `user/get` business API (a whitelisted IP); mobile and email additionally require a **verified (已验证/认证)** org. Prefilling a name the user can type in three seconds does not justify either.
@@ -16,18 +16,35 @@ What survives is narrower and still valuable: WeCom as a **faster way to log in*
 - **Sessions last 30 days with no idle timeout.** Internal tool, under 10 trusted users, largely on personal phones, and everyone is already permitted to see margin. Re-login friction costs more than it buys.
 - **Invites are sent by email via Resend** configured as custom SMTP in Supabase. Supabase's built-in mailer is rate-limited and not for production. This is transactional sending and does **not** reopen the internal-mailbox provider question, which stays out of scope.
 
-## The open measurement
+## The measurement — resolved by ticket 13 (2026-08-12)
 
-WeCom QR login rests on two unverified claims, both cheap to test on the console:
+Ticket 13 ([#14](https://github.com/Mikepeerawit-com/tender-tracker/issues/14)) measured all three gates. Findings: [`docs/research/13-wecom-qr-login-gates.md`](../research/13-wecom-qr-login-gates.md).
 
-- **Test A** — does **Authorized callback domain** accept a domain, or reject it on filing entity like **Trusted domain name** did?
-- **Test B** — is `auth/getuserinfo` exempt from **Trusted enterprise IP**, as `gettoken` is? Ticket 06 measured `gettoken` → `0` but `department/list`, `user/simplelist` and `message/send` → **60020**. The official `auth/getuserinfo` doc lists only `40029` and `50001`, never `60020` — so exemption is plausible but unproven.
+| Test | Question | Result |
+|---|---|---|
+| **A** | Does **Authorized callback domain** carry the filing-entity gate? | ✅ **No.** `taihue.com` saved outright — no 备案主体 rejection, no ownership file demanded |
+| **B** | Is `auth/getuserinfo` exempt from **Trusted enterprise IP**? | ❌ **No.** Returns `60020`, as does every other endpoint the flow could use |
+| **C** | Can Trusted enterprise IP be unlocked without an ICP filing? | ✅ **Yes**, via **Receive messages server URL** — that route carries no filing gate |
 
-**Decision rule, so no money is spent before the measurement:**
+**This ADR's central argument is vindicated.** The map had written WeCom login off on ticket 06's **Trusted domain name** rejection; this ADR argued that was the wrong field. It was. QR login is available, and more broadly **no WeCom capability is permanently out of reach for this org** — the ICP wall blocks exactly one field, and there is a second door.
 
-- Both pass → QR login ships at **zero** additional cost.
-- A fails → QR login is not available; email/password only.
-- B fails → the code→userid exchange needs a fixed egress IP, which Vercel cannot provide. Take a **Fly.io dedicated IPv4** (~$2/mo, ~50-line proxy) *if* judged worth it at that point. The documented zero-cost fallback is to drop QR login and have the **group robot post the invite link into the WeCom group** — robot webhooks are confirmed exempt from IP whitelisting, ICP and domain gates, so onboarding still starts inside WeCom, in one tap.
+**The decision rule resolves to its third branch: A passes, B fails.** QR login is viable but not free:
+
+| | |
+|---|---|
+| Callback endpoint w/ WeCom AES `echostr` verification | ~50–100 lines. **Inbound, so not IP-gated** — Vercel can host it |
+| Fixed-IP host for WeCom-facing calls | ~$2–6/mo, and a **second deployment target** beside Vercel + Supabase |
+| WeCom→OIDC shim | 1–2 days, per ticket 02 — required **only** if QR login ships |
+| Unverified | Whether WeCom accepts a **cloud-provider IP** rather than rejecting it as third-party. Untestable until the callback endpoint exists |
+
+**The ship/drop decision is deliberately not taken here.** It is a scope judgement, not a measurement, and belongs to ticket 11 ([#12](https://github.com/Mikepeerawit-com/tender-tracker/issues/12)) alongside every other v1 cut. **Nothing has been bought**, which was this rule's purpose.
+
+The zero-cost fallback stands unchanged if ticket 11 cuts it: drop QR login and have the **group robot post the invite link into the WeCom group** — robot webhooks are confirmed exempt from IP whitelisting, ICP and domain gates, so onboarding still starts inside WeCom, in one tap.
+
+### Two traps for whoever builds this
+
+- **`gettoken` is exempt and returns `0`.** It makes the IP constraint look absent. Ticket 06 was misled by this once; testing only `gettoken` proves nothing. Always probe a business endpoint.
+- **The published error lists are incomplete.** WeCom's `auth/getuserinfo` docs list only `40029` and `50001` — never `60020`. The IP gate sits at a layer above the endpoint and is not documented per-endpoint. Do not infer exemption from a doc page.
 
 ## Consequences
 
