@@ -9,7 +9,7 @@ precedent.
 |---|---|---|
 | **A** | Does **Authorized callback domain** carry the filing-entity gate? | ✅ **Settled — NO. `taihue.com` saved.** |
 | **B** | Is `auth/getuserinfo` exempt from **Trusted enterprise IP**? | ❌ **Settled — NOT exempt** |
-| **C** | Can Trusted enterprise IP be unlocked via **Receive messages server URL**? | ⚠️ **Open** — promoted to required by B's failure |
+| **C** | Can Trusted enterprise IP be unlocked via **Receive messages server URL**? | ✅ **Route is open** — no ICP gate; needs a live endpoint |
 
 ---
 
@@ -218,25 +218,61 @@ the red line alone inverted the conclusion.
 
 ---
 
-## Test C — can Trusted enterprise IP be unlocked at all? — OPEN
+## Test C — the route is OPEN, but it is not free
 
 **Promoted from conditional to required by Test B's failure.** The ticket made this
 contingent on B returning 60020. It did.
 
-The console gates Trusted enterprise IP behind **Trusted domain name** *or*
-**Receive messages server URL**. The first is ICP-blocked (ticket 06 §8), so the
-second is the only route. Two things to observe:
+### The gate, observed
 
-1. Does setting **Receive messages server URL** make IP whitelisting available at all?
-2. Is an arbitrary IPv4 accepted, or rejected as a third-party-provider address?
+Attempting to configure **Trusted enterprise IP** produced, verbatim:
 
-**This is larger than QR login.** If the door does not open, then *no* WeCom business
-API is reachable from this org at any price — which would retire private
-`message/send` reminders permanently and leave the group robot as the only WeCom
-integration that can ever work. That reaches ticket 11 (v1 scope) and `buildspec_2`,
-not just ADR-0006.
+> Before configuring the company's trusted IP, please Set trusted domain name Or Set
+> the server URL for receiving messages
 
-Note that fully *setting* a Receive messages server URL requires a live endpoint that
-echoes WeCom's verification challenge, which does not exist yet. Establishing whether
-the door opens may be possible without one; standing up such an endpoint is a
-separate decision and was not taken unilaterally.
+This confirms the two-route structure the ticket assumed. **Trusted domain name is the
+ICP dead end** ticket 06 §8 already hit, so **Receive messages server URL** is the only
+available route.
+
+### The Receive messages server URL route carries no ICP gate
+
+Tested by entering a URL on the non-resolving `taihue.com` and saving. WeCom returned:
+
+> The request for openapi callback address failed
+
+**This is a reachability failure, not a policy refusal.** WeCom accepted the domain and
+got as far as issuing an HTTP request to it, which failed because `taihue.com` has no
+A records. Compare ticket 06 §8's *"please configure a domain name whose filing entity
+is the same as or related to the current company entity"* — a policy refusal, which is
+what a closed route looks like.
+
+**So the door is open.** Unlocking Trusted enterprise IP is an engineering task, not a
+policy dead end. No WeCom capability is permanently out of reach for this org.
+
+### What the route actually costs
+
+WeCom does not accept a URL on trust. On save it issues a GET carrying
+`msg_signature`, `timestamp`, `nonce` and an **encrypted `echostr`**; the endpoint must
+AES-decrypt it and return the plaintext. A placeholder will not do.
+
+**The endpoint is inbound, not outbound, so it is not IP-gated** — it receives from
+WeCom rather than calling WeCom. It can therefore be hosted on Vercel or a temporary
+tunnel and does **not** require the fixed-IP host. The apparent chicken-and-egg between
+"need whitelisting to call WeCom" and "need a live endpoint to get whitelisting"
+dissolves.
+
+### What remains unverified
+
+The route is open; it has **not** been walked end to end. Nobody has built the
+verification endpoint, so nothing has yet proven that:
+
+- WeCom's verification actually succeeds against a real endpoint,
+- the Trusted enterprise IP field then unlocks as advertised,
+- and a **cloud-provider IP** is accepted rather than rejected as a third-party address.
+
+That last one is the residual risk worth carrying into `buildspec_2`. It could not be
+tested by whitelisting the developer's own IP, because the field stays locked until the
+callback URL is configured.
+
+This is build risk, not decision risk. The decision — *is any of this reachable?* — is
+answered **yes**.
