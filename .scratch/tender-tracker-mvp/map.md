@@ -1,5 +1,11 @@
 # De-risk the Tender Tracker buildspec
 
+> **⚠️ MIGRATED — this directory is historical (2026-08-12).**
+> The live tracker is GitHub issues: the map is
+> [#1](https://github.com/Mikepeerawit-com/tender-tracker/issues/1) and the twelve tickets
+> are its sub-issues. Old ticket `NN` is issue `#NN+1` (01 → #2 … 12 → #13).
+> Do not resolve tickets here — work the GitHub issues. See `docs/agents/issue-tracker.md`.
+
 Label: `wayfinder:map`
 
 ## Destination
