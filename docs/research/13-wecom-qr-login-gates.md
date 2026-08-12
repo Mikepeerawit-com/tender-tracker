@@ -7,7 +7,7 @@ precedent.
 
 | Test | Question | Result |
 |---|---|---|
-| **A** | Does **Authorized callback domain** carry the filing-entity gate? | ⚠️ **Open** — console work, not yet run |
+| **A** | Does **Authorized callback domain** carry the filing-entity gate? | ✅ **Settled — NO. `taihue.com` saved.** |
 | **B** | Is `auth/getuserinfo` exempt from **Trusted enterprise IP**? | ❌ **Settled — NOT exempt** |
 | **C** | Can Trusted enterprise IP be unlocked via **Receive messages server URL**? | ⚠️ **Open** — promoted to required by B's failure |
 
@@ -109,7 +109,38 @@ reflected in per-endpoint documentation.
 
 ---
 
-## Test A — Authorized callback domain — OPEN
+## Test A — Authorized callback domain — PASSES
+
+**Result: `taihue.com` saved. No filing-entity rejection, no ownership-verification
+file demanded.**
+
+Run by the user in the console, 2026-08-12. **Authorized callback domain** (under
+**WeCom Authorized Login**) does **not** carry the 备案主体 filing-entity gate that
+**Trusted domain name** (under *Web Authorization and JS-SDK*) rejected on in
+ticket 06 §8.
+
+**Ticket 07's hunch was right.** ADR-0006 argued these were different fields with
+different gates and that the map had written WeCom login off too early on the strength
+of ticket 06's rejection. That is now observed rather than argued.
+
+### Residual uncertainty, stated honestly
+
+Following ticket 06 §8's practice of separating what was proven from what was inferred:
+
+- `taihue.com` has **no A records** (measured below). WeCom accepted a hostname that
+  does not resolve, and demanded no `WW_verify_*.txt`. So the field appears to be a
+  **redirect_uri allowlist with weak validation**, not an ownership-verified binding.
+  That is a *favourable* result but a *weak* one — it proves the console accepts the
+  string, not that the whole flow works.
+- **End-to-end QR login remains unproven.** A real scan against a live host is the only
+  thing that proves it, and that requires the OIDC shim to exist. That is build work,
+  not map work — it belongs to `buildspec_2`, which should carry it as an explicit
+  early-integration risk rather than a settled certainty.
+- The runtime probes below show WeCom does **not** validate `redirect_uri` at
+  page-render time either before or after this configuration, so no external check can
+  raise confidence further. The next honest datapoint is a working scan.
+
+### The original blocked-agent note, kept for the record
 
 Console-only; the Chrome extension refuses to load `work.weixin.qq.com`
 ("This site is not allowed due to safety restrictions"), so it could not be driven
@@ -155,11 +186,30 @@ Test A is therefore irreducibly HITL. This is a property of WeCom, not of the to
 the Chrome extension's refusal to load `work.weixin.qq.com` is a separate and lesser
 obstacle that merely decides *which* human runs it.
 
-Outcomes, per the ticket:
+Outcomes, per the ticket — **outcome 1 is what occurred**:
 
-1. Accepted outright → QR login viable.
+1. **Accepted outright → QR login viable.** ← observed
 2. `WW_verify_*.txt` ownership file required, **no** filing-entity language → passable.
 3. Same filing-entity (备案主体) rejection as **Trusted domain name** → **QR login is dead.**
+
+### Post-configuration re-probe — still no external signal
+
+The runtime probes were repeated after the domain was saved, to see whether the
+configuration is externally observable. **It is not.**
+
+Using **identical-length** domains to eliminate echoed-URL length as a confound
+(`taihue.com` vs `zzzzzz.com`, both 10 characters), `wwlogin/sso/login` returned
+259692 and 259687 bytes. Normalising the domain string out of both, the *only*
+remaining difference is a per-request `"signature":"Bearer 0.…"` nonce embedded in the
+page — random on every call, which also accounts for the 5-byte wobble via base64
+padding. `qrConnect` returned 4057 bytes for both, unchanged.
+
+The whole-page growth from 252160 to ~259690 between the two probe rounds is WeCom
+redeploying that SPA; it moved both domains equally and is not a validation signal.
+
+**Conclusion: `redirect_uri` is validated at scan/redirect time, not at render time,
+configured or not.** The earlier "cannot be measured headlessly" finding holds in both
+directions — it was not merely a consequence of the field being unset.
 
 **Capture the whole panel, not the red line.** Ticket 06's post-mortem: the error line
 read "Domain name ownership verification failed", which sounds like outcome 2, while
