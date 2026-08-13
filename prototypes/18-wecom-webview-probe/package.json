@@ -1,0 +1,9 @@
+{
+  "name": "wecom-webview-probe",
+  "private": true,
+  "type": "module",
+  "description": "Ticket 18 (#19) — one-page probe for the WeCom in-app webview. Throwaway.",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  }
+}
