@@ -22,6 +22,12 @@ What we submit back to the client — our offer, derived from the Quotes we sele
 Distinct from a Quote, which points the other way.
 _Avoid_: our quote, submission, proposal
 
+**Reference Image**:
+A picture the *client* supplied showing what a Tender Item is asking for. Attached to
+the Tender Item, not the Tender, so it sits beside the Quote Photos it is meant to be
+compared against. Points the opposite way to a Quote Photo and is never called a photo.
+_Avoid_: photo, client photo, RFQ image, attachment
+
 ### The supplier side
 
 **Quote**:
@@ -39,6 +45,12 @@ _Avoid_: skipped, unavailable, N/A
 A Quote where the supplier priced a different product from the one the Tender Item
 asked for. Carries the substitute's own name — never buried in notes.
 _Avoid_: substitute, equivalent, non-exact
+
+**Quote Photo**:
+A picture the *supplier* supplied showing what they can actually provide, attached to
+the Quote. Load-bearing rather than decorative: on an Alternative it is often the only
+way to judge how far the substitute really is from what was asked for.
+_Avoid_: photo, image, supplier image, attachment
 
 **Not Yet Sourced**:
 A Tender Item an Assignee has neither Quoted nor marked No Supplier Found. The third
@@ -121,6 +133,13 @@ What a Tender Item actually costs us — the Selected Quote's price converted to
 plus shipping, duty and handling. Pre-filled from the Quote, then edited, because
 supplier prices often exclude freight.
 _Avoid_: cost, cost price, ex-works price
+
+**Unconfirmed**:
+A Landed Cost still sitting at its pre-filled value, which nobody has yet added shipping,
+duty or handling to. Any Margin derived from one is understated in cost and overstated in
+profit, so it is shown as provisional rather than as a number. Nothing is blocked and
+nobody is nagged — the figure simply does not pretend to be final.
+_Avoid_: unedited, draft, estimated, incomplete
 
 **Margin**:
 Selling price minus Landed Cost, on a Tender Item. Always computed, never entered.

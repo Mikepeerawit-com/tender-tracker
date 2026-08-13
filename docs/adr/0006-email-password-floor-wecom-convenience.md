@@ -1,5 +1,7 @@
 # Email/password is the floor; WeCom QR login is a convenience layer
 
+> **Superseded in part by [ADR-0008](0008-wecom-qr-login-deferred-from-v1.md) (ticket 11).** QR login is **deferred out of v1** — email/password ships alone. Everything else here stands: invite-only accounts, link-while-signed-in, no prefill, `is_org_admin`, soft-disable, 30-day sessions, Resend. `users.wecom_userid` also stays, but for reminder targeting rather than login.
+
 `buildspec_1` planned WeCom login as a custom OAuth 2.0 provider and claimed it would double as the org-membership check. Tickets 02, 03 and 06 dismantled the mechanism but not the goal. WeCom **web OAuth** — both the in-client `oauth2/authorize` flow and the QR/SSO flow — binds `redirect_uri` to the app's **Trusted domain name**, which the WeCom console rejects unless the domain's ICP **filing entity** matches the company entity. An ICP filing needs a mainland-registered entity *and* mainland-hosted servers, so a Thailand-registered company cannot obtain one without becoming a different company. Ticket 06 observed the rejection directly.
 
 What survives is narrower and still valuable: WeCom as a **faster way to log in**, not as the source of identity, and not as the way accounts come into existence.
