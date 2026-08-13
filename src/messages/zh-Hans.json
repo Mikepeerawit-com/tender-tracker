@@ -1,0 +1,16 @@
+{
+  "app": {
+    "name": "招标跟踪",
+    "description": "记录招标、针对招标收集的报价，以及我们最终的投标内容。"
+  },
+  "placeholder": {
+    "heading": "招标跟踪已运行",
+    "body": "此处尚未构建任何功能。本页面用于验证应用可以启动、可以通过文案键渲染，并且能够连接数据库。",
+    "healthLabel": "健康检查"
+  },
+  "localeSwitcher": {
+    "label": "语言",
+    "en": "English",
+    "zh-Hans": "简体中文"
+  }
+}

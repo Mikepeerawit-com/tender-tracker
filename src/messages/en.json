@@ -1,0 +1,16 @@
+{
+  "app": {
+    "name": "Tender Tracker",
+    "description": "Tenders, the quotes gathered against them, and what was bid back."
+  },
+  "placeholder": {
+    "heading": "Tender Tracker is running",
+    "body": "Nothing has been built here yet. This page exists to prove the app boots, renders from message keys, and can reach its database.",
+    "healthLabel": "Health check"
+  },
+  "localeSwitcher": {
+    "label": "Language",
+    "en": "English",
+    "zh-Hans": "简体中文"
+  }
+}
