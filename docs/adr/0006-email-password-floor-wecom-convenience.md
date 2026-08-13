@@ -15,7 +15,7 @@ What survives is narrower and still valuable: WeCom as a **faster way to log in*
 - **No prefill in v1.** QR login yields a `userid` and nothing else. Name requires the `user/get` business API (a whitelisted IP); mobile and email additionally require a **verified (已验证/认证)** org. Prefilling a name the user can type in three seconds does not justify either.
 - **`users.is_org_admin` boolean, true for exactly one row** — not a `role` enum. Inviting is the only thing it gates.
 - **Users are soft-disabled, never deleted** (`users.disabled_at`). A departing user owns Tenders and has entered Quotes; deleting the row would orphan the Quote history the comparison view is built on. Offboarding is a manual runbook step — nothing checks WeCom membership automatically.
-- **Sessions last 30 days with no idle timeout.** Internal tool, under 10 trusted users, largely on personal phones, and everyone is already permitted to see margin. Re-login friction costs more than it buys.
+- **Sessions last 30 days with no idle timeout.** Internal tool, under 10 trusted users, largely on personal phones, and everyone is already permitted to see margin. Re-login friction costs more than it buys. **Amended by ticket 17 — this only holds if the session is carried in a server-set cookie; see below.**
 - **Invites are sent by email via Resend** configured as custom SMTP in Supabase. Supabase's built-in mailer is rate-limited and not for production. This is transactional sending and does **not** reopen the internal-mailbox provider question, which stays out of scope.
 
 ## The measurement — resolved by ticket 13 (2026-08-12)
@@ -48,6 +48,21 @@ The zero-cost fallback stands unchanged if ticket 11 cuts it: drop QR login and 
 - **`gettoken` is exempt and returns `0`.** It makes the IP constraint look absent. Ticket 06 was misled by this once; testing only `gettoken` proves nothing. Always probe a business endpoint.
 - **The published error lists are incomplete.** WeCom's `auth/getuserinfo` docs list only `40029` and `50001` — never `60020`. The IP gate sits at a layer above the endpoint and is not documented per-endpoint. Do not infer exemption from a doc page.
 
+## The 30-day session is a 7-day session unless it lives in a cookie — ticket 17 (2026-08-13)
+
+Ticket 17 ([#18](https://github.com/Mikepeerawit-com/tender-tracker/issues/18)) went looking at the WeCom in-app webview and found this instead. Findings: [`docs/research/17-wecom-webview.md`](../research/17-wecom-webview.md) §3.
+
+WebKit's Tracking Prevention **deletes all script-writable storage after 7 days of no user interaction with the site** — `localStorage` is named in the capped set, and scrolling does not count as interaction. `supabase-js` stores its session in `localStorage` by default. This app's usage is reminder-driven and therefore sparse by design: someone taps a link when a deadline approaches, which is exactly the pattern that spends most of its life outside a 7-day window.
+
+**So the decision above is amended: store the Supabase session in server-set cookies (`@supabase/ssr`), never in `localStorage`.** Server-set cookies are not script-writable and are not in the capped set.
+
+Two things worth stating plainly, because both are easy to misfile:
+
+- **This is not a WeCom problem.** Mobile Safari — one of the two browsers this project already promised — applies the identical rule. The webview was where it surfaced, not where it lives.
+- **The exemption for server-set cookies is [inferred](../research/17-wecom-webview.md#34-the-fix-is-cheap-and-belongs-in-buildspec_2), not quoted.** WebKit enumerates what is capped and never states the exemption; it follows from the category name. The inference is standard, but it is an inference.
+
+The only stated exemption to the 7-day cap is a web app added to the home screen — which this map ruled **out of scope** along with the rest of PWA behaviour, so it is not available as a workaround.
+
 ## Consequences
 
 - `buildspec_1`'s "being in Taihue's WeCom implies being a Taihue user" is **dropped**, not reimplemented. Nothing checks WeCom membership, at login or afterwards.
@@ -55,3 +70,4 @@ The zero-cost fallback stands unchanged if ticket 11 cuts it: drop QR login and 
 - The app sends exactly one kind of email — the invite. There is no password-reset story beyond the Org Admin resetting it in the Supabase dashboard, which is acceptable under 10 users and keeps the email surface at one template.
 - Notifications are unaffected. Reminders stay on the group robot per [ADR-0005](0005-reminder-delivery-semantics.md); private per-user `message/send` reminders were considered and deferred, because the robot is the least-coupled component on the map — no IP whitelist, no console gates — and it already works.
 - If a fixed IP is ever bought for QR login, private reminders become a small change, since both need `wecom_userid` on the user row and it will already be there.
+- **A permanent WeCom security banner may sit directly above the login form**, and it says "do not pay or enter your account password". Ticket 17 found the three conditions that remove it — verified org, ICP filing, Trusted domain name — are the same three this org cannot obtain, so if it appears it cannot be removed. Do not spend time trying. Whether it fires inside 企业微信 (as opposed to consumer 微信) is unconfirmed and is **L1** on the live probe.
