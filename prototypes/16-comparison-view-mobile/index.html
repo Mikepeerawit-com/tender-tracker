@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prototype 16 — comparison working sheet at phone width</title>
+<!--
+  ======================================================================
+  PROTOTYPE — THROWAWAY. Wayfinder ticket 16 (issue #17).
+
+  QUESTION: what does the comparison working sheet become below ~768px,
+  given that every action available at a desk must also be available on
+  a phone?
+
+  Four structurally different answers, switchable via ?variant=A|B|C|D
+  and the floating bar at the bottom. No build step, no persistence, no
+  network. Data is ticket 09's dataset, reused verbatim.
+
+  Ticket 09 settled the DESKTOP design (variant D there — the "working
+  sheet": one row per Tender Item, expanded Items showing a dense
+  9-column table ranked cheapest-first). That is FIXED. This file does
+  not re-litigate it. It asks only what the same screen becomes at 390px.
+
+  Judge at 390px. On a wide screen the content is clamped into a phone
+  frame so it is honest to look at from a laptop; on a real phone the
+  frame disappears and it is full-bleed.
+  ======================================================================
+-->
+<style>
+  :root {
+    --ink: #0f172a; --muted: #64748b; --line: #e2e8f0; --line-strong: #cbd5e1;
+    --bg: #f1f5f9; --card: #ffffff;
+    --good: #047857; --good-soft: #ecfdf5;
+    --warn: #b45309; --warn-soft: #fffbeb; --warn-line: #fde68a;
+    --danger: #b91c1c; --danger-soft: #fef2f2;
+    --accent: #1d4ed8; --accent-soft: #eff6ff;
+    --tap: 44px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    color: var(--ink); background: #334155;
+  }
+
+  /* ---- prototype chrome ---- */
+  .proto-banner {
+    background: #0f172a; color: #e2e8f0; font-size: 11px; letter-spacing: .02em;
+    padding: 7px 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    position: sticky; top: 0; z-index: 60;
+  }
+  .proto-banner strong { color: #fbbf24; letter-spacing: .06em; }
+  .proto-banner span { color: #94a3b8; }
+  .switcher {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: 14px; z-index: 90;
+    background: #0f172a; color: #fff; border-radius: 999px; padding: 6px 8px;
+    display: flex; align-items: center; gap: 6px; box-shadow: 0 10px 30px rgba(0,0,0,.45);
+    max-width: calc(100vw - 20px);
+  }
+  .switcher button {
+    all: unset; cursor: pointer; width: 30px; height: 30px; border-radius: 999px;
+    display: grid; place-items: center; background: #1e293b; font-size: 15px;
+  }
+  .switcher button:active { background: #334155; }
+  .switcher .label { font-size: 11px; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60vw; }
+  .switcher .label b { color: #fbbf24; }
+  .switcher .label em { color: #cbd5e1; font-style: normal; }
+
+  /* ---- the phone frame ---- */
+  .phone {
+    width: 390px; max-width: 100%; margin: 0 auto; background: var(--bg);
+    min-height: 100vh; position: relative; overflow-x: hidden;
+    padding-bottom: 84px;
+  }
+  @media (min-width: 760px) {
+    .phone { box-shadow: 0 0 0 1px #475569, 0 24px 60px rgba(0,0,0,.5); min-height: calc(100vh - 34px); }
+  }
+  /* A structural failure this prototype must make visible rather than hide. */
+  .phone .overflow-guard { overflow-x: auto; }
+
+  /* ---- shared atoms ---- */
+  .pad { padding: 0 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  .muted { color: var(--muted); }
+  .num { font-variant-numeric: tabular-nums; }
+  .chip {
+    display: inline-block; font-size: 10.5px; line-height: 1.5; padding: 1px 6px; border-radius: 5px;
+    border: 1px solid transparent; white-space: nowrap; font-weight: 600; letter-spacing: .02em;
+  }
+  .chip.stop { background: var(--danger-soft); color: #7f1d1d; border-color: #fecaca; }
+  .chip.alt  { background: var(--warn-soft);  color: #78350f; border-color: var(--warn-line); }
+  .chip.good { background: var(--good-soft);  color: #065f46; border-color: #a7f3d0; }
+  .chip.neutral { background: #f1f5f9; color: var(--muted); border-color: var(--line); }
+  .chip.acc  { background: var(--accent-soft); color: #1e3a8a; border-color: #bfdbfe; }
+
+  .banner {
+    border: 1px solid var(--line); border-left: 3px solid var(--line-strong);
+    border-radius: 8px; padding: 8px 10px; font-size: 12px; background: #fff;
+  }
+  .banner b { display: block; margin-bottom: 1px; }
+  .banner.stop { background: var(--danger-soft); border-color: #fecaca; border-left-color: var(--danger); color: #7f1d1d; }
+  .banner.warn { background: var(--warn-soft); border-color: var(--warn-line); border-left-color: var(--warn); color: #78350f; }
+  .banner.info { background: #f8fafc; border-left-color: var(--line-strong); color: #475569; }
+
+  .avatar {
+    display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 999px;
+    color: #fff; font-size: 9px; font-weight: 700; vertical-align: middle; letter-spacing: .02em;
+  }
+  .avatar.lg { width: 26px; height: 26px; font-size: 10px; }
+
+  .money-orig { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .money-thb { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 11.5px; }
+  .money-thb.stale { color: var(--warn); }
+  .derived-note { font-size: 11px; color: var(--muted); }
+
+  .photo-badge {
+    display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; font-weight: 600;
+    color: var(--accent); background: var(--accent-soft); border: 1px solid #bfdbfe;
+    border-radius: 6px; padding: 3px 7px; cursor: pointer; min-height: 26px;
+  }
+  .no-photo { font-size: 11px; color: #94a3b8; }
+
+  /* inputs: 16px is load-bearing — iOS Safari zooms the page on focus below it */
+  .inp {
+    font: 600 16px/1.2 inherit; font-variant-numeric: tabular-nums;
+    width: 100%; min-height: var(--tap); padding: 8px 10px; text-align: right;
+    border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; color: var(--ink);
+  }
+  .inp:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+  .inp:disabled { background: #f8fafc; color: #94a3b8; }
+  .fld { display: block; }
+  .fld > span { display: block; font-size: 10.5px; color: var(--muted); margin-bottom: 3px; letter-spacing: .02em; }
+
+  .btn {
+    all: unset; box-sizing: border-box; cursor: pointer; display: grid; place-items: center;
+    min-height: var(--tap); border-radius: 9px; font-weight: 700; font-size: 13.5px;
+    border: 1px solid var(--line-strong); background: #fff; color: var(--ink); padding: 0 12px;
+  }
+  .btn.on { background: var(--good); border-color: var(--good); color: #fff; }
+  .btn.wide { width: 100%; }
+  .btn:active { transform: translateY(1px); }
+
+  .margin-out { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .margin-out.neg { color: var(--danger); }
+  .margin-out.pos { color: var(--good); }
+
+  /* ---- tender header (shared) ---- */
+  .thead { background: #0f172a; color: #e2e8f0; padding: 10px 12px 12px; }
+  .thead .ref { font-size: 10.5px; letter-spacing: .08em; color: #94a3b8; text-transform: uppercase; }
+  .thead h1 { font-size: 15px; margin: 3px 0 2px; line-height: 1.25; }
+  .thead .client { font-size: 11.5px; color: #cbd5e1; }
+  .thead .dl { display: flex; gap: 12px; margin-top: 7px; font-size: 11px; color: #94a3b8; }
+  .thead .dl b { color: #e2e8f0; display: block; font-size: 11.5px; }
+  .todo {
+    background: var(--accent-soft); border-bottom: 1px solid #bfdbfe; color: #1e3a8a;
+    font-size: 12px; padding: 8px 12px;
+  }
+  .todo b { color: #1e3a8a; }
+
+  /* ---- bid totals strip (shared) ---- */
+  .totals { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border-top: 1px solid var(--line); }
+  .totals > div { background: #fff; padding: 8px 12px; }
+  .totals span { display: block; font-size: 10.5px; color: var(--muted); letter-spacing: .02em; }
+  .totals b { font-size: 14px; font-variant-numeric: tabular-nums; }
+
+  /* =====================================================================
+     VARIANT A — Reflow. Everything stacks; quotes become cards.
+     ===================================================================== */
+  .a-item { margin: 10px 12px; overflow: hidden; }
+  .a-head { padding: 10px 12px; display: flex; gap: 8px; align-items: flex-start; }
+  .a-head .nm { font-weight: 700; font-size: 13.5px; line-height: 1.3; }
+  .a-head .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  /* 44px is the tap-target floor; the desktop twisty was a 26px hit area. */
+  .a-twist { all: unset; cursor: pointer; width: var(--tap); min-height: var(--tap); margin: -8px -8px 0 0;
+    display: grid; place-items: center; color: var(--ink); font-size: 15px; }
+  .a-chips { display: flex; gap: 4px; flex-wrap: wrap; padding: 0 12px 10px; }
+  .a-sel { padding: 8px 12px; background: var(--good-soft); border-top: 1px solid #a7f3d0; font-size: 12px; }
+  .a-sel .none { background: none; color: var(--warn); font-weight: 700; }
+  .a-none { padding: 8px 12px; background: var(--warn-soft); border-top: 1px solid var(--warn-line); font-size: 12px; color: #78350f; font-weight: 700; }
+  .a-price { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
+  .a-margin { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline;
+    background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .a-margin span { font-size: 10.5px; color: var(--muted); }
+  .a-quotes { border-top: 1px solid var(--line); background: #f8fafc; padding: 10px; }
+  .a-q {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+    margin-bottom: 8px; display: grid; grid-template-columns: 26px 1fr; gap: 9px;
+  }
+  .a-q.sel { border-color: var(--good); box-shadow: 0 0 0 1px var(--good); }
+  .a-q.alt { border-left: 3px solid var(--warn); }
+  .a-rank {
+    display: grid; place-items: center; width: 26px; height: 26px; border-radius: 999px;
+    background: #f1f5f9; color: var(--muted); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .a-q.lowest .a-rank { background: var(--good); color: #fff; }
+  .a-q .sup { font-weight: 700; font-size: 13px; line-height: 1.25; }
+  .a-q .big { font-size: 19px; font-variant-numeric: tabular-nums; font-weight: 700; margin-top: 4px; }
+  .a-q .meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 7px; }
+  .a-q .altbox { margin-top: 6px; background: var(--warn-soft); border: 1px solid var(--warn-line); border-radius: 7px; padding: 6px 8px; font-size: 11.5px; }
+  .a-q .acts { margin-top: 9px; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+
+  /* =====================================================================
+     VARIANT B — Rank table. A table, cut to what a phone can hold.
+     ===================================================================== */
+  .b-item { margin: 10px 12px; overflow: hidden; }
+  .b-head { padding: 10px 12px; display: flex; gap: 8px; align-items: flex-start; }
+  .b-price { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end;
+    padding: 9px 12px; border-top: 1px solid var(--line); background: #f8fafc; }
+  .b-price .mg { text-align: right; min-width: 84px; }
+  .b-price .mg span { display: block; font-size: 10px; color: var(--muted); }
+  .b-tbl { width: 100%; border-collapse: collapse; }
+  .b-tbl th {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted);
+    text-align: left; padding: 6px 8px; background: #f8fafc; border-bottom: 1px solid var(--line); font-weight: 700;
+  }
+  .b-tbl td { padding: 0; border-bottom: 1px solid var(--line); }
+  .b-row { display: grid; grid-template-columns: 22px 1fr auto 22px; gap: 7px; align-items: center;
+    padding: 8px; min-height: var(--tap); cursor: pointer; }
+  .b-row.sel { background: var(--good-soft); }
+  .b-row.open { background: #f8fafc; }
+  .b-rk { font-size: 12px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; text-align: center; }
+  .b-row.lowest .b-rk { background: var(--good); color: #fff; border-radius: 999px; height: 22px; line-height: 22px; }
+  .b-sup { font-size: 12.5px; font-weight: 600; line-height: 1.25; }
+  .b-sub { font-size: 10.5px; color: var(--muted); display: flex; gap: 5px; align-items: center; margin-top: 2px; }
+  .b-pr { text-align: right; font-variant-numeric: tabular-nums; }
+  .b-pr .o { font-size: 13px; font-weight: 700; }
+  .b-pr .t { font-size: 10.5px; color: var(--muted); }
+  .b-pr .t.stale { color: var(--warn); }
+  .b-chev { color: var(--line-strong); font-size: 11px; text-align: center; }
+  .b-drawer { background: #f8fafc; border-top: 1px dashed var(--line-strong); padding: 10px; font-size: 12px; }
+  .b-drawer dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0 0 9px; }
+  .b-drawer dt { color: var(--muted); font-size: 11px; }
+  .b-drawer dd { margin: 0; font-size: 12px; }
+
+  /* =====================================================================
+     VARIANT C — Drill-down. Queue → full-screen Item, sticky pricing bar.
+     ===================================================================== */
+  .c-q { margin: 10px 12px 0; }
+  .c-qrow { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 11px 12px;
+    border-bottom: 1px solid var(--line); cursor: pointer; align-items: center; min-height: 56px; }
+  .c-qrow:last-child { border-bottom: 0; }
+  .c-qrow .nm { font-size: 13px; font-weight: 700; line-height: 1.3; }
+  .c-qrow .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .c-qrow .rt { text-align: right; font-size: 11.5px; }
+  .c-sec { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+    padding: 14px 12px 5px; font-weight: 700; }
+  .c-back { position: sticky; top: 0; z-index: 30; background: #0f172a; color: #fff;
+    display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; padding: 9px 12px; }
+  .c-back button { all: unset; cursor: pointer; font-size: 13px; font-weight: 700; min-height: 32px; display: grid; place-items: center; padding-right: 4px; }
+  .c-back .nm { font-size: 12.5px; font-weight: 700; line-height: 1.25; }
+  .c-back .sub { font-size: 10.5px; color: #94a3b8; }
+  /* The pricing bar must sit at the bottom of the screen even when the Item
+     has few Quotes — sticky alone leaves it floating mid-page on short content. */
+  .c-screen { display: flex; flex-direction: column; min-height: 100vh; }
+  .c-detail { padding: 10px 12px 0; flex: 1; }
+  .c-quote { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+  .c-quote.sel { border-color: var(--good); box-shadow: 0 0 0 1px var(--good); }
+  .c-quote.alt { border-left: 3px solid var(--warn); }
+  .c-qtop { display: grid; grid-template-columns: 24px 1fr auto; gap: 9px; align-items: start; }
+  .c-bar {
+    position: sticky; bottom: 0; z-index: 40; background: #fff; border-top: 1px solid var(--line-strong);
+    box-shadow: 0 -6px 20px rgba(15,23,42,.10); padding: 9px 12px calc(9px + env(safe-area-inset-bottom));
+    display: grid; grid-template-columns: 1fr 1fr 96px; gap: 8px; align-items: end;
+  }
+  .c-bar .mg { text-align: right; }
+  .c-bar .mg span { display: block; font-size: 10px; color: var(--muted); }
+  .c-bar .mg b { font-size: 15px; }
+
+  /* =====================================================================
+     VARIANT D — Swipe deck. Quotes as a snap carousel, leader pinned.
+     ===================================================================== */
+  .d-item { margin: 10px 12px; overflow: hidden; }
+  .d-head { padding: 10px 12px; }
+  .d-leader { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
+    background: var(--good-soft); border-top: 1px solid #a7f3d0; border-bottom: 1px solid #a7f3d0; padding: 7px 12px; }
+  .d-leader .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #065f46; font-weight: 700; }
+  .d-leader .nm { font-size: 12.5px; font-weight: 700; }
+  .d-leader .pr { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 13px; }
+  .d-rail {
+    display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory;
+    padding: 10px 12px 12px; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .d-rail::-webkit-scrollbar { display: none; }
+  .d-card {
+    flex: 0 0 82%; scroll-snap-align: center; background: #fff; border: 1px solid var(--line);
+    border-radius: 12px; padding: 11px;
+  }
+  .d-card.sel { border-color: var(--good); box-shadow: 0 0 0 1px var(--good); }
+  .d-card.alt { border-left: 3px solid var(--warn); }
+  .d-card .rk { font-size: 10.5px; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+  .d-card .sup { font-size: 14px; font-weight: 700; line-height: 1.25; margin-top: 3px; }
+  .d-card .big { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 7px; }
+  .d-delta { display: inline-block; margin-top: 5px; font-size: 11.5px; font-weight: 700; }
+  .d-delta.lead { color: var(--good); }
+  .d-delta.behind { color: var(--danger); }
+  .d-dots { display: flex; gap: 4px; justify-content: center; padding: 0 0 9px; }
+  .d-dots i { width: 5px; height: 5px; border-radius: 999px; background: var(--line-strong); display: block; }
+  .d-dots i.on { background: var(--ink); width: 14px; }
+  .d-price { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); background: #f8fafc; }
+
+  /* ---- lightbox ---- */
+  .lightbox { position: fixed; inset: 0; background: rgba(15,23,42,.93); z-index: 100; display: grid;
+    grid-template-rows: 1fr auto; padding: 12px; }
+  .lightbox .frame { border-radius: 12px; background-size: cover; background-position: center; }
+  .lightbox .lb-bar { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+    color: #e2e8f0; font-size: 12px; padding: 12px 4px calc(4px + env(safe-area-inset-bottom)); }
+  .lightbox button { all: unset; cursor: pointer; background: #1e293b; color: #fff; border-radius: 8px;
+    min-width: var(--tap); min-height: var(--tap); display: grid; place-items: center; font-size: 16px; }
+  .lightbox .lb-mid { text-align: center; }
+  .lightbox .lb-mid b { display: block; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="proto-banner">
+  <strong>PROTOTYPE</strong>
+  <span>ticket 16 · the working sheet at phone width · judge at 390px</span>
+  <span id="banner-variant"></span>
+</div>
+
+<div id="root"></div>
+<div class="switcher" id="switcher"></div>
+
+<script>
+/* =======================================================================
+   FAKE DATA — ticket 09's dataset, reused verbatim. The hard cases are
+   inherited, not re-derived.
+   ======================================================================= */
+
+const USERS = {
+  somchai: { name: "Somchai P.",  initials: "SP", color: "#0f766e" },
+  nok:     { name: "Nok W.",      initials: "NW", color: "#7c3aed" },
+  wei:     { name: "Wei Zhang",   initials: "WZ", color: "#c2410c" },
+};
+
+const RATE_FRESH = { as_of: "2026-08-11", mid: { CNY: 4.9600, USD: 35.4000, THB: 1 } };
+const RATE_STALE = { as_of: "2026-08-04", mid: { CNY: 4.9100, USD: 35.1000, THB: 1 }, stale: true };
+const BUFFER = 0.02;
+
+const TENDER = {
+  ref: "TEN-2026-041",
+  client: "Bangkok Metropolitan Hospital Group",
+  title: "Q3 consumables & infusion equipment RFQ",
+  owner: "somchai",
+  assignees: ["somchai", "nok", "wei"],
+  internal_deadline: "18 Aug 2026",
+  submission_deadline: "22 Aug 2026",
+};
+
+const ITEMS = [
+  {
+    id: "i1",
+    name: "Nitrile examination glove, powder-free, size M",
+    spec: "3.5 g, blue, non-sterile, TFDA-registered",
+    qty: 40000, unit: "piece",
+    selling: 2.60,
+    quotes: [
+      { id: "q1a", supplier: "Shanghai Kindly Medical", by: "somchai", price: 0.420, ccy: "CNY", unit: "piece", rate: RATE_FRESH, photos: 3 },
+      { id: "q1b", supplier: "Shanghai Kindly Medical", by: "nok",     price: 0.455, ccy: "CNY", unit: "piece", rate: RATE_FRESH, photos: 1 },
+      { id: "q1c", supplier: "Hangzhou Sunmed",         by: "somchai", price: 0.398, ccy: "CNY", unit: "piece", rate: RATE_STALE, photos: 2 },
+      { id: "q1d", supplier: "Bangkok Medline Co.",     by: "nok",     price: 2.350, ccy: "THB", unit: "piece", rate: RATE_FRESH, photos: 0 },
+      { id: "q1e", supplier: "Guangzhou Improve",       by: "wei",     price: 0.058, ccy: "USD", unit: "piece", rate: RATE_FRESH, photos: 4 },
+      { id: "q1f", supplier: "Zhende Medical",          by: "wei",     price: 0.405, ccy: "CNY", unit: "piece", rate: RATE_FRESH, photos: 2,
+        alt: "Zhende nitrile glove, size M, 3.0 g (lighter gauge)" },
+      { id: "q1g", supplier: "Siam Pharma Supply",      by: "wei",     price: 2.280, ccy: "THB", unit: "piece", rate: RATE_FRESH, photos: 1 },
+      { id: "q1h", supplier: "Jiangsu Kanghua",         by: "nok",     price: 0.389, ccy: "CNY", unit: "piece", rate: RATE_FRESH, photos: 0 },
+    ],
+  },
+  {
+    id: "i2",
+    name: "Disposable syringe 5 ml with 23G needle",
+    spec: "Luer slip, sterile, single use",
+    qty: 20000, unit: "piece",
+    selling: null,
+    quotes: [
+      { id: "q2a", supplier: "Jiangsu Kanghua",     by: "nok",     price: 26.50, ccy: "CNY", unit: "box of 50", rate: RATE_FRESH, photos: 1 },
+      { id: "q2b", supplier: "Bangkok Medline Co.", by: "somchai", price: 2.95,  ccy: "THB", unit: "piece",     rate: RATE_FRESH, photos: 0 },
+      { id: "q2c", supplier: "Hangzhou Sunmed",     by: "wei",     price: 0.51,  ccy: "CNY", unit: "piece",     rate: RATE_FRESH, photos: 2 },
+    ],
+  },
+  {
+    id: "i3",
+    name: "Volumetric infusion pump, 2-channel",
+    spec: "Requested: B.Braun Infusomat Space P",
+    qty: 6, unit: "unit",
+    selling: null,
+    quotes: [
+      { id: "q3a", supplier: "Shenzhen Comen",     by: "wei",     price: 4850,  ccy: "CNY", unit: "unit", rate: RATE_FRESH, photos: 4,
+        alt: "Comen SK-600III volumetric pump" },
+      { id: "q3b", supplier: "Guangzhou Improve",  by: "somchai", price: 720,   ccy: "USD", unit: "unit", rate: RATE_FRESH, photos: 2,
+        alt: "Contec SP750 volumetric pump" },
+      { id: "q3c", supplier: "Siam Pharma Supply", by: "nok",     price: 26900, ccy: "THB", unit: "unit", rate: RATE_FRESH, photos: 3,
+        alt: "Mindray BeneFusion VP3" },
+    ],
+  },
+  {
+    id: "i4",
+    name: "Surgical respirator N95 / FFP2, cup style",
+    spec: "Head-strap, fluid-resistant",
+    qty: 5000, unit: "piece",
+    selling: 24.00,
+    quotes: [
+      { id: "q4a", supplier: "Zhende Medical", by: "somchai", price: 3.85, ccy: "CNY", unit: "piece", rate: RATE_FRESH, photos: 2 },
+    ],
+    no_supplier_found: [
+      { by: "wei", on: "10 Aug 2026", note: "No TFDA-registered cup style available inside a 30-day lead time" },
+    ],
+  },
+];
+
+/* =======================================================================
+   DERIVED VALUES — nothing here is stored
+   ======================================================================= */
+
+const applied = (q) => q.rate.mid[q.ccy] * (1 + BUFFER);
+const thbUnit = (q) => q.price * applied(q);
+const unitMismatch = (item) => item.quotes.some((q) => q.unit !== item.unit);
+const rankable = (item) => item.quotes.length > 0 && !unitMismatch(item);
+const allAlternatives = (item) => item.quotes.length > 0 && item.quotes.every((q) => q.alt);
+const lowestId = (item) => {
+  if (!rankable(item)) return null;
+  return item.quotes.reduce((lo, q) => (thbUnit(q) < thbUnit(lo) ? q : lo)).id;
+};
+const dupSuppliers = (item) => {
+  const seen = {};
+  item.quotes.forEach((q) => (seen[q.supplier] = (seen[q.supplier] || 0) + 1));
+  return Object.keys(seen).filter((s) => seen[s] > 1);
+};
+const findQuote = (item, id) => item.quotes.find((q) => q.id === id) || null;
+const itemById = (id) => ITEMS.find((i) => i.id === id);
+const needsDecision = (item) => !STATE.selected[item.id];
+const ordered = (item) => (rankable(item) ? [...item.quotes].sort((a, b) => thbUnit(a) - thbUnit(b)) : item.quotes);
+const untouchedBy = (item) => TENDER.assignees.filter(
+  (a) => !item.quotes.some((q) => q.by === a) && !(item.no_supplier_found || []).some((n) => n.by === a));
+
+// The frozen-rate hazard: a lead this small can be an artifact of two Quotes
+// carrying rates frozen on different days. Settled by ticket 09.
+function tooCloseToCall(item) {
+  if (!rankable(item) || item.quotes.length < 2) return null;
+  const s = ordered(item);
+  const gap = (thbUnit(s[1]) - thbUnit(s[0])) / thbUnit(s[0]);
+  const staleOne = [s[0], s[1]].find((q) => q.rate.stale);
+  if (gap < 0.03 && staleOne) return { gap, s, staleOne };
+  return null;
+}
+
+const fmt = (n, dp = 2) =>
+  n.toLocaleString("en-GB", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+const CCY_SYM = { CNY: "¥", USD: "$", THB: "฿" };
+const money = (n, ccy, places = 2) => CCY_SYM[ccy] + fmt(n, places);
+const dp = (n) => (Math.abs(n) < 10 ? 3 : 2);
+const thb = (n, d = 2) => "฿" + fmt(n, d);
+
+/* =======================================================================
+   MUTABLE PROTOTYPE STATE — in memory only
+   ======================================================================= */
+
+const STATE = {
+  variant: (new URLSearchParams(location.search).get("variant") || "A").toUpperCase(),
+  selected: { i1: "q1c", i2: null, i3: null, i4: "q4a" },
+  landed: {},
+  landedTouched: {},
+  selling: {},
+  expand: {},        // itemId -> bool, explicit twisty clicks (A, B, D)
+  openRow: {},       // variant B: itemId -> quoteId whose drawer is open
+  drill: null,       // variant C: itemId currently pushed, or null for the queue
+};
+ITEMS.forEach((i) => { if (i.selling != null) STATE.selling[i.id] = i.selling; });
+
+// Openness is derived from the work left, unless explicitly overridden.
+const isOpen = (item) =>
+  STATE.expand[item.id] !== undefined ? STATE.expand[item.id] : needsDecision(item);
+
+function landedFor(item) {
+  if (STATE.landed[item.id] != null) return STATE.landed[item.id];
+  const q = findQuote(item, STATE.selected[item.id]);
+  return q ? thbUnit(q) : null;
+}
+function marginFor(item) {
+  const cost = landedFor(item), sell = STATE.selling[item.id];
+  if (cost == null || sell == null || sell === "") return null;
+  const m = Number(sell) - cost;
+  return { unit: m, total: m * item.qty, pct: sell > 0 ? (m / Number(sell)) * 100 : 0 };
+}
+function selectQuote(itemId, quoteId) {
+  STATE.selected[itemId] = STATE.selected[itemId] === quoteId ? null : quoteId;
+  if (!STATE.landedTouched[itemId]) delete STATE.landed[itemId];
+  render();
+}
+function toggle(itemId) {
+  STATE.expand[itemId] = !isOpen(itemById(itemId));
+  render();
+}
+function openRow(itemId, quoteId) {
+  STATE.openRow[itemId] = STATE.openRow[itemId] === quoteId ? null : quoteId;
+  render();
+}
+function drill(itemId) { STATE.drill = itemId; window.scrollTo(0, 0); render(); }
+
+/* ---- live margin without re-rendering (typing must not lose focus) ---- */
+function onLanded(id, v) {
+  STATE.landed[id] = v === "" ? null : Number(v);
+  STATE.landedTouched[id] = true;
+  paintMargin(id); paintTotals();
+}
+function onSelling(id, v) {
+  STATE.selling[id] = v === "" ? null : Number(v);
+  paintMargin(id); paintTotals();
+}
+function paintMargin(id) {
+  const item = itemById(id), m = marginFor(item);
+  document.querySelectorAll(`[data-margin="${id}"]`).forEach((el) => {
+    el.textContent = m ? thb(m.unit) : "—";
+    el.className = "margin-out " + (m ? (m.unit < 0 ? "neg" : "pos") : "");
+  });
+  document.querySelectorAll(`[data-margin-total="${id}"]`).forEach((el) => {
+    el.textContent = m ? thb(m.total, 0) + ` · ${fmt(m.pct, 1)}%` : "—";
+  });
+}
+function paintTotals() {
+  let total = 0, cost = 0, covered = 0;
+  ITEMS.forEach((i) => {
+    const sell = STATE.selling[i.id], c = landedFor(i);
+    if (STATE.selected[i.id]) covered++;
+    if (sell != null && sell !== "") total += Number(sell) * i.qty;
+    if (c != null && STATE.selected[i.id]) cost += c * i.qty;
+  });
+  const set = (sel, v) => document.querySelectorAll(sel).forEach((e) => (e.textContent = v));
+  set("[data-bid-coverage]", `${covered} of ${ITEMS.length} Items`);
+  set("[data-bid-total]", total ? thb(total, 0) : "—");
+  set("[data-bid-cost]", cost ? thb(cost, 0) : "—");
+  set("[data-bid-margin]", total && cost ? `${thb(total - cost, 0)} · ${fmt(((total - cost) / total) * 100, 1)}%` : "—");
+}
+
+/* =======================================================================
+   SMALL SHARED BITS
+   ======================================================================= */
+
+const avatar = (uid, cls = "") => {
+  const u = USERS[uid];
+  return `<span class="avatar ${cls}" style="background:${u.color}" title="${u.name}">${u.initials}</span>`;
+};
+const photoBg = (qid, n) => {
+  let h = 0;
+  for (const ch of qid + n) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return `linear-gradient(135deg, hsl(${h} 45% 72%), hsl(${(h + 48) % 360} 40% 55%))`;
+};
+function convNote(q) {
+  const r = q.rate;
+  if (q.ccy === "THB") return "quoted in THB — no conversion";
+  return `${CCY_SYM[q.ccy]}1 = ฿${fmt(r.mid[q.ccy], 4)} mid +2% buffer · ${r.as_of}${r.stale ? " · STALE" : ""}`;
+}
+function thbLine(q) {
+  if (q.ccy === "THB") return `<span class="money-thb">quoted in THB</span>`;
+  const cls = "money-thb " + (q.rate.stale ? "stale" : "");
+  return `<span class="${cls}" title="${convNote(q)}">${q.rate.stale ? "⚠ " : "≈ "}${thb(thbUnit(q))}</span>`;
+}
+const photoBtn = (q) => q.photos
+  ? `<span class="photo-badge" onclick="event.stopPropagation();openLightbox('${q.id}',0)">📷 ${q.photos}</span>`
+  : `<span class="no-photo">no photos</span>`;
+
+/* ---- item-level banners: the three that must survive the loss of the table ---- */
+function itemBanners(item) {
+  const out = [];
+  if (unitMismatch(item))
+    out.push(`<div class="banner stop"><b>Unit mismatch — compare manually.</b>
+      Quotes arrived in different units from the Item. Nothing is ranked and no lowest is marked.</div>`);
+  if (allAlternatives(item))
+    out.push(`<div class="banner warn"><b>No exact match.</b>
+      All ${item.quotes.length} Quotes are Alternatives to <em>${item.spec.replace("Requested: ", "")}</em>.
+      The ranking compares different products.</div>`);
+  const close = tooCloseToCall(item);
+  if (close)
+    out.push(`<div class="banner warn"><b>Too close to call on frozen rates.</b>
+      ${close.s[0].supplier} leads ${close.s[1].supplier} by ${fmt(close.gap * 100, 1)}%, but
+      ${close.staleOne.supplier}'s rate was frozen on ${close.staleOne.rate.as_of} — the gap is smaller than the drift.</div>`);
+  dupSuppliers(item).forEach((s) => {
+    const qs = item.quotes.filter((q) => q.supplier === s);
+    out.push(`<div class="banner info"><b>Same supplier, two Assignees.</b>
+      ${s} quoted ${qs.map((q) => `${money(q.price, q.ccy, dp(q.price))} to ${USERS[q.by].name}`).join(" and ")} — both kept.</div>`);
+  });
+  (item.no_supplier_found || []).forEach((n) =>
+    out.push(`<div class="banner warn"><b>No Supplier Found</b>
+      — ${USERS[n.by].name}, ${n.on}: “${n.note}”</div>`));
+  return out;
+}
+const bannerStack = (item, pad = "0 0 10px") => {
+  const b = itemBanners(item);
+  return b.length ? `<div style="display:grid;gap:7px;padding:${pad}">${b.join("")}</div>` : "";
+};
+
+function itemChips(item) {
+  const out = [];
+  if (unitMismatch(item)) out.push(`<span class="chip stop">unit mismatch</span>`);
+  else if (allAlternatives(item)) out.push(`<span class="chip alt">all ${item.quotes.length} are Alternatives</span>`);
+  (item.no_supplier_found || []).forEach((n) => out.push(`<span class="chip alt">No Supplier Found · ${USERS[n.by].initials}</span>`));
+  const u = untouchedBy(item);
+  if (u.length) out.push(`<span class="chip neutral">not yet sourced by ${u.map((a) => USERS[a].initials).join(", ")}</span>`);
+  return out.join("");
+}
+
+function tenderHead(sub) {
+  const todo = ITEMS.filter(needsDecision).length;
+  return `<div class="thead">
+    <div class="ref">${TENDER.ref} · ${sub}</div>
+    <h1>${TENDER.title}</h1>
+    <div class="client">${TENDER.client}</div>
+    <div class="dl">
+      <div>Internal<b>${TENDER.internal_deadline}</b></div>
+      <div>Client submission<b>${TENDER.submission_deadline}</b></div>
+      <div>Assignees<b>${TENDER.assignees.map((a) => USERS[a].initials).join(" · ")}</b></div>
+    </div>
+  </div>
+  <div class="todo">${todo
+    ? `<b>${todo} of ${ITEMS.length} Items still need a Quote selected.</b> Decided Items are folded away.`
+    : `<b>Every Item has a Selected Quote.</b> Ready to build the Bid.`}</div>`;
+}
+
+const totalsStrip = () => `<div class="totals">
+  <div><span>Coverage</span><b data-bid-coverage></b></div>
+  <div><span>Bid total</span><b data-bid-total></b></div>
+  <div><span>Landed cost</span><b data-bid-cost></b></div>
+  <div><span>Margin</span><b data-bid-margin></b></div>
+</div>
+<p class="derived-note" style="padding:10px 12px 0">
+  THB figures are derived for comparison only: ECB mid-market + 2% buffer, frozen onto each Quote at entry.
+  Suppliers are paid in the currency they quoted.</p>`;
+
+const priceFields = (item) => {
+  const cost = landedFor(item), sel = STATE.selected[item.id];
+  return `
+    <label class="fld"><span>Landed cost / ${item.unit}</span>
+      <input class="inp" type="number" inputmode="decimal" step="0.01"
+        value="${cost == null ? "" : fmt(cost, 4)}" oninput="onLanded('${item.id}', this.value)" ${sel ? "" : "disabled"}></label>
+    <label class="fld"><span>Selling / ${item.unit}</span>
+      <input class="inp" type="number" inputmode="decimal" step="0.01"
+        value="${STATE.selling[item.id] ?? ""}" oninput="onSelling('${item.id}', this.value)"></label>`;
+};
+
+/* =======================================================================
+   VARIANT A — "Reflow". The null hypothesis: stack everything, and let
+   the quotes become the cards ticket 09 rejected at desktop width.
+   ======================================================================= */
+function variantA() {
+  return `<div class="phone">
+    ${tenderHead("working sheet")}
+    ${ITEMS.map(itemA).join("")}
+    ${totalsStrip()}
+  </div>`;
+}
+
+function itemA(item) {
+  const open = isOpen(item);
+  const sel = findQuote(item, STATE.selected[item.id]);
+  const m = marginFor(item);
+
+  const selStrip = sel
+    ? `<div class="a-sel"><b>${sel.supplier}</b> ${avatar(sel.by)}
+         <div class="derived-note">${money(sel.price, sel.ccy, dp(sel.price))} / ${sel.unit} · ${thbLine(sel)}</div>
+         ${sel.alt ? `<div style="margin-top:4px"><span class="chip alt">ALT → ${sel.alt}</span></div>` : ""}</div>`
+    : `<div class="a-none">Needs a decision — ${item.quotes.length} Quote${item.quotes.length === 1 ? "" : "s"} below</div>`;
+
+  return `<section class="card a-item">
+    <div class="a-head">
+      <div style="flex:1">
+        <div class="nm">${item.name}</div>
+        <div class="sub">${fmt(item.qty, 0)} ${item.unit} · ${item.quotes.length} Quote${item.quotes.length === 1 ? "" : "s"}</div>
+      </div>
+      <button class="a-twist" onclick="toggle('${item.id}')">${open ? "▾" : "▸"}</button>
+    </div>
+    ${itemChips(item) ? `<div class="a-chips">${itemChips(item)}</div>` : ""}
+    ${selStrip}
+    <div class="a-price">
+      ${priceFields(item)}
+      <div class="a-margin">
+        <span>Margin / ${item.unit}</span>
+        <span class="margin-out ${m ? (m.unit < 0 ? "neg" : "pos") : ""}" data-margin="${item.id}">—</span>
+      </div>
+      <div class="a-margin">
+        <span>Margin on line</span>
+        <b class="num" data-margin-total="${item.id}">—</b>
+      </div>
+    </div>
+    ${open ? `<div class="a-quotes">
+      ${bannerStack(item)}
+      ${ordered(item).map((q, i) => quoteCardA(item, q, i)).join("")}
+    </div>` : ""}
+  </section>`;
+}
+
+function quoteCardA(item, q, idx) {
+  const isSel = STATE.selected[item.id] === q.id;
+  const lo = lowestId(item);
+  const dups = dupSuppliers(item);
+  const comparable = q.unit === item.unit;
+  return `<div class="a-q ${isSel ? "sel" : ""} ${q.alt ? "alt" : ""} ${q.id === lo ? "lowest" : ""}">
+    <div class="a-rank">${rankable(item) ? idx + 1 : "·"}</div>
+    <div>
+      <div class="sup">${q.supplier}</div>
+      ${dups.includes(q.supplier) ? `<div class="derived-note">also quoted to another Assignee</div>` : ""}
+      <div class="big">${money(q.price, q.ccy, dp(q.price))}
+        <span style="font-size:11px;font-weight:400;color:var(--muted)">/ ${q.unit}</span>
+        ${q.id === lo ? `<span class="chip good" style="margin-left:4px">lowest</span>` : ""}
+        ${!comparable ? `<span class="chip stop" style="margin-left:4px">≠ ${item.unit}</span>` : ""}</div>
+      <div>${thbLine(q)}</div>
+      <div class="derived-note" style="margin-top:3px">Line total ${comparable
+        ? `${money(q.price * item.qty, q.ccy, 0)}${q.ccy === "THB" ? "" : " ≈ " + thb(thbUnit(q) * item.qty, 0)}`
+        : "not comparable"}</div>
+      ${q.alt ? `<div class="altbox"><span class="chip alt">ALTERNATIVE</span>
+        <div style="margin-top:3px"><b>${q.alt}</b></div>
+        <div class="derived-note">requested: ${item.name}</div></div>` : ""}
+      <div class="meta">${avatar(q.by)}
+        <span class="derived-note">${USERS[q.by].name}</span>${photoBtn(q)}</div>
+      <div class="acts">
+        <button class="btn ${isSel ? "on" : ""}" onclick="selectQuote('${item.id}','${q.id}')">
+          ${isSel ? "✓ Selected" : "Select this Quote"}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* =======================================================================
+   VARIANT B — "Rank table". Keep the table, cut it to the three columns
+   a phone can actually hold; everything else lives in a tap-to-open
+   drawer on the row. The bet: seeing all 8 ranks at once beats detail.
+   ======================================================================= */
+function variantB() {
+  return `<div class="phone">
+    ${tenderHead("working sheet")}
+    ${ITEMS.map(itemB).join("")}
+    ${totalsStrip()}
+  </div>`;
+}
+
+function itemB(item) {
+  const open = isOpen(item);
+  const sel = findQuote(item, STATE.selected[item.id]);
+  const m = marginFor(item);
+  const lo = lowestId(item);
+
+  const rows = ordered(item).map((q, i) => {
+    const isSel = STATE.selected[item.id] === q.id;
+    const drawerOpen = STATE.openRow[item.id] === q.id;
+    const comparable = q.unit === item.unit;
+    const row = `<div class="b-row ${isSel ? "sel" : ""} ${drawerOpen ? "open" : ""} ${q.id === lo ? "lowest" : ""}"
+        onclick="openRow('${item.id}','${q.id}')">
+      <div class="b-rk">${rankable(item) ? i + 1 : "·"}</div>
+      <div>
+        <div class="b-sup">${q.supplier}${q.alt ? ` <span class="chip alt">ALT</span>` : ""}</div>
+        <div class="b-sub">${avatar(q.by)} ${USERS[q.by].initials}${q.photos ? ` · 📷 ${q.photos}` : ""}${isSel ? ` · <b style="color:var(--good)">SELECTED</b>` : ""}</div>
+      </div>
+      <div class="b-pr">
+        <div class="o">${comparable ? thb(thbUnit(q), dp(thbUnit(q))) : money(q.price, q.ccy, dp(q.price))}</div>
+        <div class="t ${q.rate.stale ? "stale" : ""}">${money(q.price, q.ccy, dp(q.price))} / ${q.unit}${q.rate.stale ? " ⚠" : ""}</div>
+      </div>
+      <div class="b-chev">${drawerOpen ? "▾" : "▸"}</div>
+    </div>`;
+
+    if (!drawerOpen) return `<tr><td>${row}</td></tr>`;
+    return `<tr><td>${row}
+      <div class="b-drawer">
+        <dl>
+          <dt>Sourced by</dt><dd>${avatar(q.by)} ${USERS[q.by].name}</dd>
+          <dt>Quoted product</dt><dd>${q.alt ? `<b>${q.alt}</b><div class="derived-note">requested: ${item.name}</div>` : "as requested"}</dd>
+          <dt>Unit price</dt><dd>${money(q.price, q.ccy, dp(q.price))} / ${q.unit} · ${thbLine(q)}</dd>
+          <dt>Line total</dt><dd>${comparable
+            ? `${money(q.price * item.qty, q.ccy, 0)}${q.ccy === "THB" ? "" : " ≈ " + thb(thbUnit(q) * item.qty, 0)}`
+            : `<span class="chip stop">not comparable — ≠ ${item.unit}</span>`}</dd>
+          <dt>Photos</dt><dd>${photoBtn(q)}</dd>
+        </dl>
+        <button class="btn wide ${STATE.selected[item.id] === q.id ? "on" : ""}"
+          onclick="event.stopPropagation();selectQuote('${item.id}','${q.id}')">
+          ${STATE.selected[item.id] === q.id ? "✓ Selected" : "Select this Quote"}</button>
+      </div></td></tr>`;
+  }).join("");
+
+  return `<section class="card b-item">
+    <div class="b-head">
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:13.5px;line-height:1.3">${item.name}</div>
+        <div class="derived-note" style="margin-top:2px">${fmt(item.qty, 0)} ${item.unit} · ${item.quotes.length} Quote${item.quotes.length === 1 ? "" : "s"}
+          ${sel ? `· <b style="color:var(--good)">${sel.supplier}</b>` : `· <b style="color:var(--warn)">needs a decision</b>`}</div>
+        ${itemChips(item) ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px">${itemChips(item)}</div>` : ""}
+      </div>
+      <button class="a-twist" onclick="toggle('${item.id}')">${open ? "▾" : "▸"}</button>
+    </div>
+    <div class="b-price">
+      ${priceFields(item)}
+      <div class="mg"><span>Margin / ${item.unit}</span>
+        <b class="margin-out ${m ? (m.unit < 0 ? "neg" : "pos") : ""}" data-margin="${item.id}">—</b>
+        <span class="num" data-margin-total="${item.id}" style="font-size:10.5px">—</span></div>
+    </div>
+    ${open ? `${itemBanners(item).length ? `<div style="display:grid;gap:7px;padding:10px 12px;background:#f8fafc;border-top:1px solid var(--line)">${itemBanners(item).join("")}</div>` : ""}
+      <table class="b-tbl">
+        <thead><tr><th colspan="1" style="width:100%">
+          ${rankable(item) ? "Ranked cheapest first · THB / " + item.unit : "Not ranked"} — tap a row for detail
+        </th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>` : ""}
+  </section>`;
+}
+
+/* =======================================================================
+   VARIANT C — "Drill-down". Two levels. The phone shows a work queue of
+   Items; tapping one pushes a full-screen Item with a STICKY pricing bar,
+   so margin never leaves the screen while you type into the field above it.
+   ======================================================================= */
+function variantC() {
+  return STATE.drill ? variantCDetail(itemById(STATE.drill)) : variantCQueue();
+}
+
+function variantCQueue() {
+  const todo = ITEMS.filter(needsDecision);
+  const done = ITEMS.filter((i) => !needsDecision(i));
+  const row = (item) => {
+    const sel = findQuote(item, STATE.selected[item.id]);
+    const m = marginFor(item);
+    return `<div class="c-qrow" onclick="drill('${item.id}')">
+      <div>
+        <div class="nm">${item.name}</div>
+        <div class="sub">${fmt(item.qty, 0)} ${item.unit} · ${item.quotes.length} Quote${item.quotes.length === 1 ? "" : "s"}</div>
+        ${itemChips(item) ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px">${itemChips(item)}</div>` : ""}
+      </div>
+      <div class="rt">
+        ${sel ? `<div style="font-weight:700;font-size:12px">${sel.supplier}</div>
+                 <div class="margin-out ${m ? (m.unit < 0 ? "neg" : "pos") : ""}" data-margin="${item.id}" style="font-size:12px">—</div>`
+              : `<span class="chip alt">decide</span>`}
+        <div class="derived-note" style="margin-top:3px">›</div>
+      </div>
+    </div>`;
+  };
+  return `<div class="phone">
+    ${tenderHead("work queue")}
+    ${todo.length ? `<div class="c-sec">Needs a decision — ${todo.length}</div>
+      <section class="card c-q">${todo.map(row).join("")}</section>` : ""}
+    ${done.length ? `<div class="c-sec">Decided — ${done.length}</div>
+      <section class="card c-q">${done.map(row).join("")}</section>` : ""}
+    <div style="height:12px"></div>
+    ${totalsStrip()}
+  </div>`;
+}
+
+function variantCDetail(item) {
+  const lo = lowestId(item);
+  const dups = dupSuppliers(item);
+  const m = marginFor(item);
+
+  const quotes = ordered(item).map((q, i) => {
+    const isSel = STATE.selected[item.id] === q.id;
+    const comparable = q.unit === item.unit;
+    return `<div class="c-quote ${isSel ? "sel" : ""} ${q.alt ? "alt" : ""}">
+      <div class="c-qtop">
+        <div class="a-rank">${rankable(item) ? i + 1 : "·"}</div>
+        <div>
+          <div style="font-weight:700;font-size:13px;line-height:1.25">${q.supplier}</div>
+          <div class="b-sub">${avatar(q.by)} ${USERS[q.by].name}</div>
+          ${dups.includes(q.supplier) ? `<div class="derived-note">also quoted to another Assignee</div>` : ""}
+        </div>
+        <div style="text-align:right">
+          <div class="money-orig" style="font-size:15px">${money(q.price, q.ccy, dp(q.price))}</div>
+          <div class="derived-note">/ ${q.unit}</div>
+          <div>${thbLine(q)}</div>
+        </div>
+      </div>
+      ${q.id === lo ? `<div style="margin-top:6px"><span class="chip good">lowest</span></div>` : ""}
+      ${!comparable ? `<div style="margin-top:6px"><span class="chip stop">≠ ${item.unit} — not comparable</span></div>` : ""}
+      ${q.alt ? `<div class="altbox" style="margin-top:7px"><span class="chip alt">ALTERNATIVE</span>
+        <div style="margin-top:3px"><b>${q.alt}</b></div></div>` : ""}
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-top:9px">
+        <div class="derived-note">Line total ${comparable
+          ? `${money(q.price * item.qty, q.ccy, 0)}${q.ccy === "THB" ? "" : " ≈ " + thb(thbUnit(q) * item.qty, 0)}`
+          : "—"}</div>
+        ${photoBtn(q)}
+      </div>
+      <div style="margin-top:9px">
+        <button class="btn wide ${isSel ? "on" : ""}" onclick="selectQuote('${item.id}','${q.id}')">
+          ${isSel ? "✓ Selected" : "Select this Quote"}</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  return `<div class="phone c-screen">
+    <div class="c-back">
+      <button onclick="STATE.drill=null;render()">‹ Items</button>
+      <div><div class="nm">${item.name}</div>
+        <div class="sub">${fmt(item.qty, 0)} ${item.unit} · ${item.quotes.length} Quote${item.quotes.length === 1 ? "" : "s"}</div></div>
+    </div>
+    <div class="c-detail">
+      ${itemChips(item) ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:9px">${itemChips(item)}</div>` : ""}
+      ${bannerStack(item)}
+      ${quotes}
+      <div style="height:8px"></div>
+    </div>
+    <div class="c-bar">
+      ${priceFields(item)}
+      <div class="mg"><span>Margin / ${item.unit}</span>
+        <b class="margin-out ${m ? (m.unit < 0 ? "neg" : "pos") : ""}" data-margin="${item.id}">—</b>
+        <span class="num" data-margin-total="${item.id}" style="font-size:10px;color:var(--muted)">—</span></div>
+    </div>
+  </div>`;
+}
+
+/* =======================================================================
+   VARIANT D — "Swipe deck". Ranking as a snap carousel, one Quote per
+   screen, with the leader pinned above and every card showing its delta
+   against it. The phone-native gesture, tested honestly.
+   ======================================================================= */
+function variantD() {
+  return `<div class="phone">
+    ${tenderHead("working sheet")}
+    ${ITEMS.map(itemD).join("")}
+    ${totalsStrip()}
+  </div>`;
+}
+
+function itemD(item) {
+  const open = isOpen(item);
+  const m = marginFor(item);
+  const ord = ordered(item);
+  const leader = rankable(item) ? ord[0] : null;
+  const sel = findQuote(item, STATE.selected[item.id]);
+
+  const cards = ord.map((q, i) => {
+    const isSel = STATE.selected[item.id] === q.id;
+    const comparable = q.unit === item.unit;
+    let delta = "";
+    if (leader && comparable) {
+      const d = (thbUnit(q) - thbUnit(leader)) / thbUnit(leader);
+      delta = i === 0
+        ? `<div class="d-delta lead">◆ cheapest</div>`
+        : `<div class="d-delta behind">+${fmt(d * 100, 1)}% vs ${leader.supplier}</div>`;
+    }
+    return `<div class="d-card ${isSel ? "sel" : ""} ${q.alt ? "alt" : ""}">
+      <div class="rk">${rankable(item) ? `${i + 1} of ${ord.length}` : "not ranked"}</div>
+      <div class="sup">${q.supplier}</div>
+      <div class="b-sub">${avatar(q.by)} ${USERS[q.by].name}</div>
+      <div class="big">${money(q.price, q.ccy, dp(q.price))}</div>
+      <div class="derived-note">per ${q.unit}${!comparable ? ` <span class="chip stop">≠ ${item.unit}</span>` : ""}</div>
+      <div>${thbLine(q)}</div>
+      ${delta}
+      ${q.alt ? `<div class="altbox" style="margin-top:7px"><span class="chip alt">ALTERNATIVE</span>
+        <div style="margin-top:3px"><b>${q.alt}</b></div></div>` : ""}
+      <div class="derived-note" style="margin-top:7px">Line total ${comparable
+        ? `${money(q.price * item.qty, q.ccy, 0)}` : "not comparable"}</div>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center">${photoBtn(q)}</div>
+      <div style="margin-top:9px">
+        <button class="btn wide ${isSel ? "on" : ""}" onclick="selectQuote('${item.id}','${q.id}')">
+          ${isSel ? "✓ Selected" : "Select"}</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  return `<section class="card d-item">
+    <div class="d-head">
+      <div style="display:flex;gap:8px;align-items:flex-start">
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:13.5px;line-height:1.3">${item.name}</div>
+          <div class="derived-note" style="margin-top:2px">${fmt(item.qty, 0)} ${item.unit} · ${item.quotes.length} Quote${item.quotes.length === 1 ? "" : "s"}</div>
+          ${itemChips(item) ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px">${itemChips(item)}</div>` : ""}
+        </div>
+        <button class="a-twist" onclick="toggle('${item.id}')">${open ? "▾" : "▸"}</button>
+      </div>
+    </div>
+    ${leader ? `<div class="d-leader">
+      <div><div class="lbl">${sel ? "Selected" : "Cheapest"}</div>
+        <div class="nm">${(sel || leader).supplier}</div></div>
+      <div class="pr">${thb(thbUnit(sel || leader), dp(thbUnit(sel || leader)))}<div class="derived-note">per ${item.unit}</div></div>
+    </div>` : ""}
+    ${open ? `${itemBanners(item).length ? `<div style="display:grid;gap:7px;padding:10px 12px 0">${itemBanners(item).join("")}</div>` : ""}
+      <div class="d-rail">${cards}</div>
+      <div class="d-dots">${ord.map((_, i) => `<i class="${i === 0 ? "on" : ""}"></i>`).join("")}</div>` : ""}
+    <div class="d-price">
+      ${priceFields(item)}
+      <div class="a-margin" style="grid-column:1/-1">
+        <span>Margin / ${item.unit}</span>
+        <span><span class="margin-out ${m ? (m.unit < 0 ? "neg" : "pos") : ""}" data-margin="${item.id}">—</span>
+          <span class="derived-note num" style="margin-left:8px" data-margin-total="${item.id}">—</span></span>
+      </div>
+    </div>
+  </section>`;
+}
+
+/* =======================================================================
+   LIGHTBOX
+   ======================================================================= */
+let LB = null;
+function openLightbox(qid, n) {
+  const q = ITEMS.flatMap((i) => i.quotes).find((x) => x.id === qid);
+  LB = { q, n };
+  drawLightbox();
+}
+function closeLightbox() { LB = null; drawLightbox(); }
+function stepLightbox(d) {
+  if (!LB) return;
+  LB.n = (LB.n + d + LB.q.photos) % LB.q.photos;
+  drawLightbox();
+}
+function drawLightbox() {
+  const old = document.getElementById("lightbox");
+  if (old) old.remove();
+  if (!LB) return;
+  const el = document.createElement("div");
+  el.className = "lightbox"; el.id = "lightbox";
+  el.onclick = (e) => { if (e.target === el) closeLightbox(); };
+  el.innerHTML = `
+    <div class="frame" style="background-image:${photoBg(LB.q.id, LB.n)}"></div>
+    <div class="lb-bar">
+      <button onclick="stepLightbox(-1)">‹</button>
+      <div class="lb-mid"><b>${LB.q.supplier}</b>
+        Quote Photo ${LB.n + 1} of ${LB.q.photos} · ${USERS[LB.q.by].name}</div>
+      <button onclick="stepLightbox(1)">›</button>
+    </div>`;
+  document.body.appendChild(el);
+}
+
+/* =======================================================================
+   SWITCHER + RENDER
+   ======================================================================= */
+const VARIANTS = [
+  { key: "A", name: "Reflow — stack it, quotes become cards", fn: variantA },
+  { key: "B", name: "Rank table — 3 columns, tap a row for detail", fn: variantB },
+  { key: "C", name: "Drill-down — queue → Item, sticky pricing bar", fn: variantC },
+  { key: "D", name: "Swipe deck — ranking as a snap carousel", fn: variantD },
+];
+
+function setVariant(key) {
+  STATE.variant = key;
+  STATE.drill = null;
+  const u = new URL(location.href);
+  u.searchParams.set("variant", key);
+  history.replaceState(null, "", u);
+  render();
+}
+function cycle(d) {
+  const i = VARIANTS.findIndex((v) => v.key === STATE.variant);
+  setVariant(VARIANTS[(i + d + VARIANTS.length) % VARIANTS.length].key);
+}
+
+function render() {
+  const v = VARIANTS.find((x) => x.key === STATE.variant) || VARIANTS[0];
+  STATE.variant = v.key;
+  document.getElementById("root").innerHTML = v.fn();
+  document.getElementById("switcher").innerHTML = `
+    <button onclick="cycle(-1)" title="previous variant">←</button>
+    <span class="label"><b>${v.key}</b> — <em>${v.name}</em></span>
+    <button onclick="cycle(1)" title="next variant">→</button>`;
+  document.getElementById("banner-variant").textContent = `Variant ${v.key} of ${VARIANTS.length}`;
+  ITEMS.forEach((i) => paintMargin(i.id));
+  paintTotals();
+  wireDots();
+}
+
+// Variant D only: keep the dots honest as the rail is swiped.
+function wireDots() {
+  document.querySelectorAll(".d-rail").forEach((rail) => {
+    const dots = rail.parentElement.querySelector(".d-dots");
+    if (!dots) return;
+    rail.addEventListener("scroll", () => {
+      const card = rail.querySelector(".d-card");
+      if (!card) return;
+      const step = card.offsetWidth + 10;
+      const i = Math.round(rail.scrollLeft / step);
+      [...dots.children].forEach((d, n) => d.classList.toggle("on", n === i));
+    }, { passive: true });
+  });
+}
+
+document.addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  if (e.key === "ArrowLeft") cycle(-1);
+  if (e.key === "ArrowRight") cycle(1);
+  if (e.key === "Escape") closeLightbox();
+});
+
+render();
+</script>
+</body>
+</html>
