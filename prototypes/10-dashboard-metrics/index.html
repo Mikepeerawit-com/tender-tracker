@@ -413,6 +413,10 @@ const awaitingDecision = t => !!t.submitted && t.items.some(i => !i.outcome);
 // figure has to be multiplied by qty — the grain buildspec_1 never stated.
 const itemBidValue = i => (i.selling || 0) * i.qty;
 const selectedQuote = i => i.quotes.find(x => x.selected);
+// Landed Cost is the selected Quote in THB *plus* shipping/duty/handling, edited by hand.
+// This prototype has no shipping data, so it approximates Landed Cost as the selected
+// Quote alone — which flatters margin. Called out on the card.
+const itemMargin = i => { const q = selectedQuote(i); return q ? (i.selling - q.thb) * i.qty : 0; };
 const cheapestQuote = i => {
   const rankable = i.quotes.filter(x => !x.mismatch);
   if (rankable.length !== i.quotes.length) return null;   // a mismatch poisons the Item
@@ -515,10 +519,17 @@ const VALUE_DEFS = {
         gap: t.items.some(i => !selectedQuote(i)) })),
   },
   bid: {
-    name: 'Value of Bids out with clients',
-    desc: 'Selling price × qty on submitted Tenders still Awaiting Decision. The number with money riding on it.',
+    name: 'Bids out — whole Tender',
+    desc: 'Selling price × qty on submitted Tenders still Awaiting Decision, counting every Item we bid.',
     rows: () => TENDERS.filter(t => t.submitted && awaitingDecision(t))
       .map(t => ({ t, v: t.items.filter(i => !i.outcome || i.outcome === 'won').reduce((s, i) => s + itemBidValue(i), 0) })),
+  },
+  bidUndecided: {
+    name: 'Bids out — undecided Items only',
+    desc: 'SETTLED. Only Items the client has not ruled on. An Item already won is money banked, not money at stake.',
+    rows: () => TENDERS.filter(t => t.submitted && awaitingDecision(t))
+      .map(t => ({ t, v: t.items.filter(i => !i.outcome).reduce((s, i) => s + itemBidValue(i), 0),
+        gap: t.items.some(i => i.outcome === 'won') })),
   },
 };
 
@@ -617,8 +628,8 @@ function variantB() {
   const overdue = TENDERS.filter(sourcingOverdue);
   const dueSoon = dueRows('either', 'roll').filter(r => !r.past);
   const awaiting = TENDERS.filter(awaitingDecision);
-  const bidOut = VALUE_DEFS.bid.rows().reduce((s, r) => s + r.v, 0);
-  const wonVal = wonRows('item').reduce((s, r) => s + itemBidValue(r.i), 0);
+  const bidOut = VALUE_DEFS.bidUndecided.rows().reduce((s, r) => s + r.v, 0);
+  const wonMargin = wonRows('item').reduce((s, r) => s + itemMargin(r.i), 0);
 
   return `
   <div class="wrap">
@@ -637,9 +648,9 @@ function variantB() {
       <div class="card warn"><div class="label">Sourcing Overdue</div><div class="value">${overdue.length}</div>
         <div class="foot">still fixable today</div></div>
       <div class="card"><div class="label">Bids out with clients</div><div class="value">${thbShort(bidOut)}</div>
-        <div class="foot">${awaiting.length} tenders awaiting decision</div></div>
-      <div class="card good"><div class="label">Won in August</div><div class="value">${thbShort(wonVal)}</div>
-        <div class="foot">${wonRows('item').length} item${wonRows('item').length === 1 ? '' : 's'} across ${new Set(wonRows('item').map(r => r.t.ref)).size} tender${new Set(wonRows('item').map(r => r.t.ref)).size === 1 ? '' : 's'}</div></div>
+        <div class="foot">undecided Items only · ${awaiting.length} tenders</div></div>
+      <div class="card good"><div class="label">Margin won in August</div><div class="value">${thbShort(wonMargin)}</div>
+        <div class="foot">${wonRows('item').length} item${wonRows('item').length === 1 ? '' : 's'} · landed cost excl. shipping here</div></div>
     </div>
 
     <div class="block danger">
@@ -669,7 +680,7 @@ function variantB() {
     <div class="block info">
       <header><h3>Awaiting Decision — submitted, client silent</h3>
         <span class="note">Not a failure. A prompt to chase.</span></header>
-      ${tenderRows(awaiting, r => `<td class="num">${thb(VALUE_DEFS.bid.rows().find(x => x.t === r)?.v || 0)}
+      ${tenderRows(awaiting, r => `<td class="num">${thb(VALUE_DEFS.bidUndecided.rows().find(x => x.t === r)?.v || 0)}
         <div class="sub">submitted ${fmtD(r.submitted)} · ${days(r.submitted, TODAY)}d ago</div></td>`)}
     </div>
     ${dataDump()}
@@ -935,10 +946,11 @@ function labValue() {
     <p class="finding"><b>Finding — “Selected only” is honest and nearly always ฿0.</b> Selection happens
       minutes before the Bid goes out, so for most of a Tender's life this reads zero. It measures the wrong thing:
       not exposure, but how close we are to submitting.</p>
-    <p class="finding"><b>Recommendation — cut the metric and replace it.</b> The only figure here with a decision
-      attached is <b>Bids out with clients</b> (${thb(defs.bid.total)}) — money genuinely at stake, on Tenders
-      genuinely Awaiting Decision. It answers “how much is riding on the phone call I have not made”.
-      “Total quoted value” answers nothing.</p>
+    <p class="finding"><b>SETTLED — the metric is cut and replaced by “Bids out with clients”</b>
+      (${thb(defs.bidUndecided.total)}). Money genuinely at stake: it answers “how much is riding on the phone call
+      I have not made”, and “Total quoted value” answers nothing.
+      <b>Undecided Items only</b> — the whole-Tender reading (${thb(defs.bid.total)}) counts T-1022's two
+      already-won Items, which are money banked, not money at stake.</p>
     <p class="schema"><b>Schema.</b> No new columns — but note every one of these needs
       <code>qty × per-unit</code>, and <b>09 found the per-unit grain was never stated anywhere in buildspec_1</b>.
       <code>buildspec_2</code> has to say it out loud or this metric gets rebuilt wrong.</p>
@@ -963,9 +975,9 @@ function labFifth() {
             <div class="foot">the failure the product exists to prevent</div></div>
           <div class="card warn"><div class="label">Sourcing Overdue</div><div class="value">${overdue.length}</div>
             <div class="foot">fixable today, by a named Assignee</div></div>
-          <div class="card"><div class="label">Bids out</div><div class="value">${thbShort(VALUE_DEFS.bid.rows().reduce((s, r) => s + r.v, 0))}</div>
+          <div class="card"><div class="label">Bids out</div><div class="value">${thbShort(VALUE_DEFS.bidUndecided.rows().reduce((s, r) => s + r.v, 0))}</div>
             <div class="foot">${awaiting.length} awaiting client decision</div></div>
-          <div class="card good"><div class="label">Won in August</div><div class="value">${thbShort(wonRows('item').reduce((s, r) => s + itemBidValue(r.i), 0))}</div>
+          <div class="card good"><div class="label">Margin won in August</div><div class="value">${thbShort(wonRows('item').reduce((s, r) => s + itemMargin(r.i), 0))}</div>
             <div class="foot">${wonRows('item').length} item${wonRows('item').length === 1 ? '' : 's'}, by decision date</div></div>
         </div>
       </div>
