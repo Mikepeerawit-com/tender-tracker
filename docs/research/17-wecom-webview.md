@@ -97,6 +97,8 @@ one operational thing on the list that could ever bite. **[documented]**
 
 ### 1.4 The cost that is not zero — an anti-fraud banner over a password field
 
+> **MEASURED 2026-08-13 by ticket 18 ([#19](https://github.com/Mikepeerawit-com/tender-tracker/issues/19)) — L1: there is no banner.** The probe page opened in the WeCom iOS webview with nothing above it and nothing below it. **This whole section's cost is zero**, and the reason is the trap it flagged itself: the FAQ says *在微信打开页面* and this section inferred it onto 企业微信 anyway. The banner is consumer 微信 behaviour. Everything below stands as a record of the inference and why it was wrong to make; the conclusion does not.
+
 This is the finding worth carrying forward, and it is uncomfortable.
 
 The banner in §1.2 reads **防欺诈盗号，请勿支付或输入账号密码** — *"Guard against fraud
@@ -412,7 +414,13 @@ It is unavailable to us for two independent reasons, either sufficient: **[docum
 
 **So our page cannot push the user into Safari or Chrome. It can only ask.**
 
-### 6.2 The manual route exists
+### 6.2 The manual route ~~exists~~ **does not exist on iOS**
+
+> **MEASURED 2026-08-13 by ticket 18 ([#19](https://github.com/Mikepeerawit-com/tender-tracker/issues/19)) — L5: there is no open-in-browser action.** The ⋯ menu does not carry one. This section was **[widely-reported]** with no primary source behind it, and it is **wrong** for WeCom on iOS.
+>
+> **So the escape hatch is dead three ways, not two.** §6.1's two reasons kill the programmatic route; this kills the manual one. There is no route from the WeCom webview to Safari, and the product must never offer one as advice. Consequence for `buildspec_2`: **everything a reminder link leads to has to work inside the webview** — the webview is not a degraded mode with a way out, it is the delivery surface.
+>
+> Android is unmeasured (no device), and the two platforms differ here as everywhere else in this document. Do not assume Android matches.
 
 Mobile WeCom opens chat links in the built-in browser by default, and the overflow (⋯)
 menu carries copy-link and open-in-browser actions. **[widely-reported]** — consistent
