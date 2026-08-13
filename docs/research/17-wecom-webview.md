@@ -11,12 +11,12 @@ statement), **[inferred]** (my reading of documented facts, stated as such).
 | # | Question | Verdict | Confidence |
 |---|---|---|---|
 | **1** | Does **Trusted domain name** gate plain link-tapping? | ✅ **NO. The entry path lives.** | **documented** |
-| 1b | Does an unfiled domain get an anti-fraud banner? | ⚠️ **Yes, over the login form** — and permanently | documented + inferred |
+| 1b | Does an unfiled domain get an anti-fraud banner? | ~~⚠️ **Yes, over the login form** — and permanently~~ ✅ **NO — measured, ticket 18 L1.** The inference in §1.4 was wrong | ~~documented + inferred~~ **measured** |
 | 2 | What is the webview? | iOS `WKWebView`; Android Tencent engine, version unknown | documented + inferred |
 | **3** | Do cookies/`localStorage` survive app restarts? | ⚠️ **Restarts yes. Seven idle days, no** — and this hits Mobile Safari too | **documented** |
 | 4 | Does `capture="environment"` open the camera? | iOS ✅ by design · Android ❓ **WeCom's choice, reported flaky** | documented + widely-reported |
 | 5 | Cross-origin `PUT` to Supabase Storage? | ✅ Nothing on WeCom's side. The risk is Supabase-side | documented absence + widely-reported |
-| 6 | Escape hatch to a real browser? | Manual ✅ · **Programmatic ❌ dead twice over** · detection ✅ | documented |
+| 6 | Escape hatch to a real browser? | ~~Manual ✅ ·~~ **Manual ❌ too — measured, ticket 18 L5.** Programmatic ❌ dead twice over · detection ✅. **There is no escape** | ~~documented~~ **measured** |
 
 **Headline: the ticket's catastrophic outcome did not happen.** Tapping a robot-message
 link opens the page. The Trusted domain name wall that ticket 06 hit does not stand in
