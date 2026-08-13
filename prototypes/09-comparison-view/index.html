@@ -1,0 +1,964 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE — Quote comparison view (ticket 09)</title>
+<!--
+  THROWAWAY PROTOTYPE — ticket 09 / issue #10.
+  Three radically different variants of the Quote comparison view, switchable via
+  ?variant=A|B|C and the floating bar at the bottom. No build step, no persistence,
+  no backend: open the file.
+
+  The real app is Next.js + Tailwind + shadcn/ui. This file is hand-rolled CSS that
+  approximates that look so the *structure* can be judged. None of this code is meant
+  to survive; the argument it settles is.
+
+  Fake data is deliberately awkward, per the ticket: 4 Items, 3 Assignees, 6 suppliers,
+  THB/CNY/USD, one Item with 8 competing quotes (density stress case), one Item where
+  the same supplier was quoted by two Assignees, one Item with a unit mismatch, one Item
+  where every quote is an Alternative, and one Item marked No Supplier Found by one
+  Assignee but quoted by another.
+-->
+<style>
+  :root {
+    --bg: #f8fafc; --panel: #ffffff; --ink: #0f172a; --muted: #64748b;
+    --line: #e2e8f0; --line-strong: #cbd5e1;
+    --accent: #0f766e; --accent-soft: #f0fdfa;
+    --warn: #b45309; --warn-soft: #fffbeb; --warn-line: #fcd34d;
+    --danger: #b91c1c; --danger-soft: #fef2f2;
+    --good: #15803d; --good-soft: #f0fdf4;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    padding-bottom: 96px;
+  }
+  h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+  table { border-collapse: collapse; width: 100%; }
+  input { font: inherit; color: inherit; }
+  button { font: inherit; cursor: pointer; }
+
+  /* ---------- prototype chrome ---------- */
+  .proto-banner {
+    background: #1e293b; color: #e2e8f0; padding: 8px 20px; font-size: 12px;
+    display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap;
+  }
+  .proto-banner strong { color: #fbbf24; letter-spacing: .06em; }
+  .proto-banner span { color: #94a3b8; }
+
+  .switcher {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #0f172a; color: #f8fafc; border-radius: 999px;
+    display: flex; align-items: center; gap: 4px; padding: 6px;
+    box-shadow: 0 10px 30px rgba(15,23,42,.35); z-index: 200;
+  }
+  .switcher button {
+    background: #1e293b; color: #f8fafc; border: 0; border-radius: 999px;
+    width: 34px; height: 34px; font-size: 16px; line-height: 1;
+  }
+  .switcher button:hover { background: #334155; }
+  .switcher .label { padding: 0 14px; font-size: 13px; white-space: nowrap; }
+  .switcher .label b { font-weight: 600; }
+  .switcher .label em { font-style: normal; color: #94a3b8; }
+  .switcher .hint { font-size: 11px; color: #64748b; padding-right: 10px; }
+
+  /* ---------- shared page furniture ---------- */
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 24px 20px; }
+  .tender-head { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 20px; }
+  .tender-head .who { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .tender-head h1 { font-size: 22px; margin-top: 2px; }
+  .deadlines { display: flex; gap: 20px; font-size: 12px; }
+  .deadlines div span { display: block; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-size: 10px; }
+  .deadlines div b { font-weight: 600; }
+  .assignee-strip { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+
+  .avatar {
+    width: 22px; height: 22px; border-radius: 999px; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 10px; font-weight: 600;
+    color: #fff; flex: none;
+  }
+  .avatar.sm { width: 18px; height: 18px; font-size: 9px; }
+  .avatar.lg { width: 28px; height: 28px; font-size: 11px; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px; border-radius: 999px;
+    padding: 2px 8px; font-size: 11px; font-weight: 500; border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .chip.neutral { background: #f1f5f9; color: #475569; border-color: var(--line); }
+  .chip.alt     { background: var(--warn-soft); color: var(--warn); border-color: var(--warn-line); }
+  .chip.stop    { background: var(--danger-soft); color: var(--danger); border-color: #fecaca; }
+  .chip.good    { background: var(--good-soft); color: var(--good); border-color: #bbf7d0; }
+  .chip.sel     { background: var(--accent-soft); color: var(--accent); border-color: #99f6e4; }
+
+  .money-orig { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .money-thb  { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+  .money-thb.stale { color: var(--warn); }
+  .derived-note { font-size: 11px; color: var(--muted); }
+
+  .banner {
+    border: 1px solid var(--line); border-left-width: 3px; border-radius: 8px;
+    padding: 8px 12px; font-size: 12.5px; display: flex; gap: 8px; align-items: baseline;
+  }
+  .banner.stop { background: var(--danger-soft); border-color: #fecaca; border-left-color: var(--danger); color: #7f1d1d; }
+  .banner.warn { background: var(--warn-soft); border-color: var(--warn-line); border-left-color: var(--warn); color: #78350f; }
+  .banner.info { background: #f8fafc; border-left-color: var(--line-strong); color: #475569; }
+
+  .thumbs { display: flex; gap: 4px; }
+  .thumb {
+    width: 34px; height: 34px; border-radius: 6px; border: 1px solid var(--line);
+    cursor: zoom-in; flex: none; background-size: cover;
+  }
+  .thumb.tiny { width: 20px; height: 20px; border-radius: 4px; }
+  .photo-badge {
+    display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line);
+    background: #fff; border-radius: 6px; padding: 2px 7px; font-size: 11px;
+    color: var(--muted); cursor: zoom-in;
+  }
+  .photo-badge:hover { border-color: var(--line-strong); color: var(--ink); }
+  .no-photo { color: #cbd5e1; font-size: 11px; }
+
+  /* pricing block, shared shape across variants but styled per variant */
+  .price-grid { display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; }
+  .price-field label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 4px; }
+  .price-field input {
+    width: 120px; padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: 6px;
+    background: #fff; text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .price-field input:focus { outline: 2px solid #99f6e4; outline-offset: -1px; border-color: var(--accent); }
+  .price-field .readonly {
+    width: 120px; padding: 6px 8px; border: 1px dashed var(--line-strong); border-radius: 6px;
+    text-align: right; font-variant-numeric: tabular-nums; background: #f8fafc; color: var(--muted);
+  }
+  .margin-out { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 16px; }
+  .margin-out.neg { color: var(--danger); }
+  .margin-out.pos { color: var(--good); }
+  .prefill-note { font-size: 11px; color: var(--muted); }
+
+  /* lightbox */
+  .lightbox {
+    position: fixed; inset: 0; background: rgba(15,23,42,.82); z-index: 300;
+    display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+  }
+  .lightbox .frame { width: min(70vw, 620px); aspect-ratio: 4/3; border-radius: 12px; background-size: cover; }
+  .lightbox .cap { color: #e2e8f0; font-size: 13px; }
+  .lightbox .nav { display: flex; gap: 10px; }
+  .lightbox .nav button { background: #1e293b; color: #f8fafc; border: 0; border-radius: 8px; padding: 6px 14px; }
+
+  /* =====================================================================
+     VARIANT A — dense comparison tables, whole Tender on one page
+     ===================================================================== */
+  .a-item { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 18px; overflow: hidden; }
+  .a-item > header { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
+  .a-item > header h3 { font-size: 15px; }
+  .a-item > header .qty { color: var(--muted); font-size: 12.5px; }
+  .a-item > header .spacer { flex: 1; }
+  .a-note { padding: 10px 16px 0; }
+  table.a-tbl th {
+    text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line);
+    background: #f8fafc; white-space: nowrap;
+  }
+  table.a-tbl td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.a-tbl tr.alt td { background: var(--warn-soft); }
+  table.a-tbl tr.selected td { background: var(--accent-soft); }
+  table.a-tbl tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  table.a-tbl tr.lowest td.unit-price .money-orig::after {
+    content: "lowest"; margin-left: 8px; font-size: 10px; font-weight: 500; color: var(--good);
+    background: var(--good-soft); border: 1px solid #bbf7d0; border-radius: 999px; padding: 1px 6px;
+    text-transform: uppercase; letter-spacing: .05em; vertical-align: 1px;
+  }
+  table.a-tbl td.num { text-align: right; }
+  .a-dup { font-size: 11px; color: var(--warn); }
+  .a-pricing { padding: 14px 16px; background: #f8fafc; border-top: 1px solid var(--line); }
+  .a-selbtn {
+    border: 1px solid var(--line-strong); background: #fff; border-radius: 6px;
+    padding: 3px 9px; font-size: 11.5px; color: var(--muted);
+  }
+  .a-selbtn:hover { border-color: var(--accent); color: var(--accent); }
+  .a-selbtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .a-footnote { padding: 8px 16px; font-size: 11px; color: var(--muted); background: #f8fafc; }
+
+  /* =====================================================================
+     VARIANT B — item rail + quote cards + persistent bid panel
+     ===================================================================== */
+  .b-layout { display: grid; grid-template-columns: 250px minmax(0,1fr) 290px; gap: 16px; align-items: start; }
+  .b-rail { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; position: sticky; top: 16px; }
+  .b-rail h4 { padding: 12px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); border-bottom: 1px solid var(--line); }
+  .b-rail button {
+    display: block; width: 100%; text-align: left; background: none; border: 0;
+    border-bottom: 1px solid var(--line); padding: 12px 14px;
+  }
+  .b-rail button:hover { background: #f8fafc; }
+  .b-rail button.on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+  .b-rail .nm { font-size: 13px; font-weight: 500; display: block; margin-bottom: 5px; }
+  .b-rail .meta { font-size: 11px; color: var(--muted); }
+
+  .b-main { min-width: 0; }
+  .b-itemhead { margin-bottom: 12px; }
+  .b-itemhead h2 { font-size: 18px; }
+  .b-itemhead .qty { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .b-cards { display: flex; gap: 12px; overflow-x: auto; padding: 4px 4px 14px; scroll-snap-type: x mandatory; }
+  .b-card {
+    flex: none; width: 258px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); scroll-snap-align: start; display: flex; flex-direction: column;
+  }
+  .b-card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  .b-card .who { display: flex; gap: 7px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .b-card .who .nm { font-size: 12px; color: var(--muted); }
+  .b-card .altbar {
+    background: var(--warn); color: #fff; padding: 6px 12px; font-size: 11px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .b-card .altbar .req { opacity: .8; text-decoration: line-through; }
+  .b-card .body { padding: 12px; flex: 1; }
+  .b-card .supplier { font-weight: 600; font-size: 13.5px; margin-bottom: 10px; }
+  .b-card .big { font-size: 22px; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .b-card .per { font-size: 11px; color: var(--muted); }
+  .b-card .conv {
+    margin-top: 8px; border: 1px dashed var(--line-strong); border-radius: 8px;
+    padding: 7px 9px; background: #f8fafc;
+  }
+  .b-card .conv .val { font-variant-numeric: tabular-nums; font-size: 13px; }
+  .b-card .conv .why { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+  .b-card .foot { padding: 10px 12px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+  .b-card .foot button { flex: 1; border: 1px solid var(--line-strong); background: #fff; border-radius: 6px; padding: 6px; font-size: 12px; }
+  .b-card.selected .foot button { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .b-nsf {
+    flex: none; width: 258px; border: 1px dashed var(--line-strong); border-radius: var(--radius);
+    padding: 12px; background: #fff; color: var(--muted); font-size: 12px;
+  }
+  .b-panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); position: sticky; top: 16px; }
+  .b-panel h4 { padding: 12px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); border-bottom: 1px solid var(--line); }
+  .b-panel .inner { padding: 14px; }
+  .b-panel .price-field { margin-bottom: 12px; }
+  .b-panel .price-field input, .b-panel .price-field .readonly { width: 100%; }
+  .b-scrollhint { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+
+  /* =====================================================================
+     VARIANT C — decision ledger, one row per Item, expand to compare
+     ===================================================================== */
+  .c-sheet { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  table.c-tbl th {
+    text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--muted); font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--line); background: #f8fafc;
+  }
+  table.c-tbl td { padding: 11px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  table.c-tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.c-tbl tr.head-row:hover td { background: #f8fafc; }
+  table.c-tbl .twist { background: none; border: 0; color: var(--muted); font-size: 11px; padding: 0; }
+  .c-item-nm { font-weight: 500; }
+  .c-item-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .c-sel { font-size: 12.5px; }
+  .c-sel .none { color: var(--muted); font-style: italic; }
+  .c-expand { background: #f8fafc; }
+  .c-expand .inner { padding: 12px 12px 14px 30px; }
+  .c-rank { width: 100%; }
+  .c-rank td { padding: 6px 8px; border-bottom: 1px solid var(--line); background: #fff; font-size: 12.5px; }
+  .c-rank tr.alt td { background: var(--warn-soft); }
+  .c-rank tr.selected td { background: var(--accent-soft); }
+  .c-rank td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .c-rank .pick { border: 1px solid var(--line-strong); background: #fff; border-radius: 5px; font-size: 11px; padding: 2px 8px; }
+  .c-rank tr.selected .pick { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .c-totals { display: flex; gap: 26px; padding: 14px 16px; background: #f1f5f9; border-top: 1px solid var(--line-strong); }
+  .c-totals div span { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  .c-totals div b { font-size: 16px; font-variant-numeric: tabular-nums; }
+  .c-inline-input {
+    width: 96px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 5px;
+    text-align: right; font-variant-numeric: tabular-nums; background: #fff;
+  }
+  .c-inline-input:focus { outline: 2px solid #99f6e4; outline-offset: -1px; }
+</style>
+</head>
+<body>
+
+<div class="proto-banner">
+  <strong>PROTOTYPE</strong>
+  <span>Ticket 09 · Quote comparison view · throwaway, no backend, nothing saves</span>
+  <span id="banner-variant"></span>
+</div>
+
+<div id="root"></div>
+<div class="switcher" id="switcher"></div>
+
+<script>
+/* =======================================================================
+   FAKE DATA — deliberately awkward. See the comment at the top of the file.
+   ======================================================================= */
+
+const USERS = {
+  somchai: { name: "Somchai P.",  initials: "SP", color: "#0f766e" },
+  nok:     { name: "Nok W.",      initials: "NW", color: "#7c3aed" },
+  wei:     { name: "Wei Zhang",   initials: "WZ", color: "#c2410c" },
+};
+
+// Applied rate = ECB mid x (1 + 2% buffer), frozen onto the Quote at entry (ticket 04).
+const RATE_FRESH = { as_of: "2026-08-11", mid: { CNY: 4.9600, USD: 35.4000, THB: 1 } };
+const RATE_STALE = { as_of: "2026-08-04", mid: { CNY: 4.9100, USD: 35.1000, THB: 1 }, stale: true };
+const BUFFER = 0.02;
+
+const TENDER = {
+  ref: "TEN-2026-041",
+  client: "Bangkok Metropolitan Hospital Group",
+  title: "Q3 consumables & infusion equipment RFQ",
+  owner: "somchai",
+  assignees: ["somchai", "nok", "wei"],
+  internal_deadline: "18 Aug 2026",
+  submission_deadline: "22 Aug 2026",
+};
+
+const ITEMS = [
+  {
+    id: "i1",
+    name: "Nitrile examination glove, powder-free, size M",
+    spec: "3.5 g, blue, non-sterile, TFDA-registered",
+    qty: 40000, unit: "piece",
+    selling: 2.60,
+    quotes: [
+      { id: "q1a", supplier: "Shanghai Kindly Medical", by: "somchai", price: 0.420, ccy: "CNY", unit: "piece", rate: RATE_FRESH, photos: 3 },
+      { id: "q1b", supplier: "Shanghai Kindly Medical", by: "nok",     price: 0.455, ccy: "CNY", unit: "piece", rate: RATE_FRESH, photos: 1 },
+      { id: "q1c", supplier: "Hangzhou Sunmed",         by: "somchai", price: 0.398, ccy: "CNY", unit: "piece", rate: RATE_STALE, photos: 2 },
+      { id: "q1d", supplier: "Bangkok Medline Co.",     by: "nok",     price: 2.350, ccy: "THB", unit: "piece", rate: RATE_FRESH, photos: 0 },
+      { id: "q1e", supplier: "Guangzhou Improve",       by: "wei",     price: 0.058, ccy: "USD", unit: "piece", rate: RATE_FRESH, photos: 4 },
+      { id: "q1f", supplier: "Zhende Medical",          by: "wei",     price: 0.405, ccy: "CNY", unit: "piece", rate: RATE_FRESH, photos: 2,
+        alt: "Zhende nitrile glove, size M, 3.0 g (lighter gauge)" },
+      { id: "q1g", supplier: "Siam Pharma Supply",      by: "wei",     price: 2.280, ccy: "THB", unit: "piece", rate: RATE_FRESH, photos: 1 },
+      { id: "q1h", supplier: "Jiangsu Kanghua",         by: "nok",     price: 0.389, ccy: "CNY", unit: "piece", rate: RATE_FRESH, photos: 0 },
+    ],
+  },
+  {
+    id: "i2",
+    name: "Disposable syringe 5 ml with 23G needle",
+    spec: "Luer slip, sterile, single use",
+    qty: 20000, unit: "piece",
+    selling: null,
+    quotes: [
+      { id: "q2a", supplier: "Jiangsu Kanghua",     by: "nok",     price: 26.50, ccy: "CNY", unit: "box of 50", rate: RATE_FRESH, photos: 1 },
+      { id: "q2b", supplier: "Bangkok Medline Co.", by: "somchai", price: 2.95,  ccy: "THB", unit: "piece",     rate: RATE_FRESH, photos: 0 },
+      { id: "q2c", supplier: "Hangzhou Sunmed",     by: "wei",     price: 0.51,  ccy: "CNY", unit: "piece",     rate: RATE_FRESH, photos: 2 },
+    ],
+  },
+  {
+    id: "i3",
+    name: "Volumetric infusion pump, 2-channel",
+    spec: "Requested: B.Braun Infusomat Space P",
+    qty: 6, unit: "unit",
+    selling: null,
+    quotes: [
+      { id: "q3a", supplier: "Shenzhen Comen",     by: "wei",     price: 4850,  ccy: "CNY", unit: "unit", rate: RATE_FRESH, photos: 4,
+        alt: "Comen SK-600III volumetric pump" },
+      { id: "q3b", supplier: "Guangzhou Improve",  by: "somchai", price: 720,   ccy: "USD", unit: "unit", rate: RATE_FRESH, photos: 2,
+        alt: "Contec SP750 volumetric pump" },
+      { id: "q3c", supplier: "Siam Pharma Supply", by: "nok",     price: 26900, ccy: "THB", unit: "unit", rate: RATE_FRESH, photos: 3,
+        alt: "Mindray BeneFusion VP3" },
+    ],
+  },
+  {
+    id: "i4",
+    name: "Surgical respirator N95 / FFP2, cup style",
+    spec: "Head-strap, fluid-resistant",
+    qty: 5000, unit: "piece",
+    selling: 24.00,
+    quotes: [
+      { id: "q4a", supplier: "Zhende Medical", by: "somchai", price: 3.85, ccy: "CNY", unit: "piece", rate: RATE_FRESH, photos: 2 },
+    ],
+    no_supplier_found: [
+      { by: "wei", on: "10 Aug 2026", note: "No TFDA-registered cup style available inside a 30-day lead time" },
+    ],
+  },
+];
+
+/* =======================================================================
+   DERIVED VALUES — nothing here is stored
+   ======================================================================= */
+
+const applied = (q) => q.rate.mid[q.ccy] * (1 + BUFFER);
+const thbUnit = (q) => q.price * applied(q);
+const unitMismatch = (item) => item.quotes.some((q) => q.unit !== item.unit);
+const rankable = (item) => item.quotes.length > 0 && !unitMismatch(item);
+const allAlternatives = (item) => item.quotes.length > 0 && item.quotes.every((q) => q.alt);
+const lowestId = (item) => {
+  if (!rankable(item)) return null;
+  return item.quotes.reduce((lo, q) => (thbUnit(q) < thbUnit(lo) ? q : lo)).id;
+};
+const dupSuppliers = (item) => {
+  const seen = {};
+  item.quotes.forEach((q) => (seen[q.supplier] = (seen[q.supplier] || 0) + 1));
+  return Object.keys(seen).filter((s) => seen[s] > 1);
+};
+const findQuote = (item, id) => item.quotes.find((q) => q.id === id) || null;
+const itemById = (id) => ITEMS.find((i) => i.id === id);
+
+const fmt = (n, dp = 2) =>
+  n.toLocaleString("en-GB", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+const CCY_SYM = { CNY: "¥", USD: "$", THB: "฿" };
+const money = (n, ccy, dp = 2) => CCY_SYM[ccy] + fmt(n, dp);
+const thb = (n, dp = 2) => "฿" + fmt(n, dp);
+
+/* =======================================================================
+   MUTABLE PROTOTYPE STATE — in memory only
+   ======================================================================= */
+
+const STATE = {
+  variant: (new URLSearchParams(location.search).get("variant") || "A").toUpperCase(),
+  selected: { i1: "q1c", i2: null, i3: null, i4: "q4a" },
+  landed: {},          // itemId -> per-unit THB, once touched or pre-filled
+  landedTouched: {},
+  selling: {},
+  openItem: "i1",      // variant B
+  expanded: { i1: true, i2: false, i3: false, i4: false }, // variant C
+};
+ITEMS.forEach((i) => { if (i.selling != null) STATE.selling[i.id] = i.selling; });
+
+function landedFor(item) {
+  if (STATE.landed[item.id] != null) return STATE.landed[item.id];
+  const q = findQuote(item, STATE.selected[item.id]);
+  return q ? thbUnit(q) : null;
+}
+function marginFor(item) {
+  const cost = landedFor(item), sell = STATE.selling[item.id];
+  if (cost == null || sell == null || sell === "") return null;
+  const m = Number(sell) - cost;
+  return { unit: m, total: m * item.qty, pct: sell > 0 ? (m / Number(sell)) * 100 : 0 };
+}
+
+function selectQuote(itemId, quoteId) {
+  STATE.selected[itemId] = STATE.selected[itemId] === quoteId ? null : quoteId;
+  if (!STATE.landedTouched[itemId]) delete STATE.landed[itemId]; // re-prefill from the new Quote
+  render();
+}
+
+/* =======================================================================
+   SMALL SHARED BITS
+   ======================================================================= */
+
+const avatar = (uid, cls = "") => {
+  const u = USERS[uid];
+  return `<span class="avatar ${cls}" style="background:${u.color}" title="${u.name}">${u.initials}</span>`;
+};
+
+// Deterministic pretend photos — no network, no assets.
+const photoBg = (qid, n) => {
+  let h = 0;
+  for (const ch of qid + n) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return `linear-gradient(135deg, hsl(${h} 45% 72%), hsl(${(h + 48) % 360} 40% 55%))`;
+};
+const thumbHtml = (q, n, cls = "") =>
+  `<div class="thumb ${cls}" style="background-image:${photoBg(q.id, n)}"
+        onclick="openLightbox('${q.id}', ${n})"></div>`;
+
+function convNote(q) {
+  const r = q.rate;
+  if (q.ccy === "THB") return "quoted in THB — no conversion";
+  return `${CCY_SYM[q.ccy]}1 = ฿${fmt(r.mid[q.ccy], 4)} mid +2% buffer · ${r.as_of}${r.stale ? " · STALE" : ""}`;
+}
+
+function thbLine(q, extraCls = "") {
+  const cls = "money-thb " + (q.rate.stale ? "stale " : "") + extraCls;
+  const warn = q.rate.stale ? "⚠ " : "≈ ";
+  if (q.ccy === "THB") return `<span class="money-thb">฿ — quoted in THB</span>`;
+  return `<span class="${cls}" title="${convNote(q)}">${warn}${thb(thbUnit(q))}</span>`;
+}
+
+/* ---- lightbox ---- */
+let LB = null;
+function openLightbox(qid, n) {
+  const q = ITEMS.flatMap((i) => i.quotes).find((x) => x.id === qid);
+  LB = { q, n };
+  drawLightbox();
+}
+function closeLightbox() { LB = null; drawLightbox(); }
+function stepLightbox(d) {
+  if (!LB) return;
+  LB.n = (LB.n + d + LB.q.photos) % LB.q.photos;
+  drawLightbox();
+}
+function drawLightbox() {
+  const old = document.getElementById("lightbox");
+  if (old) old.remove();
+  if (!LB) return;
+  const el = document.createElement("div");
+  el.className = "lightbox"; el.id = "lightbox";
+  el.onclick = (e) => { if (e.target === el) closeLightbox(); };
+  el.innerHTML = `
+    <div class="frame" style="background-image:${photoBg(LB.q.id, LB.n)}"></div>
+    <div class="cap">${LB.q.supplier} · photo ${LB.n + 1} of ${LB.q.photos} · uploaded by ${USERS[LB.q.by].name}</div>
+    <div class="nav">
+      <button onclick="stepLightbox(-1)">← prev</button>
+      <button onclick="closeLightbox()">close</button>
+      <button onclick="stepLightbox(1)">next →</button>
+    </div>`;
+  document.body.appendChild(el);
+}
+
+/* ---- live pricing recompute (no re-render, so inputs keep focus) ---- */
+function onLanded(itemId, v) {
+  STATE.landed[itemId] = v === "" ? null : Number(v);
+  STATE.landedTouched[itemId] = true;
+  paintMargin(itemId);
+}
+function onSelling(itemId, v) {
+  STATE.selling[itemId] = v === "" ? null : Number(v);
+  paintMargin(itemId);
+}
+function paintMargin(itemId) {
+  const item = itemById(itemId), m = marginFor(item);
+  document.querySelectorAll(`[data-margin="${itemId}"]`).forEach((el) => {
+    if (!m) { el.textContent = "—"; el.className = "margin-out"; return; }
+    el.textContent = thb(m.unit) + " / " + item.unit;
+    el.className = "margin-out " + (m.unit < 0 ? "neg" : "pos");
+  });
+  document.querySelectorAll(`[data-margin-total="${itemId}"]`).forEach((el) => {
+    el.textContent = m ? thb(m.total, 0) + `  (${fmt(m.pct, 1)}%)` : "—";
+  });
+  document.querySelectorAll(`[data-margin-pct="${itemId}"]`).forEach((el) => {
+    el.textContent = m ? fmt(m.pct, 1) + "%" : "—";
+  });
+  document.querySelectorAll(`[data-cost-total="${itemId}"]`).forEach((el) => {
+    const c = landedFor(item);
+    el.textContent = c == null ? "—" : thb(c * item.qty, 0);
+  });
+  paintTotals();
+}
+function paintTotals() {
+  let cost = 0, sell = 0, priced = 0;
+  ITEMS.forEach((item) => {
+    const c = landedFor(item), s = STATE.selling[item.id];
+    if (c != null && s != null && s !== "") { cost += c * item.qty; sell += Number(s) * item.qty; priced++; }
+  });
+  const set = (sel, txt) => document.querySelectorAll(sel).forEach((e) => (e.textContent = txt));
+  set("[data-bid-total]", priced ? thb(sell, 0) : "—");
+  set("[data-bid-cost]", priced ? thb(cost, 0) : "—");
+  set("[data-bid-margin]", priced ? thb(sell - cost, 0) + ` (${fmt(((sell - cost) / sell) * 100, 1)}%)` : "—");
+  set("[data-bid-coverage]", `${priced} of ${ITEMS.length} Items priced`);
+}
+
+/* =======================================================================
+   SHARED HEADER
+   ======================================================================= */
+function tenderHead(subtitle) {
+  return `
+  <div class="tender-head">
+    <div>
+      <div class="who">${TENDER.ref} · ${TENDER.client}</div>
+      <h1>${TENDER.title}</h1>
+      <div class="assignee-strip" style="margin-top:8px">
+        <span>Owner</span> ${avatar(TENDER.owner)}
+        <span style="margin-left:10px">Assignees</span>
+        ${TENDER.assignees.map((a) => avatar(a)).join("")}
+        <span style="margin-left:10px">· ${subtitle}</span>
+      </div>
+    </div>
+    <div class="deadlines">
+      <div><span>Internal quote deadline</span><b>${TENDER.internal_deadline}</b></div>
+      <div><span>Client submission deadline</span><b>${TENDER.submission_deadline}</b></div>
+      <div><span>Progress</span><b>sourcing</b></div>
+    </div>
+  </div>`;
+}
+
+/* =======================================================================
+   VARIANT A — "Comparison sheet"
+   Whole Tender on one page. Each Item is a dense table; the comparison is the
+   page. Primary affordance: scanning a column of numbers.
+   ======================================================================= */
+function variantA() {
+  return `<div class="wrap">
+    ${tenderHead("comparison sheet")}
+    ${ITEMS.map(itemBlockA).join("")}
+  </div>`;
+}
+
+function itemBlockA(item) {
+  const lo = lowestId(item);
+  const dups = dupSuppliers(item);
+  const mismatch = unitMismatch(item);
+  const sel = findQuote(item, STATE.selected[item.id]);
+
+  const notes = [];
+  if (mismatch)
+    notes.push(`<div class="banner stop"><b>Unit mismatch — compare manually.</b>
+      <span>This Item is quoted in pieces and in boxes of 50. Nothing here is ranked and no lowest is marked;
+      converting pack sizes silently would highlight the wrong supplier.</span></div>`);
+  if (allAlternatives(item))
+    notes.push(`<div class="banner warn"><b>No exact match.</b>
+      <span>All ${item.quotes.length} Quotes are Alternatives to <em>${item.spec.replace("Requested: ", "")}</em>.
+      Ranking compares different products.</span></div>`);
+  dups.forEach((s) => {
+    const qs = item.quotes.filter((q) => q.supplier === s);
+    notes.push(`<div class="banner info"><b>Same supplier, two Assignees.</b>
+      <span>${s} quoted ${qs.map((q) => `${money(q.price, q.ccy, 3)} by ${USERS[q.by].name}`).join(" and ")}
+      — kept as separate Quotes.</span></div>`);
+  });
+  (item.no_supplier_found || []).forEach((n) =>
+    notes.push(`<div class="banner warn"><b>No Supplier Found</b>
+      <span>— ${USERS[n.by].name}, ${n.on}: “${n.note}”</span></div>`));
+
+  const rows = item.quotes.map((q) => {
+    const cls = [q.alt ? "alt" : "", q.id === lo ? "lowest" : "", q.id === STATE.selected[item.id] ? "selected" : ""].join(" ");
+    return `<tr class="${cls}">
+      <td><button class="a-selbtn ${q.id === STATE.selected[item.id] ? "on" : ""}"
+            onclick="selectQuote('${item.id}','${q.id}')">${q.id === STATE.selected[item.id] ? "✓ Selected" : "Select"}</button></td>
+      <td><b>${q.supplier}</b>${dups.includes(q.supplier) ? `<div class="a-dup">also quoted by another Assignee</div>` : ""}</td>
+      <td style="white-space:nowrap">${avatar(q.by, "sm")} <span style="font-size:12px;color:var(--muted)">${USERS[q.by].name}</span></td>
+      <td>${q.alt
+            ? `<span class="chip alt">ALTERNATIVE</span>
+               <div style="font-size:12px;margin-top:4px"><b>${q.alt}</b></div>
+               <div style="font-size:11px;color:var(--muted)">requested: ${item.name}</div>`
+            : `<span style="font-size:12px;color:var(--muted)">as requested</span>`}</td>
+      <td class="num unit-price">
+        <div class="money-orig">${money(q.price, q.ccy, 3)}</div>
+        <div>${thbLine(q)}</div>
+        <div class="derived-note">per ${q.unit}${q.unit !== item.unit ? ` <span class="chip stop">≠ ${item.unit}</span>` : ""}</div>
+      </td>
+      <td class="num">${q.unit === item.unit
+            ? `<div class="money-orig">${money(q.price * item.qty, q.ccy, 0)}</div>
+               <div class="money-thb">${q.ccy === "THB" ? "" : "≈ " + thb(thbUnit(q) * item.qty, 0)}</div>`
+            : `<span class="derived-note">not comparable</span>`}</td>
+      <td>${q.photos
+            ? `<span class="photo-badge" onclick="openLightbox('${q.id}',0)">📷 ${q.photos}</span>`
+            : `<span class="no-photo">no photos</span>`}</td>
+    </tr>`;
+  }).join("");
+
+  const cost = landedFor(item);
+  const m = marginFor(item);
+
+  return `<section class="a-item">
+    <header>
+      <h3>${item.name}</h3>
+      <span class="qty">${fmt(item.qty, 0)} ${item.unit} · ${item.spec}</span>
+      <span class="spacer"></span>
+      ${sel ? `<span class="chip sel">Selected: ${sel.supplier}</span>` : `<span class="chip neutral">No Quote selected</span>`}
+      <span class="chip neutral">${item.quotes.length} Quote${item.quotes.length === 1 ? "" : "s"}</span>
+    </header>
+    ${notes.length ? `<div class="a-note">${notes.join('<div style="height:6px"></div>')}</div>` : ""}
+    <div style="padding:${notes.length ? "12px" : "0"} 0 0">
+      <table class="a-tbl">
+        <thead><tr>
+          <th style="width:96px"></th><th>Supplier</th><th>Sourced by</th><th>Quoted product</th>
+          <th class="num">Unit price</th><th class="num">Line total (${fmt(item.qty, 0)} ${item.unit})</th><th>Photos</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="a-pricing">
+      <div class="price-grid">
+        <div class="price-field">
+          <label>Landed cost / ${item.unit}</label>
+          <input type="number" step="0.01" value="${cost == null ? "" : fmt(cost, 4)}"
+                 oninput="onLanded('${item.id}', this.value)" ${sel ? "" : 'placeholder="select a Quote"'}>
+          <div class="prefill-note">${sel ? `pre-filled from ${sel.supplier}, editable` : "no Selected Quote"}</div>
+        </div>
+        <div class="price-field">
+          <label>Selling price / ${item.unit}</label>
+          <input type="number" step="0.01" value="${STATE.selling[item.id] ?? ""}"
+                 oninput="onSelling('${item.id}', this.value)">
+          <div class="prefill-note">what we bid the client</div>
+        </div>
+        <div class="price-field">
+          <label>Margin</label>
+          <div class="margin-out ${m ? (m.unit < 0 ? "neg" : "pos") : ""}" data-margin="${item.id}">
+            ${m ? thb(m.unit) + " / " + item.unit : "—"}
+          </div>
+          <div class="prefill-note">computed, never entered</div>
+        </div>
+        <div class="price-field">
+          <label>Margin on ${fmt(item.qty, 0)} ${item.unit}</label>
+          <div style="font-variant-numeric:tabular-nums;font-weight:600" data-margin-total="${item.id}">
+            ${m ? thb(m.total, 0) + `  (${fmt(m.pct, 1)}%)` : "—"}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="a-footnote">
+      THB figures are derived for comparison only: ECB mid-market + 2% buffer, frozen onto each Quote at entry.
+      Suppliers are paid in the currency they quoted.
+    </div>
+  </section>`;
+}
+
+/* =======================================================================
+   VARIANT B — "Sourcing desk"
+   One Item at a time. Left rail navigates Items, centre holds quote cards,
+   right holds a persistent bid panel. Primary affordance: working one Item.
+   ======================================================================= */
+function variantB() {
+  const item = itemById(STATE.openItem);
+  return `<div class="wrap">
+    ${tenderHead("sourcing desk")}
+    <div class="b-layout">
+      <nav class="b-rail">
+        <h4>Tender Items</h4>
+        ${ITEMS.map((it) => {
+          const sel = findQuote(it, STATE.selected[it.id]);
+          let meta;
+          if (unitMismatch(it)) meta = `<span class="chip stop">unit mismatch</span>`;
+          else if (allAlternatives(it)) meta = `<span class="chip alt">no exact match</span>`;
+          else if (sel) meta = `<span class="chip sel">✓ ${sel.supplier}</span>`;
+          else meta = `<span class="chip neutral">${it.quotes.length} Quotes, none selected</span>`;
+          const nsf = (it.no_supplier_found || []).length
+            ? `<div style="margin-top:5px"><span class="chip alt">No Supplier Found ×${it.no_supplier_found.length}</span></div>` : "";
+          return `<button class="${it.id === STATE.openItem ? "on" : ""}" onclick="STATE.openItem='${it.id}';render()">
+            <span class="nm">${it.name}</span>
+            <span class="meta">${fmt(it.qty, 0)} ${it.unit}</span>
+            <div style="margin-top:6px">${meta}</div>${nsf}
+          </button>`;
+        }).join("")}
+      </nav>
+
+      <div class="b-main">
+        <div class="b-itemhead">
+          <h2>${item.name}</h2>
+          <div class="qty">${fmt(item.qty, 0)} ${item.unit} · ${item.spec}</div>
+        </div>
+        ${unitMismatch(item) ? `<div class="banner stop" style="margin-bottom:10px">
+          <b>Unit mismatch — compare manually.</b>
+          <span>Quotes arrived in different units. Nothing is ranked here.</span></div>` : ""}
+        ${allAlternatives(item) ? `<div class="banner warn" style="margin-bottom:10px">
+          <b>No exact match.</b><span>Every Quote is an Alternative.</span></div>` : ""}
+        ${dupSuppliers(item).map((s) => `<div class="banner info" style="margin-bottom:10px">
+          <b>${s}</b><span>appears twice — quoted independently by two Assignees.</span></div>`).join("")}
+        <div class="b-scrollhint">${item.quotes.length} Quote${item.quotes.length === 1 ? "" : "s"}${
+          item.quotes.length > 4 ? " · scroll sideways to see them all →" : ""}</div>
+        <div class="b-cards">
+          ${item.quotes.map((q) => cardB(item, q)).join("")}
+          ${(item.no_supplier_found || []).map((n) => `<div class="b-nsf">
+            ${avatar(n.by, "lg")}
+            <div style="margin-top:8px"><span class="chip alt">No Supplier Found</span></div>
+            <div style="margin-top:8px;color:var(--ink);font-size:12.5px">${USERS[n.by].name} could not source this.</div>
+            <div style="margin-top:6px">“${n.note}”</div>
+            <div style="margin-top:6px;font-size:11px">recorded ${n.on}</div>
+          </div>`).join("")}
+        </div>
+      </div>
+
+      ${bidPanelB(item)}
+    </div>
+  </div>`;
+}
+
+function cardB(item, q) {
+  const isSel = STATE.selected[item.id] === q.id;
+  const isLow = lowestId(item) === q.id;
+  return `<article class="b-card ${isSel ? "selected" : ""}">
+    <div class="who">${avatar(q.by)}<span class="nm">sourced by ${USERS[q.by].name}</span></div>
+    ${q.alt ? `<div class="altbar">
+      <span class="req">requested: ${item.name}</span>
+      <b>quoted: ${q.alt}</b></div>` : ""}
+    <div class="body">
+      <div class="supplier">${q.supplier}</div>
+      <div class="big">${money(q.price, q.ccy, 3)}</div>
+      <div class="per">per ${q.unit}
+        ${q.unit !== item.unit ? `<span class="chip stop" style="margin-left:4px">Item asks ${item.unit}</span>` : ""}
+        ${isLow ? `<span class="chip good" style="margin-left:4px">lowest</span>` : ""}</div>
+      ${q.ccy === "THB" ? `<div class="conv"><div class="val">฿ quoted in Reporting Currency</div>
+          <div class="why">no conversion applied</div></div>`
+        : `<div class="conv">
+            <div class="val">≈ ${thb(thbUnit(q))} ${q.rate.stale ? "⚠" : ""}</div>
+            <div class="why">${convNote(q)}</div>
+          </div>`}
+      <div style="margin-top:10px" class="thumbs">
+        ${q.photos ? Array.from({ length: q.photos }, (_, n) => thumbHtml(q, n)).join("")
+                   : `<span class="no-photo">no photos</span>`}
+      </div>
+    </div>
+    <div class="foot">
+      <button onclick="selectQuote('${item.id}','${q.id}')">${isSel ? "✓ Selected for the Bid" : "Select for the Bid"}</button>
+    </div>
+  </article>`;
+}
+
+function bidPanelB(item) {
+  const sel = findQuote(item, STATE.selected[item.id]);
+  const cost = landedFor(item);
+  const m = marginFor(item);
+  return `<aside class="b-panel">
+    <h4>Bid for this Item</h4>
+    <div class="inner">
+      ${sel ? `<div style="margin-bottom:12px">
+          <span class="chip sel">${sel.supplier}</span>
+          <div class="derived-note" style="margin-top:6px">${money(sel.price, sel.ccy, 3)} per ${sel.unit}, sourced by ${USERS[sel.by].name}</div>
+        </div>`
+        : `<div class="banner info" style="margin-bottom:12px">No Quote selected yet — that is a normal resting state.</div>`}
+      <div class="price-field">
+        <label>Landed cost / ${item.unit}</label>
+        <input type="number" step="0.01" value="${cost == null ? "" : fmt(cost, 4)}"
+               oninput="onLanded('${item.id}', this.value)" ${sel ? "" : "disabled"}>
+        <div class="prefill-note">${sel ? "pre-filled from the Selected Quote — add freight, duty, handling" : "select a Quote first"}</div>
+      </div>
+      <div class="price-field">
+        <label>Selling price / ${item.unit}</label>
+        <input type="number" step="0.01" value="${STATE.selling[item.id] ?? ""}"
+               oninput="onSelling('${item.id}', this.value)">
+      </div>
+      <div class="price-field">
+        <label>Margin</label>
+        <div class="margin-out ${m ? (m.unit < 0 ? "neg" : "pos") : ""}" data-margin="${item.id}">${m ? thb(m.unit) + " / " + item.unit : "—"}</div>
+        <div class="prefill-note">on ${fmt(item.qty, 0)} ${item.unit}:
+          <b data-margin-total="${item.id}">${m ? thb(m.total, 0) + ` (${fmt(m.pct, 1)}%)` : "—"}</b></div>
+      </div>
+      <hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px">Whole Tender</div>
+      <div class="derived-note" data-bid-coverage></div>
+      <div style="margin-top:6px;font-size:13px">Bid total <b data-bid-total></b></div>
+      <div style="font-size:13px">Margin <b data-bid-margin></b></div>
+    </div>
+  </aside>`;
+}
+
+/* =======================================================================
+   VARIANT C — "Decision ledger"
+   One row per Item: what we are bidding and what it makes. Comparison is
+   collapsed behind a twisty. Primary affordance: the Bid, not the compare.
+   ======================================================================= */
+function variantC() {
+  return `<div class="wrap">
+    ${tenderHead("decision ledger")}
+    <div class="c-sheet">
+      <table class="c-tbl">
+        <thead><tr>
+          <th style="width:26px"></th><th>Tender Item</th><th>Selected Quote</th>
+          <th class="num">Landed cost / unit</th><th class="num">Selling / unit</th>
+          <th class="num">Margin / unit</th><th class="num">Margin on line</th>
+        </tr></thead>
+        <tbody>${ITEMS.map(rowC).join("")}</tbody>
+      </table>
+      <div class="c-totals">
+        <div><span>Coverage</span><b data-bid-coverage></b></div>
+        <div><span>Bid total</span><b data-bid-total></b></div>
+        <div><span>Landed cost</span><b data-bid-cost></b></div>
+        <div><span>Margin</span><b data-bid-margin></b></div>
+      </div>
+    </div>
+    <p class="derived-note" style="margin-top:12px">
+      All THB figures are derived: each Quote carries the ECB mid-market rate + 2% buffer frozen at entry.
+      Expand an Item to see the Quotes behind the decision.
+    </p>
+  </div>`;
+}
+
+function rowC(item) {
+  const sel = findQuote(item, STATE.selected[item.id]);
+  const cost = landedFor(item);
+  const m = marginFor(item);
+  const open = STATE.expanded[item.id];
+
+  let flag = "";
+  if (unitMismatch(item)) flag = `<span class="chip stop">unit mismatch — compare manually</span>`;
+  else if (allAlternatives(item)) flag = `<span class="chip alt">no exact match — all ${item.quotes.length} Quotes are Alternatives</span>`;
+  const nsf = (item.no_supplier_found || []).length
+    ? `<span class="chip alt">No Supplier Found · ${item.no_supplier_found.map((n) => USERS[n.by].name).join(", ")}</span>` : "";
+
+  const main = `<tr class="head-row">
+    <td><button class="twist" onclick="STATE.expanded['${item.id}']=!STATE.expanded['${item.id}'];render()">${open ? "▾" : "▸"}</button></td>
+    <td>
+      <div class="c-item-nm">${item.name}</div>
+      <div class="c-item-sub">${fmt(item.qty, 0)} ${item.unit} · ${item.quotes.length} Quote${item.quotes.length === 1 ? "" : "s"}</div>
+      ${flag || nsf ? `<div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">${flag}${nsf}</div>` : ""}
+    </td>
+    <td class="c-sel">${sel
+      ? `<b>${sel.supplier}</b>
+         <div class="derived-note">${money(sel.price, sel.ccy, 3)} / ${sel.unit} · ${thbLine(sel)} · ${avatar(sel.by, "sm")}</div>
+         ${sel.alt ? `<div style="margin-top:3px"><span class="chip alt">ALT → ${sel.alt}</span></div>` : ""}`
+      : `<span class="none">nothing selected</span>`}</td>
+    <td class="num"><input class="c-inline-input" type="number" step="0.01"
+        value="${cost == null ? "" : fmt(cost, 4)}" oninput="onLanded('${item.id}', this.value)"
+        ${sel ? "" : "disabled"}></td>
+    <td class="num"><input class="c-inline-input" type="number" step="0.01"
+        value="${STATE.selling[item.id] ?? ""}" oninput="onSelling('${item.id}', this.value)"></td>
+    <td class="num"><span class="margin-out ${m ? (m.unit < 0 ? "neg" : "pos") : ""}" style="font-size:13px"
+        data-margin="${item.id}">${m ? thb(m.unit) + " / " + item.unit : "—"}</span></td>
+    <td class="num"><b data-margin-total="${item.id}">${m ? thb(m.total, 0) + ` (${fmt(m.pct, 1)}%)` : "—"}</b></td>
+  </tr>`;
+
+  if (!open) return main;
+
+  const lo = lowestId(item);
+  const dups = dupSuppliers(item);
+  const ranked = rankable(item)
+    ? [...item.quotes].sort((a, b) => thbUnit(a) - thbUnit(b))
+    : item.quotes;
+
+  const rank = ranked.map((q, idx) => {
+    const isSel = STATE.selected[item.id] === q.id;
+    return `<tr class="${q.alt ? "alt" : ""} ${isSel ? "selected" : ""}">
+      <td style="width:22px;color:var(--muted)">${rankable(item) ? idx + 1 : "·"}</td>
+      <td>${q.supplier}${dups.includes(q.supplier) ? ` <span class="chip neutral">×2 Assignees</span>` : ""}
+        ${q.alt ? `<div style="font-size:11.5px;margin-top:2px"><b>ALT → ${q.alt}</b>
+             <span style="color:var(--muted)"> (requested ${item.name})</span></div>` : ""}</td>
+      <td style="width:120px">${avatar(q.by, "sm")} <span style="color:var(--muted)">${USERS[q.by].name}</span></td>
+      <td class="num" style="width:170px">
+        <span class="money-orig">${money(q.price, q.ccy, 3)}</span>
+        <span style="color:var(--muted)"> / ${q.unit}</span>
+        ${q.unit !== item.unit ? ` <span class="chip stop">≠ ${item.unit}</span>` : ""}
+        <div>${thbLine(q)} ${q.id === lo ? `<span class="chip good">lowest</span>` : ""}</div>
+      </td>
+      <td style="width:74px">${q.photos
+        ? `<div class="thumbs">${Array.from({ length: Math.min(q.photos, 3) }, (_, n) => thumbHtml(q, n, "tiny")).join("")}
+           ${q.photos > 3 ? `<span class="no-photo">+${q.photos - 3}</span>` : ""}</div>`
+        : `<span class="no-photo">—</span>`}</td>
+      <td style="width:80px" class="num">
+        <button class="pick" onclick="selectQuote('${item.id}','${q.id}')">${isSel ? "✓ selected" : "select"}</button></td>
+    </tr>`;
+  }).join("");
+
+  return main + `<tr class="c-expand"><td colspan="7"><div class="inner">
+    ${unitMismatch(item) ? `<div class="banner stop" style="margin-bottom:8px"><b>Not ranked.</b>
+      <span>Quotes use different units from the Item — converting pack sizes silently would pick the wrong supplier.</span></div>` : ""}
+    ${(item.no_supplier_found || []).map((n) => `<div class="banner warn" style="margin-bottom:8px">
+      <b>No Supplier Found</b><span>— ${USERS[n.by].name}, ${n.on}: “${n.note}”</span></div>`).join("")}
+    <table class="c-rank"><tbody>${rank}</tbody></table>
+  </div></td></tr>`;
+}
+
+/* =======================================================================
+   SWITCHER + RENDER
+   ======================================================================= */
+const VARIANTS = [
+  { key: "A", name: "Comparison sheet — dense tables, whole Tender", fn: variantA },
+  { key: "B", name: "Sourcing desk — item rail + quote cards", fn: variantB },
+  { key: "C", name: "Decision ledger — bid first, compare on demand", fn: variantC },
+];
+
+function setVariant(key) {
+  STATE.variant = key;
+  const u = new URL(location.href);
+  u.searchParams.set("variant", key);
+  history.replaceState(null, "", u);
+  render();
+}
+function cycle(d) {
+  const i = VARIANTS.findIndex((v) => v.key === STATE.variant);
+  setVariant(VARIANTS[(i + d + VARIANTS.length) % VARIANTS.length].key);
+}
+
+function render() {
+  const v = VARIANTS.find((x) => x.key === STATE.variant) || VARIANTS[0];
+  STATE.variant = v.key;
+  document.getElementById("root").innerHTML = v.fn();
+  document.getElementById("switcher").innerHTML = `
+    <button onclick="cycle(-1)" title="previous variant">←</button>
+    <span class="label"><b>${v.key}</b> — <em>${v.name}</em></span>
+    <button onclick="cycle(1)" title="next variant">→</button>
+    <span class="hint">← → keys</span>`;
+  document.getElementById("banner-variant").textContent = `Variant ${v.key} of ${VARIANTS.length}`;
+  ITEMS.forEach((i) => paintMargin(i.id));
+}
+
+document.addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  if (e.key === "ArrowLeft") cycle(-1);
+  if (e.key === "ArrowRight") cycle(1);
+  if (e.key === "Escape") closeLightbox();
+});
+
+render();
+</script>
+</body>
+</html>
