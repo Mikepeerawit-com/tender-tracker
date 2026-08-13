@@ -40,6 +40,12 @@ A Quote where the supplier priced a different product from the one the Tender It
 asked for. Carries the substitute's own name — never buried in notes.
 _Avoid_: substitute, equivalent, non-exact
 
+**Not Yet Sourced**:
+A Tender Item an Assignee has neither Quoted nor marked No Supplier Found. The third
+sourcing state, and the only one that is overdue: an Item nobody has touched means
+different work from one somebody has already given up on.
+_Avoid_: no quote, missing, blank
+
 **Assignee**:
 A user working a Tender. Several Assignees work the same Tender at once, each
 sourcing every Item they can through their own suppliers — they compete rather than
@@ -119,6 +125,13 @@ _Avoid_: cost, cost price, ex-works price
 **Margin**:
 Selling price minus Landed Cost, on a Tender Item. Always computed, never entered.
 Internal-only.
+
+**Bids Out**:
+The money still riding on Bids the client has not ruled on — selling price × quantity
+across Tender Items with no Outcome, on submitted Tenders. An Item already won is
+money banked, not money at stake, and drops out. Replaces the deleted "total quoted
+value", which summed competing Quotes for the same goods and so overstated by ~7×.
+_Avoid_: pipeline, total quoted value, open value
 
 ### Identity
 
