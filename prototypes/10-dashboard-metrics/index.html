@@ -1,0 +1,1046 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE — Dashboard metrics (ticket 10)</title>
+<!--
+  THROWAWAY PROTOTYPE — ticket 10 / issue #11.
+
+  The question is NOT "what should the dashboard look like". It is "what does each
+  number MEAN, and does it earn its place". So this file is a definition lab as much
+  as a UI: every metric can be switched between competing definitions and you watch
+  the number move, with the exact rows each definition includes listed underneath.
+
+  ?variant=A|B|C|lab and the floating bar at the bottom.
+    A   — buildspec_1's four cards, exactly as written. Deliberately a liar.
+    B   — action board: the three overdue conditions from ADR-0003 as the primary surface.
+    C   — minimal cut: two numbers and a list.
+    lab — every metric, every candidate definition, side by side, with drill-downs.
+
+  Nothing here is production code. The fake dataset is: 10 Tenders, 21 Tender Items,
+  3 Assignees, THB/CNY/USD, and it is built entirely out of awkward cases —
+  one Submission Missed, one Sourcing Overdue, one partially-won Tender straddling
+  two months, one no_bid, one cancelled, one Tender with 19 competing Quotes and a
+  unit mismatch, and two Tenders sitting on the calendar-week / rolling-7 boundary.
+  Every number on screen is computed from that data, never hand-written.
+
+  "Today" is pinned to Thursday 2026-08-13, Asia/Bangkok (org timezone, ADR-0005).
+-->
+<style>
+  :root {
+    --bg: #f8fafc; --panel: #ffffff; --ink: #0f172a; --muted: #64748b;
+    --line: #e2e8f0; --line-strong: #cbd5e1;
+    --accent: #0f766e; --accent-soft: #f0fdfa;
+    --warn: #b45309; --warn-soft: #fffbeb; --warn-line: #fcd34d;
+    --danger: #b91c1c; --danger-soft: #fef2f2; --danger-line: #fca5a5;
+    --good: #15803d; --good-soft: #f0fdf4;
+    --info: #1d4ed8; --info-soft: #eff6ff;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    padding-bottom: 110px;
+  }
+  h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+  table { border-collapse: collapse; width: 100%; }
+  button { font: inherit; cursor: pointer; }
+  code { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; }
+
+  /* ---------- prototype chrome ---------- */
+  .proto-banner {
+    background: #1e293b; color: #e2e8f0; padding: 8px 20px; font-size: 12px;
+    display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap;
+  }
+  .proto-banner strong { color: #fbbf24; letter-spacing: .06em; }
+  .proto-banner span { color: #94a3b8; }
+
+  .switcher {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #0f172a; color: #f8fafc; border-radius: 999px;
+    display: flex; align-items: center; gap: 4px; padding: 6px 8px;
+    box-shadow: 0 10px 30px rgba(15,23,42,.35); z-index: 200;
+  }
+  .switcher button {
+    background: #1e293b; color: #f8fafc; border: 0; border-radius: 999px;
+    padding: 7px 14px; font-size: 13px;
+  }
+  .switcher button:hover { background: #334155; }
+  .switcher button.on { background: #f8fafc; color: #0f172a; font-weight: 600; }
+  .switcher .sep { width: 1px; height: 22px; background: #334155; margin: 0 4px; }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px; }
+  .wrap.wide { max-width: 1360px; }
+
+  .page-head { margin-bottom: 20px; }
+  .page-head h1 { font-size: 22px; }
+  .page-head .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+  .verdict {
+    border-left: 3px solid var(--warn-line); background: var(--warn-soft);
+    padding: 12px 16px; border-radius: 0 var(--radius) var(--radius) 0;
+    margin: 0 0 22px; font-size: 13px; color: #78350f;
+  }
+  .verdict b { color: #7c2d12; }
+
+  /* ---------- cards ---------- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 26px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px 18px;
+  }
+  .card .label { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  .card .value { font-size: 30px; font-weight: 650; letter-spacing: -0.02em; margin-top: 6px; line-height: 1.1; }
+  .card .value small { font-size: 14px; font-weight: 500; color: var(--muted); margin-left: 3px; }
+  .card .foot { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .card.danger { border-color: var(--danger-line); background: var(--danger-soft); }
+  .card.danger .value { color: var(--danger); }
+  .card.warn { border-color: var(--warn-line); background: var(--warn-soft); }
+  .card.warn .value { color: var(--warn); }
+  .card.good .value { color: var(--good); }
+
+  /* ---------- lists ---------- */
+  .block { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 18px; overflow: hidden; }
+  .block > header {
+    padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex;
+    justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  }
+  .block > header h3 { font-size: 14px; }
+  .block > header .note { font-size: 12px; color: var(--muted); }
+  .block.danger > header { background: var(--danger-soft); border-color: var(--danger-line); }
+  .block.danger > header h3 { color: var(--danger); }
+  .block.warn > header { background: var(--warn-soft); border-color: var(--warn-line); }
+  .block.warn > header h3 { color: var(--warn); }
+  .block.info > header { background: var(--info-soft); }
+  .block.info > header h3 { color: var(--info); }
+
+  table.rows th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); font-weight: 500; padding: 8px 16px; border-bottom: 1px solid var(--line);
+    background: #fbfcfd;
+  }
+  table.rows td { padding: 9px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.rows tr:last-child td { border-bottom: 0; }
+  table.rows td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.rows .ref { color: var(--muted); font-size: 12px; }
+  table.rows .title { font-weight: 500; }
+
+  .pill {
+    display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px;
+    border: 1px solid var(--line-strong); color: var(--muted); white-space: nowrap;
+  }
+  .pill.danger { background: var(--danger-soft); border-color: var(--danger-line); color: var(--danger); }
+  .pill.warn { background: var(--warn-soft); border-color: var(--warn-line); color: var(--warn); }
+  .pill.good { background: var(--good-soft); border-color: #86efac; color: var(--good); }
+  .pill.info { background: var(--info-soft); border-color: #bfdbfe; color: var(--info); }
+  .pill.flat { background: #f1f5f9; }
+
+  .empty { padding: 18px 16px; color: var(--muted); font-size: 13px; }
+
+  /* ---------- the lab ---------- */
+  .metric { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 22px; overflow: hidden; }
+  .metric > header { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .metric > header h3 { font-size: 15px; }
+  .metric > header .q { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+  .metric .body { display: grid; grid-template-columns: 340px 1fr; }
+  @media (max-width: 900px) { .metric .body { grid-template-columns: 1fr; } }
+  .metric .options { border-right: 1px solid var(--line); background: #fbfcfd; }
+  @media (max-width: 900px) { .metric .options { border-right: 0; border-bottom: 1px solid var(--line); } }
+  .opt {
+    display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: baseline;
+    padding: 11px 16px; border-bottom: 1px solid var(--line); cursor: pointer;
+  }
+  .opt:last-child { border-bottom: 0; }
+  .opt:hover { background: #f1f5f9; }
+  .opt.on { background: #fff; box-shadow: inset 3px 0 0 var(--accent); }
+  .opt .name { font-size: 13px; font-weight: 500; }
+  .opt.on .name { color: var(--accent); }
+  .opt .desc { font-size: 11.5px; color: var(--muted); margin-top: 2px; grid-column: 1 / -1; }
+  .opt .n { font-variant-numeric: tabular-nums; font-size: 17px; font-weight: 600; }
+  .opt.on .n { color: var(--accent); }
+  .metric .detail { padding: 0; }
+  .metric .detail .headline { padding: 14px 18px 10px; }
+  .metric .detail .headline .big { font-size: 26px; font-weight: 650; letter-spacing: -.02em; }
+  .metric .detail .headline .cap { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .metric .toggles { padding: 10px 18px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .metric .toggles .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: 2px; }
+  .metric .toggles button {
+    border: 1px solid var(--line-strong); background: #fff; border-radius: 999px;
+    padding: 3px 11px; font-size: 12px; color: var(--muted);
+  }
+  .metric .toggles button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+
+  .finding {
+    margin: 0; padding: 11px 18px; background: var(--warn-soft);
+    border-top: 1px solid var(--warn-line); font-size: 12.5px; color: #78350f;
+  }
+  .finding b { color: #7c2d12; }
+  .finding + .finding { border-top-color: #fde68a; }
+
+  .schema {
+    margin: 0; padding: 11px 18px; background: var(--info-soft);
+    border-top: 1px solid #bfdbfe; font-size: 12.5px; color: #1e3a8a;
+  }
+
+  details.data { margin-top: 26px; }
+  details.data > summary { cursor: pointer; font-size: 13px; color: var(--muted); padding: 8px 0; }
+  details.data table.rows { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin-top: 8px; }
+  .sub { color: var(--muted); }
+  .strike { text-decoration: line-through; opacity: .55; }
+</style>
+</head>
+<body>
+
+<div class="proto-banner">
+  <strong>PROTOTYPE</strong>
+  <span>ticket 10 / issue #11 — dashboard metric definitions</span>
+  <span>“today” = <b>Thu 13 Aug 2026</b>, Asia/Bangkok (org tz, ADR-0005)</span>
+  <span>10 Tenders · 21 Items · 3 Assignees · fake data, all of it awkward</span>
+</div>
+
+<div id="app"></div>
+
+<div class="switcher" id="switcher"></div>
+
+<script>
+// ---------------------------------------------------------------------------
+// FAKE DATA. Built to break naive definitions, not to look tidy.
+// Rates are the *frozen* rate on the Quote, buffer already applied (ADR from 04).
+// ---------------------------------------------------------------------------
+const TODAY = '2026-08-13';           // Thursday
+const RATE = { THB: 1, CNY: 5.12, USD: 36.40 };
+
+const q = (sup, asg, ccy, unit, opts = {}) =>
+  ({ sup, asg, ccy, unit, thb: unit * RATE[ccy], ...opts });
+
+const TENDERS = [
+  {
+    ref: 'T-1044', client: 'Vejthani Hospital', title: 'Oxygen concentrators',
+    owner: 'Mei', received: '2026-08-12',
+    internal: '2026-08-14', submission: '2026-08-17', submitted: null,
+    note: 'Submission falls on Monday 17th — inside rolling-7, outside this calendar week.',
+    items: [
+      { name: 'Oxygen concentrator, 5L', qty: 12, unit: 'unit', quotes: [
+        q('Guangzhou Yuwell', 'Mei', 'CNY', 2450),
+        q('Bangkok MedTech', 'Mei', 'THB', 13200),
+      ]},
+    ],
+  },
+  {
+    ref: 'T-1041', client: 'Bangkok Hospital', title: 'Gloves & syringes',
+    owner: 'Somchai', received: '2026-08-12',
+    internal: '2026-08-16', submission: '2026-08-20', submitted: null,
+    note: 'Submission is exactly 7 days out — does the rolling window include day 7?',
+    items: [
+      { name: 'Nitrile gloves, powder-free, M', qty: 500, unit: 'box', quotes: [] },
+      { name: 'Syringe 5ml, luer lock', qty: 2000, unit: 'box', quotes: [] },
+    ],
+  },
+  {
+    ref: 'T-1038', client: 'Siriraj Hospital', title: 'Ventilator circuits',
+    owner: 'Somchai', received: '2026-07-30',
+    internal: '2026-08-11', submission: '2026-08-19', submitted: null,
+    note: 'Internal deadline passed Tuesday — inside this calendar week, but in the past.',
+    items: [
+      { name: 'Ventilator circuit, adult', qty: 300, unit: 'unit', quotes: [
+        q('Ningbo David', 'Somchai', 'CNY', 168),
+        q('Bangkok MedTech', 'Somchai', 'THB', 940),
+        q('Intersurgical TH', 'Nok', 'THB', 1010),
+      ]},
+      { name: 'Heated wire circuit, neonatal', qty: 80, unit: 'unit', quotes: [], noSupplier: ['Mei', 'Somchai'] },
+      { name: 'HME filter, adult', qty: 1200, unit: 'box', quotes: [] },
+    ],
+  },
+  {
+    ref: 'T-1035', client: 'Ramathibodi Hospital', title: 'Surgical drapes',
+    owner: 'Nok', received: '2026-08-01',
+    internal: '2026-08-08', submission: '2026-08-14', submitted: null,
+    note: 'Due tomorrow. The one uncontroversial “due this week”.',
+    items: [
+      { name: 'Surgical drape, laparotomy', qty: 400, unit: 'unit', selling: 385, quotes: [
+        q('Mölnlycke TH', 'Nok', 'THB', 298, { selected: true }),
+        q('Winner Medical', 'Nok', 'CNY', 62),
+        q('Bangkok MedTech', 'Mei', 'THB', 340),
+      ]},
+      { name: 'Drape, universal 75x90', qty: 600, unit: 'unit', selling: 128, quotes: [
+        q('Winner Medical', 'Nok', 'CNY', 19, { selected: true }),
+        q('Bangkok MedTech', 'Mei', 'THB', 112),
+      ]},
+    ],
+  },
+  {
+    ref: 'T-1029', client: 'Bumrungrad International', title: 'Infusion pumps',
+    owner: 'Mei', received: '2026-07-10',
+    internal: '2026-07-22', submission: '2026-07-29', submitted: '2026-07-28',
+    note: 'Submitted on time, client silent for 16 days. Awaiting Decision.',
+    items: [
+      { name: 'Infusion pump, volumetric', qty: 20, unit: 'unit', selling: 52000, quotes: [
+        q('Shenzhen Mindray', 'Mei', 'CNY', 7100, { selected: true }),
+        q('B.Braun TH', 'Mei', 'THB', 46800),
+      ]},
+      { name: 'IV giving set', qty: 3000, unit: 'unit', selling: 68, quotes: [
+        q('Ningbo David', 'Mei', 'CNY', 9.4, { selected: true }),
+        q('Bangkok MedTech', 'Somchai', 'THB', 58),
+      ]},
+    ],
+  },
+  {
+    ref: 'T-1022', client: 'Chulalongkorn Hospital', title: 'Catheters',
+    owner: 'Nok', received: '2026-07-02',
+    internal: '2026-07-18', submission: '2026-07-25', submitted: '2026-07-24',
+    note: 'Split award: 2 Items won (one last month, one this month), 1 lost, 1 still undecided.',
+    items: [
+      { name: 'Foley catheter, 16Fr', qty: 200, unit: 'unit', selling: 4500,
+        outcome: 'won', outcomeAt: '2026-08-03', quotes: [ q('Wellead Medical', 'Nok', 'CNY', 625, { selected: true }) ]},
+      { name: 'Central venous catheter', qty: 150, unit: 'unit', selling: 2800,
+        outcome: 'won', outcomeAt: '2026-07-30', quotes: [ q('Shenzhen Mindray', 'Nok', 'CNY', 410, { selected: true }) ]},
+      { name: 'Suction catheter, 14Fr', qty: 1000, unit: 'unit', selling: 42,
+        outcome: 'lost', outcomeAt: '2026-08-03', quotes: [ q('Ningbo David', 'Mei', 'CNY', 6.2, { selected: true }) ]},
+      { name: 'Nelaton catheter, 12Fr', qty: 800, unit: 'unit', selling: 31,
+        outcome: null, quotes: [ q('Ningbo David', 'Mei', 'CNY', 4.6, { selected: true }) ]},
+    ],
+  },
+  {
+    ref: 'T-1018', client: 'Phyathai 2 Hospital', title: 'ECG electrodes',
+    owner: 'Somchai', received: '2026-07-20',
+    internal: '2026-08-03', submission: '2026-08-07', submitted: null,
+    note: 'Quoted, priced, selected — and then never sent. This is the failure the product exists to prevent.',
+    items: [
+      { name: 'ECG electrode, disposable', qty: 5000, unit: 'unit', selling: 12, quotes: [
+        q('Shanghai Kehua', 'Somchai', 'CNY', 1.55, { selected: true }),
+        q('3M Thailand', 'Somchai', 'THB', 11.2),
+        q('Bangkok MedTech', 'Mei', 'THB', 9.8),
+        q('Nihon Kohden TH', 'Nok', 'THB', 13.5),
+      ]},
+    ],
+  },
+  {
+    ref: 'T-1011', client: 'Praram 9 Hospital', title: 'Dialysis consumables',
+    owner: 'Mei', received: '2026-07-15',
+    internal: '2026-07-28', submission: '2026-08-04', submitted: null,
+    note: 'We sourced it, then chose not to bid. Never submitted — but not a failure.',
+    items: [
+      { name: 'Dialyzer, high-flux', qty: 600, unit: 'unit', outcome: 'no_bid', outcomeAt: '2026-08-05',
+        quotes: [ q('Weigao Group', 'Mei', 'CNY', 118), q('Fresenius TH', 'Mei', 'THB', 690) ]},
+      { name: 'Bloodline set', qty: 600, unit: 'unit', outcome: 'no_bid', outcomeAt: '2026-08-05',
+        quotes: [ q('Weigao Group', 'Mei', 'CNY', 44) ]},
+    ],
+  },
+  {
+    ref: 'T-1005', client: 'Thonburi Hospital', title: 'Electric hospital beds',
+    owner: 'Nok', received: '2026-06-28',
+    internal: '2026-07-14', submission: '2026-07-21', submitted: null,
+    note: 'Client pulled the tender before we bid.',
+    items: [
+      { name: 'Electric hospital bed, 3-function', qty: 15, unit: 'unit', outcome: 'cancelled', outcomeAt: '2026-08-06',
+        quotes: [ q('Jiangsu Saikang', 'Nok', 'CNY', 21500), q('Bangkok MedTech', 'Nok', 'THB', 118000) ]},
+    ],
+  },
+  {
+    ref: 'T-1043', client: 'Samitivej Sukhumvit', title: 'General consumables (annual)',
+    owner: 'Mei', received: '2026-08-06',
+    internal: '2026-08-18', submission: '2026-08-26', submitted: null,
+    note: '3 Assignees competing on every Item — 19 Quotes, nothing selected yet. One unit mismatch.',
+    items: [
+      { name: 'Examination gloves, nitrile', qty: 800, unit: 'box', quotes: [
+        q('Guangzhou Blue Sail', 'Mei', 'CNY', 48),
+        q('Top Glove TH', 'Mei', 'THB', 268),
+        q('Ansell', 'Somchai', 'USD', 8.10),
+        q('Bangkok MedTech', 'Somchai', 'THB', 312),
+        q('Sri Trang Gloves', 'Somchai', 'THB', 258),
+        q('Hartalega', 'Nok', 'USD', 9.20),
+        q('Guangzhou Blue Sail', 'Nok', 'CNY', 51),
+        q('Medline', 'Nok', 'USD', 10.50),
+      ]},
+      { name: 'Alcohol swab, 70%', qty: 5000, unit: 'box', quotes: [
+        q('Hangzhou Formed', 'Mei', 'CNY', 6.40),
+        q('Bangkok MedTech', 'Mei', 'THB', 34.50),
+        q('Sri Trang Gloves', 'Somchai', 'THB', 38.00),
+        q('Medline', 'Somchai', 'USD', 1.05),
+        q('Winner Medical', 'Nok', 'CNY', 6.90),
+        q('3M Thailand', 'Nok', 'THB', 41.20),
+      ]},
+      { name: 'Surgical mask, Level 3', qty: 1000, unit: 'box', quotes: [
+        q('Winner Medical', 'Mei', 'THB', 92),
+        q('Bangkok MedTech', 'Somchai', 'THB', 88),
+        q('Hangzhou Formed', 'Nok', 'CNY', 17),
+        q('Medline', 'Nok', 'USD', 2.60),
+        q('Shenzhen Anbang', 'Mei', 'THB', 1980, { unit_: 'carton', mismatch: true }),
+      ]},
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
+// DERIVATIONS. Everything on screen comes through here.
+// ---------------------------------------------------------------------------
+const d = s => new Date(s + 'T00:00:00');
+const days = (a, b) => Math.round((d(b) - d(a)) / 86400000);
+const fmtD = s => s ? d(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—';
+const thb = n => '฿' + Math.round(n).toLocaleString('en-US');
+const thbShort = n => n >= 1e6 ? '฿' + (n / 1e6).toFixed(2) + 'M' : thb(n);
+
+// Progress — derived, never stored (ADR-0001). no_bid Items excluded so one
+// unsourceable Item can't pin a Tender at `sourcing` forever.
+function progress(t) {
+  if (t.submitted) return 'submitted';
+  const live = t.items.filter(i => i.outcome !== 'no_bid' && i.outcome !== 'cancelled');
+  if (!live.length) return 'closed';
+  const priced = i => i.quotes.length > 0 || (i.noSupplier || []).length > 0;
+  if (live.every(priced)) return 'quoted';
+  if (live.some(i => i.quotes.length > 0)) return 'sourcing';
+  return 'new';
+}
+
+function tenderOutcome(t) {
+  const os = t.items.map(i => i.outcome);
+  if (os.every(o => o === null || o === undefined)) return null;
+  const set = [...new Set(os.filter(Boolean))];
+  if (os.some(o => !o)) return 'partial';        // some Items still undecided
+  return set.length === 1 ? set[0] : 'partial';  // display-only, never stored
+}
+
+// The three overdue conditions (ADR-0003) — three different audiences.
+const sourcingOverdue = t => !t.submitted && days(t.internal, TODAY) > 0 && !tenderOutcome(t) &&
+  t.items.some(i => i.outcome !== 'no_bid' && !i.quotes.length && !(i.noSupplier || []).length);
+const submissionMissed = t => !t.submitted && days(t.submission, TODAY) > 0 && !tenderOutcome(t);
+const awaitingDecision = t => !!t.submitted && t.items.some(i => !i.outcome);
+
+// Money. Landed cost and selling price are per unit (09's finding), so every
+// figure has to be multiplied by qty — the grain buildspec_1 never stated.
+const itemBidValue = i => (i.selling || 0) * i.qty;
+const selectedQuote = i => i.quotes.find(x => x.selected);
+const cheapestQuote = i => {
+  const rankable = i.quotes.filter(x => !x.mismatch);
+  if (rankable.length !== i.quotes.length) return null;   // a mismatch poisons the Item
+  return rankable.slice().sort((a, b) => a.thb - b.thb)[0] || null;
+};
+const allQuotesValue = i => i.quotes.reduce((s, x) => s + x.thb * i.qty, 0);
+
+const inMonth = (s, ref) => s && s.slice(0, 7) === ref.slice(0, 7);
+
+// Windows. Both computed server-side in the org timezone — never client-side,
+// or two colleagues see different sets (ADR-0005).
+const CAL_WEEK = { from: '2026-08-10', to: '2026-08-16' };   // Mon–Sun containing today
+const ROLL_7 = { from: '2026-08-13', to: '2026-08-20' };     // today .. today+7
+const inWin = (s, w) => s && s >= w.from && s <= w.to;
+
+// ---------------------------------------------------------------------------
+// METRIC DEFINITIONS — the actual subject of this ticket.
+// ---------------------------------------------------------------------------
+const ACTIVE_DEFS = {
+  notSubmitted: {
+    name: 'Not submitted',
+    desc: 'buildspec_1 as written: submitted_at IS NULL. Nothing else.',
+    fn: t => !t.submitted,
+  },
+  noOutcome: {
+    name: 'Nothing decided yet',
+    desc: 'Any Item still has a null Outcome — includes submitted Tenders awaiting the client.',
+    fn: t => t.items.some(i => !i.outcome),
+  },
+  liveWork: {
+    name: 'Still ours to work',
+    desc: 'Not submitted, not written off (no_bid / cancelled), and not already Submission Missed.',
+    fn: t => !t.submitted && !tenderOutcome(t) && !submissionMissed(t),
+  },
+  liveOrChasing: {
+    name: 'Still ours to work, or chasing',
+    desc: 'The above, plus Awaiting Decision — anything that still needs a human at some point.',
+    fn: t => (!t.submitted && !tenderOutcome(t) && !submissionMissed(t)) || awaitingDecision(t),
+  },
+};
+
+const DUE_DEADLINE = {
+  submission: { name: 'Client Submission', get: t => t.submission },
+  internal: { name: 'Internal Quote', get: t => t.internal },
+  either: { name: 'Either', get: null },
+};
+const DUE_WINDOW = {
+  cal: { name: 'Calendar week (Mon–Sun)', win: CAL_WEEK, note: 'Mon 10 – Sun 16 Aug' },
+  roll: { name: 'Rolling 7 days', win: ROLL_7, note: 'Thu 13 – Thu 20 Aug' },
+};
+
+function dueRows(deadlineKey, windowKey) {
+  const w = DUE_WINDOW[windowKey].win;
+  const out = [];
+  for (const t of TENDERS) {
+    if (t.submitted || tenderOutcome(t)) continue;   // already gone, or written off
+    const check = [];
+    if (deadlineKey === 'internal' || deadlineKey === 'either') check.push(['Internal Quote', t.internal]);
+    if (deadlineKey === 'submission' || deadlineKey === 'either') check.push(['Client Submission', t.submission]);
+    for (const [which, date] of check) {
+      if (inWin(date, w)) out.push({ t, which, date, past: days(date, TODAY) > 0 });
+    }
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+const WON_GRAIN = { item: 'Tender Items', tender: 'Tenders' };
+const WON_MEASURE = { count: 'Count', value: 'Value (THB)' };
+
+function wonRows(grain) {
+  if (grain === 'item') {
+    return TENDERS.flatMap(t => t.items
+      .filter(i => i.outcome === 'won' && inMonth(i.outcomeAt, TODAY))
+      .map(i => ({ t, i })));
+  }
+  // Tender grain: a Tender "won this month" if any Item was won this month.
+  return TENDERS.filter(t => t.items.some(i => i.outcome === 'won' && inMonth(i.outcomeAt, TODAY)))
+    .map(t => ({ t, i: null }));
+}
+
+const VALUE_DEFS = {
+  allQuotes: {
+    name: 'Sum of every Quote',
+    desc: 'buildspec_1 as written. Every Quote × quantity, across every open Tender.',
+    rows: () => TENDERS.filter(t => !t.submitted && !tenderOutcome(t))
+      .map(t => ({ t, v: t.items.reduce((s, i) => s + allQuotesValue(i), 0) })),
+  },
+  cheapest: {
+    name: 'Cheapest Quote per Item',
+    desc: 'One Quote per Item. Items with a unit mismatch have no cheapest and drop out.',
+    rows: () => TENDERS.filter(t => !t.submitted && !tenderOutcome(t))
+      .map(t => ({ t, v: t.items.reduce((s, i) => { const c = cheapestQuote(i); return s + (c ? c.thb * i.qty : 0); }, 0),
+        gap: t.items.some(i => i.quotes.length && !cheapestQuote(i)) || t.items.some(i => !i.quotes.length) })),
+  },
+  selected: {
+    name: 'Selected Quotes only',
+    desc: 'What we have actually chosen to build a Bid from. Zero until someone selects.',
+    rows: () => TENDERS.filter(t => !t.submitted && !tenderOutcome(t))
+      .map(t => ({ t, v: t.items.reduce((s, i) => { const q = selectedQuote(i); return s + (q ? q.thb * i.qty : 0); }, 0),
+        gap: t.items.some(i => !selectedQuote(i)) })),
+  },
+  bid: {
+    name: 'Value of Bids out with clients',
+    desc: 'Selling price × qty on submitted Tenders still Awaiting Decision. The number with money riding on it.',
+    rows: () => TENDERS.filter(t => t.submitted && awaitingDecision(t))
+      .map(t => ({ t, v: t.items.filter(i => !i.outcome || i.outcome === 'won').reduce((s, i) => s + itemBidValue(i), 0) })),
+  },
+};
+
+// ---------------------------------------------------------------------------
+// RENDER
+// ---------------------------------------------------------------------------
+const state = {
+  variant: new URLSearchParams(location.search).get('variant') || 'A',
+  active: 'notSubmitted',
+  dueDeadline: 'submission', dueWindow: 'roll',
+  wonGrain: 'item', wonMeasure: 'count',
+  value: 'allQuotes',
+};
+
+const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const el = (h) => { const t = document.createElement('template'); t.innerHTML = h.trim(); return t.content.firstChild; };
+
+function progressPill(t) {
+  const p = progress(t);
+  const cls = { new: 'flat', sourcing: 'warn', quoted: 'info', submitted: 'good', closed: 'flat' }[p];
+  return `<span class="pill ${cls}">${p}</span>`;
+}
+function conditionPills(t) {
+  const out = [];
+  if (submissionMissed(t)) out.push('<span class="pill danger">Submission Missed</span>');
+  if (sourcingOverdue(t)) out.push('<span class="pill warn">Sourcing Overdue</span>');
+  if (awaitingDecision(t)) out.push('<span class="pill info">Awaiting Decision</span>');
+  const o = tenderOutcome(t);
+  if (o) out.push(`<span class="pill ${o === 'won' ? 'good' : 'flat'}">${o}</span>`);
+  return out.join(' ');
+}
+
+function tenderRows(list, extra) {
+  if (!list.length) return `<div class="empty">Nothing matches this definition.</div>`;
+  return `<table class="rows"><tbody>${list.map(r => {
+    const t = r.t || r;
+    return `<tr>
+      <td><span class="ref">${t.ref}</span> <span class="title">${esc(t.client)}</span>
+        <div class="sub" style="font-size:12px">${esc(t.title)}</div></td>
+      <td>${progressPill(t)} ${conditionPills(t)}</td>
+      ${extra ? extra(r) : ''}
+    </tr>`;
+  }).join('')}</tbody></table>`;
+}
+
+// ---- Variant A: buildspec_1 exactly as written -----------------------------
+function variantA() {
+  const active = TENDERS.filter(ACTIVE_DEFS.notSubmitted.fn).length;
+  const due = dueRows('submission', 'roll').length;
+  const won = wonRows('tender').length;
+  const val = VALUE_DEFS.allQuotes.rows().reduce((s, r) => s + r.v, 0);
+  return `
+  <div class="wrap">
+    <div class="page-head">
+      <h1>Dashboard</h1>
+      <div class="sub">Variant A — <b>buildspec_1's four cards, exactly as written.</b> Each number is defended below.</div>
+    </div>
+    <div class="verdict">
+      Every one of these four numbers is wrong, and none of them is <i>visibly</i> wrong —
+      which is the point. A dashboard that lies quietly is worse than no dashboard.
+      Switch to <b>lab</b> to see what each one is actually counting.
+    </div>
+    <div class="cards">
+      <div class="card"><div class="label">Active tenders</div><div class="value">${active}</div>
+        <div class="foot">submitted_at IS NULL</div></div>
+      <div class="card"><div class="label">Due this week</div><div class="value">${due}</div>
+        <div class="foot">next 7 days</div></div>
+      <div class="card"><div class="label">Won this month</div><div class="value">${won}</div>
+        <div class="foot">August 2026</div></div>
+      <div class="card"><div class="label">Total quoted value</div><div class="value">${thbShort(val)}</div>
+        <div class="foot">all open tenders</div></div>
+    </div>
+    <div class="block danger">
+      <header><h3>What those four cards hid</h3></header>
+      <table class="rows"><tbody>
+        <tr><td><b>“Active” = ${active}</b> counts a Tender we <b>never submitted</b> (T-1018, deadline passed 6 days ago),
+          a Tender we <b>chose not to bid</b> (T-1011) and one the <b>client cancelled</b> (T-1005).
+          Three of the ${active} are corpses. Meanwhile the two Tenders with real money out with clients don't count as active at all.</td></tr>
+        <tr><td><b>“Due this week” = ${due}</b> silently means Client Submission only. T-1038 <i>is</i> in that list —
+          but as “due Wed 19th”, looking perfectly healthy. Its <b>Internal Quote Deadline passed on Tuesday</b> with an
+          Item still unsourced, which is the one thing here someone could still fix today, and the card cannot say so.</td></tr>
+        <tr><td><b>“Won this month” = ${won}</b> is one Tender that is simultaneously <b>won, lost and undecided</b>:
+          T-1022 had 4 Items, 2 won (in <i>different months</i>), 1 lost, 1 still open. At Tender grain the number is a rounding of reality.</td></tr>
+        <tr><td><b>“Total quoted value” = ${thbShort(val)}</b> is fiction. Assignees compete rather than divide (ADR-0004),
+          so one Item carries 8 Quotes and this sums <b>all of them</b>. It also multiplies a
+          <b>per-carton price by a per-box quantity</b>. The real exposure is nowhere near it.</td></tr>
+      </tbody></table>
+    </div>
+    ${dataDump()}
+  </div>`;
+}
+
+// ---- Variant B: action board ----------------------------------------------
+function variantB() {
+  const missed = TENDERS.filter(submissionMissed);
+  const overdue = TENDERS.filter(sourcingOverdue);
+  const dueSoon = dueRows('either', 'roll').filter(r => !r.past);
+  const awaiting = TENDERS.filter(awaitingDecision);
+  const bidOut = VALUE_DEFS.bid.rows().reduce((s, r) => s + r.v, 0);
+  const wonVal = wonRows('item').reduce((s, r) => s + itemBidValue(r.i), 0);
+
+  return `
+  <div class="wrap">
+    <div class="page-head">
+      <h1>Dashboard</h1>
+      <div class="sub">Variant B — <b>the three overdue conditions are the dashboard.</b> Metrics are demoted to a strip.</div>
+    </div>
+    <div class="verdict">
+      Built on ADR-0003's claim that “overdue” is three unrelated conditions with three different audiences.
+      Cards answer “how are we doing”; this answers <b>“what do I do next”</b> — which is what a
+      sub-10-person team opening the app at 9am actually wants.
+    </div>
+    <div class="cards">
+      <div class="card danger"><div class="label">Submission Missed</div><div class="value">${missed.length}</div>
+        <div class="foot">dead unless the client reopens</div></div>
+      <div class="card warn"><div class="label">Sourcing Overdue</div><div class="value">${overdue.length}</div>
+        <div class="foot">still fixable today</div></div>
+      <div class="card"><div class="label">Bids out with clients</div><div class="value">${thbShort(bidOut)}</div>
+        <div class="foot">${awaiting.length} tenders awaiting decision</div></div>
+      <div class="card good"><div class="label">Won in August</div><div class="value">${thbShort(wonVal)}</div>
+        <div class="foot">${wonRows('item').length} item${wonRows('item').length === 1 ? '' : 's'} across ${new Set(wonRows('item').map(r => r.t.ref)).size} tender${new Set(wonRows('item').map(r => r.t.ref)).size === 1 ? '' : 's'}</div></div>
+    </div>
+
+    <div class="block danger">
+      <header><h3>Submission Missed — the Bid never went out</h3>
+        <span class="note">Owner's problem. Nothing to do but call the client.</span></header>
+      ${tenderRows(missed, r => `<td class="num">deadline ${fmtD(r.submission)}<div class="sub">${days(r.submission, TODAY)} days ago</div></td>`)}
+    </div>
+
+    <div class="block warn">
+      <header><h3>Sourcing Overdue — Items with no Quote past the internal deadline</h3>
+        <span class="note">The Assignee's problem, and still fixable.</span></header>
+      ${tenderRows(overdue, r => `<td class="num">${r.items.filter(i => !i.quotes.length && !(i.noSupplier || []).length).length} of ${r.items.length} items unsourced
+        <div class="sub">internal ${fmtD(r.internal)}</div></td>`)}
+    </div>
+
+    <div class="block">
+      <header><h3>Coming up — next 7 days, either deadline</h3>
+        <span class="note">Bangkok dates, computed server-side</span></header>
+      ${dueSoon.length ? `<table class="rows"><tbody>${dueSoon.map(r => `<tr>
+        <td><span class="ref">${r.t.ref}</span> <span class="title">${esc(r.t.client)}</span>
+          <div class="sub" style="font-size:12px">${esc(r.t.title)}</div></td>
+        <td>${progressPill(r.t)}</td>
+        <td class="num">${r.which}<div class="sub">${fmtD(r.date)} · in ${-days(r.date, TODAY)}d</div></td>
+      </tr>`).join('')}</tbody></table>` : '<div class="empty">Nothing due.</div>'}
+    </div>
+
+    <div class="block info">
+      <header><h3>Awaiting Decision — submitted, client silent</h3>
+        <span class="note">Not a failure. A prompt to chase.</span></header>
+      ${tenderRows(awaiting, r => `<td class="num">${thb(VALUE_DEFS.bid.rows().find(x => x.t === r)?.v || 0)}
+        <div class="sub">submitted ${fmtD(r.submitted)} · ${days(r.submitted, TODAY)}d ago</div></td>`)}
+    </div>
+    ${dataDump()}
+  </div>`;
+}
+
+// ---- Variant C: minimal ----------------------------------------------------
+function variantC() {
+  const work = TENDERS.filter(ACTIVE_DEFS.liveWork.fn);
+  const missed = TENDERS.filter(submissionMissed);
+  const rows = work.map(t => {
+    const next = [['Internal Quote', t.internal], ['Client Submission', t.submission]]
+      .filter(([, dt]) => days(dt, TODAY) <= 0).sort((a, b) => a[1].localeCompare(b[1]))[0];
+    return { t, next };
+  }).sort((a, b) => (a.next?.[1] || '9') .localeCompare(b.next?.[1] || '9'));
+
+  return `
+  <div class="wrap">
+    <div class="page-head">
+      <h1>Tenders</h1>
+      <div class="sub">Variant C — <b>no metric cards at all.</b> One list, sorted by what happens next, plus a banner when something is dead.</div>
+    </div>
+    <div class="verdict">
+      The honest version of “does each card earn its place”: with under 10 users and ~10 live Tenders,
+      every metric is a number you could get by <b>counting the list</b>. This variant asks whether
+      cards are decoration. If B beats C, the cards earned their place; if C feels sufficient, they didn't.
+    </div>
+    ${missed.length ? `<div class="block danger"><header>
+      <h3>${missed.length} Tender${missed.length > 1 ? 's' : ''} missed its Client Submission Deadline</h3>
+      <span class="note">${missed.map(t => t.ref).join(', ')}</span></header></div>` : ''}
+    <div class="block">
+      <header><h3>Open tenders</h3><span class="note">${work.length} still ours to work · next milestone first</span></header>
+      <table class="rows">
+        <thead><tr><th>Tender</th><th>Progress</th><th>Owner</th><th style="text-align:right">Next milestone</th></tr></thead>
+        <tbody>${rows.map(({ t, next }) => `<tr>
+          <td><span class="ref">${t.ref}</span> <span class="title">${esc(t.client)}</span>
+            <div class="sub" style="font-size:12px">${esc(t.title)}</div></td>
+          <td>${progressPill(t)} ${sourcingOverdue(t) ? '<span class="pill warn">Sourcing Overdue</span>' : ''}</td>
+          <td class="sub">${t.owner}</td>
+          <td class="num">${next ? `${next[0]}<div class="sub">${fmtD(next[1])} · in ${-days(next[1], TODAY)}d</div>` : '<span class="sub">—</span>'}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>
+    ${dataDump()}
+  </div>`;
+}
+
+// ---- The lab ---------------------------------------------------------------
+function optList(defs, current, key) {
+  return Object.entries(defs).map(([k, v]) => `
+    <div class="opt ${k === current ? 'on' : ''}" data-set="${key}" data-val="${k}">
+      <div class="name">${v.name}</div>
+      <div class="n">${v.count}</div>
+      <div class="desc">${v.desc}</div>
+    </div>`).join('');
+}
+
+function labActive() {
+  const defs = {};
+  for (const [k, v] of Object.entries(ACTIVE_DEFS)) {
+    const rows = TENDERS.filter(v.fn);
+    defs[k] = { ...v, count: rows.length, rows };
+  }
+  const cur = defs[state.active];
+  return `
+  <div class="metric">
+    <header>
+      <h3>1 — “Active tenders”</h3>
+      <div class="q">Which Tenders count? The word does no work on its own: three of the ten Tenders here are
+        neither active nor finished, and each definition below disagrees about them.</div>
+    </header>
+    <div class="body">
+      <div class="options">${optList(defs, state.active, 'active')}</div>
+      <div class="detail">
+        <div class="headline"><div class="big">${cur.count}</div><div class="cap">${cur.desc}</div></div>
+        ${tenderRows(cur.rows, r => `<td class="num sub">${r.owner}</td>`)}
+      </div>
+    </div>
+    <p class="finding"><b>Finding.</b> “Not submitted” — the literal buildspec_1 reading — counts a Tender we
+      <b>never sent</b> (T-1018), one we <b>declined to bid</b> (T-1011) and one the <b>client cancelled</b> (T-1005).
+      The number only goes down when someone submits, so a missed deadline inflates “active” <i>forever</i>.</p>
+    <p class="finding"><b>Finding.</b> The four definitions give ${Object.values(defs).map(x => x.count).join(' / ')}.
+      A metric whose plausible readings span ${Math.min(...Object.values(defs).map(x => x.count))}–${Math.max(...Object.values(defs).map(x => x.count))}
+      on ten Tenders is not a metric, it's a label. Whichever we pick has to be written down in <code>buildspec_2</code>
+      as a query, not a phrase.</p>
+    <p class="schema"><b>Schema.</b> Needs nothing new — <code>submitted_at</code> and per-Item <code>outcome</code>
+      already carry it. But <b>Submission Missed must be excluded explicitly</b>; it is not implied by any column.</p>
+  </div>`;
+}
+
+function labDue() {
+  const rows = dueRows(state.dueDeadline, state.dueWindow);
+  const grid = {};
+  for (const dk of Object.keys(DUE_DEADLINE)) for (const wk of Object.keys(DUE_WINDOW))
+    grid[dk + '|' + wk] = dueRows(dk, wk).length;
+
+  return `
+  <div class="metric">
+    <header>
+      <h3>2 — “Due this week”</h3>
+      <div class="q">Two hidden questions, not one: <b>which deadline</b>, and <b>which window</b>.
+        buildspec_1 assumed one deadline; ADR-0003 says there are three.</div>
+    </header>
+    <div class="toggles">
+      <span class="lbl">Deadline</span>
+      ${Object.entries(DUE_DEADLINE).map(([k, v]) => `<button data-set="dueDeadline" data-val="${k}" class="${state.dueDeadline === k ? 'on' : ''}">${v.name}</button>`).join('')}
+      <span style="width:14px"></span>
+      <span class="lbl">Window</span>
+      ${Object.entries(DUE_WINDOW).map(([k, v]) => `<button data-set="dueWindow" data-val="${k}" class="${state.dueWindow === k ? 'on' : ''}">${v.name}</button>`).join('')}
+    </div>
+    <div class="body" style="grid-template-columns:1fr">
+      <div class="detail">
+        <div class="headline">
+          <div class="big">${rows.length}</div>
+          <div class="cap">${DUE_DEADLINE[state.dueDeadline].name} deadline${state.dueDeadline === 'either' ? 's' : ''},
+            ${DUE_WINDOW[state.dueWindow].name.toLowerCase()} — ${DUE_WINDOW[state.dueWindow].note}</div>
+        </div>
+        ${rows.length ? `<table class="rows">
+          <thead><tr><th>Tender</th><th>State</th><th>Deadline</th><th style="text-align:right">Date</th></tr></thead>
+          <tbody>${rows.map(r => `<tr>
+            <td><span class="ref">${r.t.ref}</span> <span class="title">${esc(r.t.client)}</span>
+              <div class="sub" style="font-size:12px">${esc(r.t.title)}</div></td>
+            <td>${progressPill(r.t)} ${conditionPills(r.t)}</td>
+            <td>${r.which}</td>
+            <td class="num">${fmtD(r.date)}
+              <div class="sub">${r.past ? `<b style="color:var(--danger)">${days(r.date, TODAY)}d ago</b>` : `in ${-days(r.date, TODAY)}d`}</div></td>
+          </tr>`).join('')}</tbody></table>` : '<div class="empty">Nothing due under this definition.</div>'}
+        <table class="rows" style="border-top:1px solid var(--line)">
+          <thead><tr><th>All six combinations</th><th style="text-align:right">Calendar week</th><th style="text-align:right">Rolling 7</th></tr></thead>
+          <tbody>${Object.entries(DUE_DEADLINE).map(([dk, dv]) => `<tr>
+            <td>${dv.name}</td>
+            <td class="num">${grid[dk + '|cal']}</td>
+            <td class="num">${grid[dk + '|roll']}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>
+    <p class="finding"><b>Finding — the deadline question dwarfs the window question.</b>
+      Under Client Submission only, T-1038 shows up as “due 19 Aug” and looks fine. Switch to Internal Quote and it
+      turns red: that deadline <b>passed on Tuesday</b> and an Item still has no Quote. Same Tender, opposite reading —
+      and the second one is the only thing on this dashboard someone can still act on today.</p>
+    <p class="finding"><b>Finding — “unsourced” needs the third sourcing state, or the count is wrong.</b>
+      T-1038 has 3 Items: one quoted, one marked <b>No Supplier Found</b>, one untouched. Only the untouched one is
+      overdue — 09 found this third state and it matters here, because counting “Items with no Quote” gives <b>2</b>
+      and nags an Assignee who already answered. Sourcing Overdue must mean <i>neither quoted nor No Supplier Found</i>.</p>
+    <p class="finding"><b>Finding — the two windows disagree in both directions.</b>
+      Calendar week (Mon 10 – Sun 16) includes <b>past</b> deadlines from Monday and Tuesday; rolling 7 (13 – 20)
+      drops them but picks up <b>T-1044 on Monday the 17th</b>, which is next week to a human. Neither is “obviously right”,
+      so it has to be chosen, not defaulted into.</p>
+    <p class="finding"><b>Finding — “this week” degrades badly on Fridays.</b> Under a calendar week, Friday afternoon
+      shows a window with one day left in it; under rolling 7, the number is stable all week. If the card exists to
+      drive action, rolling wins; if it exists to say “what is this week's load”, calendar wins.</p>
+    <p class="schema"><b>Schema.</b> Nothing new. But the window <b>must be computed server-side in the org timezone</b>
+      (ADR-0005) — a client-side <code>new Date()</code> gives a user in Shenzhen a different set than one in Bangkok,
+      and the app would be lying to one of them.</p>
+  </div>`;
+}
+
+function labWon() {
+  const rows = wonRows(state.wonGrain);
+  const value = state.wonGrain === 'item'
+    ? rows.reduce((s, r) => s + itemBidValue(r.i), 0)
+    : rows.reduce((s, r) => s + r.t.items.filter(i => i.outcome === 'won' && inMonth(i.outcomeAt, TODAY)).reduce((a, i) => a + itemBidValue(i), 0), 0);
+  const shown = state.wonMeasure === 'count' ? rows.length : thb(value);
+
+  const allWon = TENDERS.flatMap(t => t.items.filter(i => i.outcome === 'won').map(i => ({ t, i })));
+
+  return `
+  <div class="metric">
+    <header>
+      <h3>3 — “Won this month”</h3>
+      <div class="q">Outcome is stored per <b>Tender Item</b> (ADR-0001), so “won” has no single grain.
+        T-1022 alone is won, lost and undecided at the same time — and its two wins landed in different months.</div>
+    </header>
+    <div class="toggles">
+      <span class="lbl">Grain</span>
+      ${Object.entries(WON_GRAIN).map(([k, v]) => `<button data-set="wonGrain" data-val="${k}" class="${state.wonGrain === k ? 'on' : ''}">${v}</button>`).join('')}
+      <span style="width:14px"></span>
+      <span class="lbl">Measure</span>
+      ${Object.entries(WON_MEASURE).map(([k, v]) => `<button data-set="wonMeasure" data-val="${k}" class="${state.wonMeasure === k ? 'on' : ''}">${v}</button>`).join('')}
+    </div>
+    <div class="body" style="grid-template-columns:1fr">
+      <div class="detail">
+        <div class="headline"><div class="big">${shown}</div>
+          <div class="cap">${WON_GRAIN[state.wonGrain]} with a win dated in August 2026, by <code>outcome_at</code></div></div>
+        ${rows.length ? `<table class="rows">
+          <thead><tr><th>Tender</th>${state.wonGrain === 'item' ? '<th>Item</th>' : '<th>Items won in Aug</th>'}<th style="text-align:right">Decided</th><th style="text-align:right">Value</th></tr></thead>
+          <tbody>${rows.map(r => `<tr>
+            <td><span class="ref">${r.t.ref}</span> <span class="title">${esc(r.t.client)}</span></td>
+            ${r.i
+              ? `<td>${esc(r.i.name)}<div class="sub" style="font-size:12px">${r.i.qty} ${r.i.unit} × ${thb(r.i.selling)}</div></td>
+                 <td class="num">${fmtD(r.i.outcomeAt)}</td><td class="num">${thb(itemBidValue(r.i))}</td>`
+              : `<td>${r.t.items.filter(i => i.outcome === 'won' && inMonth(i.outcomeAt, TODAY)).map(i => esc(i.name)).join('<br>')}</td>
+                 <td class="num">—</td>
+                 <td class="num">${thb(r.t.items.filter(i => i.outcome === 'won' && inMonth(i.outcomeAt, TODAY)).reduce((a, i) => a + itemBidValue(i), 0))}</td>`}
+          </tr>`).join('')}</tbody></table>` : '<div class="empty">Nothing won this month under this definition.</div>'}
+        <table class="rows" style="border-top:1px solid var(--line)">
+          <thead><tr><th>Every won Item in the dataset</th><th>Decided</th><th style="text-align:right">In August?</th><th style="text-align:right">Value</th></tr></thead>
+          <tbody>${allWon.map(({ t, i }) => `<tr>
+            <td><span class="ref">${t.ref}</span> ${esc(i.name)}</td>
+            <td>${fmtD(i.outcomeAt)}</td>
+            <td class="num">${inMonth(i.outcomeAt, TODAY) ? '<span class="pill good">yes</span>' : '<span class="pill flat">no — July</span>'}</td>
+            <td class="num">${thb(itemBidValue(i))}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>
+    <p class="finding"><b>Finding — the grains are different numbers, and Tender grain is dishonest.</b>
+      At Item grain: <b>1 Item</b> won in August. At Tender grain: <b>1 Tender</b> — but that Tender also
+      <b>lost an Item in August</b> and won another <b>in July</b>. Counting it as “1 won” throws away three quarters of what happened.</p>
+    <p class="finding"><b>Finding — count is nearly meaningless at this volume.</b> One win a month is a number that
+      tells a 10-person team nothing they don't already know. <b>Value</b> at Item grain is the only reading here
+      with any information in it.</p>
+    <p class="finding"><b>Finding — “won value” is selling price, not margin.</b> ${thb(value)} of revenue may be
+      a worse month than half that at double the margin. If a money card is going to exist, the honest one is
+      <b>Margin won</b> — and every input for it already exists (Landed Cost is on the selected Quote).</p>
+    <p class="schema"><b>Schema.</b> <code>outcome_at</code> on <code>tender_items</code> already exists (ADR-0001) —
+      without it this metric would have had to filter on <code>updated_at</code>, which is not a decision date.
+      Nothing new needed. Month boundaries in the org timezone, same as the week windows.</p>
+  </div>`;
+}
+
+function labValue() {
+  const defs = {};
+  for (const [k, v] of Object.entries(VALUE_DEFS)) {
+    const rows = v.rows();
+    defs[k] = { ...v, rows, total: rows.reduce((s, r) => s + r.v, 0), count: thbShort(rows.reduce((s, r) => s + r.v, 0)) };
+  }
+  const cur = defs[state.value];
+  const bomb = TENDERS.find(t => t.ref === 'T-1043');
+  const bombItem = bomb.items[0];
+
+  return `
+  <div class="metric">
+    <header>
+      <h3>4 — “Total quoted value”</h3>
+      <div class="q">The metric that does not survive contact with ADR-0004. Assignees <b>compete rather than divide</b>,
+        so an Item routinely carries 6–8 Quotes for the <i>same</i> goods — and summing Quotes counts it 8 times.</div>
+    </header>
+    <div class="body">
+      <div class="options">${optList(defs, state.value, 'value')}</div>
+      <div class="detail">
+        <div class="headline"><div class="big">${thb(cur.total)}</div><div class="cap">${cur.desc}</div></div>
+        ${cur.rows.length ? `<table class="rows">
+          <thead><tr><th>Tender</th><th>State</th><th style="text-align:right">Value</th></tr></thead>
+          <tbody>${cur.rows.map(r => `<tr>
+            <td><span class="ref">${r.t.ref}</span> <span class="title">${esc(r.t.client)}</span>
+              <div class="sub" style="font-size:12px">${esc(r.t.title)}</div></td>
+            <td>${progressPill(r.t)} ${r.gap ? '<span class="pill warn">incomplete — some Items contribute 0</span>' : ''}</td>
+            <td class="num">${r.v ? thb(r.v) : '<span class="sub">฿0</span>'}</td>
+          </tr>`).join('')}</tbody></table>` : '<div class="empty">No rows.</div>'}
+      </div>
+    </div>
+    <p class="finding"><b>Finding — the naive sum is inflated by roughly ${(defs.allQuotes.total / defs.cheapest.total).toFixed(0)}×.</b>
+      T-1043's first Item alone (<i>${esc(bombItem.name)}</i>, ${bombItem.qty} ${bombItem.unit}) has
+      <b>${bombItem.quotes.length} Quotes</b> from 3 Assignees — including the <b>same supplier quoted twice</b> by two
+      different people (ADR-0004 says that is normal, not a bug). Summing them gives ${thb(allQuotesValue(bombItem))}
+      for goods whose cheapest offer is ${thb(cheapestQuote(bombItem).thb * bombItem.qty)}.</p>
+    <p class="finding"><b>Finding — a unit mismatch makes the sum not just wrong but absurd.</b>
+      One supplier quoted Surgical masks at <b>฿1,980 per carton</b> against a quantity of <b>1,000 boxes</b>.
+      The naive sum multiplies them anyway. 09 already ruled that a mismatch <b>refuses to rank</b> — so the
+      cheapest-per-Item definition correctly drops that Item, and reports an incomplete total rather than a false one.</p>
+    <p class="finding"><b>Finding — “Selected only” is honest and nearly always ฿0.</b> Selection happens
+      minutes before the Bid goes out, so for most of a Tender's life this reads zero. It measures the wrong thing:
+      not exposure, but how close we are to submitting.</p>
+    <p class="finding"><b>Recommendation — cut the metric and replace it.</b> The only figure here with a decision
+      attached is <b>Bids out with clients</b> (${thb(defs.bid.total)}) — money genuinely at stake, on Tenders
+      genuinely Awaiting Decision. It answers “how much is riding on the phone call I have not made”.
+      “Total quoted value” answers nothing.</p>
+    <p class="schema"><b>Schema.</b> No new columns — but note every one of these needs
+      <code>qty × per-unit</code>, and <b>09 found the per-unit grain was never stated anywhere in buildspec_1</b>.
+      <code>buildspec_2</code> has to say it out loud or this metric gets rebuilt wrong.</p>
+  </div>`;
+}
+
+function labFifth() {
+  const missed = TENDERS.filter(submissionMissed);
+  const overdue = TENDERS.filter(sourcingOverdue);
+  const awaiting = TENDERS.filter(awaitingDecision);
+  return `
+  <div class="metric">
+    <header>
+      <h3>5 — The metric buildspec_1 didn't have</h3>
+      <div class="q">Does each card earn its place? Four cards is a default. Here is what the same screen space
+        buys if the cards are chosen from ADR-0003's three conditions instead.</div>
+    </header>
+    <div class="body" style="grid-template-columns:1fr">
+      <div class="detail" style="padding:16px 18px">
+        <div class="cards" style="margin:0">
+          <div class="card danger"><div class="label">Submission Missed</div><div class="value">${missed.length}</div>
+            <div class="foot">the failure the product exists to prevent</div></div>
+          <div class="card warn"><div class="label">Sourcing Overdue</div><div class="value">${overdue.length}</div>
+            <div class="foot">fixable today, by a named Assignee</div></div>
+          <div class="card"><div class="label">Bids out</div><div class="value">${thbShort(VALUE_DEFS.bid.rows().reduce((s, r) => s + r.v, 0))}</div>
+            <div class="foot">${awaiting.length} awaiting client decision</div></div>
+          <div class="card good"><div class="label">Won in August</div><div class="value">${thbShort(wonRows('item').reduce((s, r) => s + itemBidValue(r.i), 0))}</div>
+            <div class="foot">${wonRows('item').length} item${wonRows('item').length === 1 ? '' : 's'}, by decision date</div></div>
+        </div>
+      </div>
+    </div>
+    <p class="finding"><b>Every card here names something a specific person does next.</b>
+      buildspec_1's four named things that happen to be countable. “Active tenders = 7” has never once
+      caused anyone to do anything.</p>
+    <p class="finding"><b>The counter-argument, which variant C makes:</b> with ~10 live Tenders, every one of
+      these numbers is legible by looking at the list, and a card is a second place for the same truth to live —
+      and to drift. Worth deciding deliberately rather than by habit.</p>
+  </div>`;
+}
+
+function variantLab() {
+  return `
+  <div class="wrap wide">
+    <div class="page-head">
+      <h1>Definition lab</h1>
+      <div class="sub">Every metric, every candidate definition, over the same 10 Tenders. Click an option or a
+        toggle and watch the number move — then read which rows it let in.</div>
+    </div>
+    ${labActive()}${labDue()}${labWon()}${labValue()}${labFifth()}
+    ${dataDump()}
+  </div>`;
+}
+
+function dataDump() {
+  return `
+  <details class="data">
+    <summary>▸ The full fake dataset — audit any number above by hand</summary>
+    <table class="rows">
+      <thead><tr><th>Tender</th><th>Progress / conditions</th><th>Received</th><th>Internal</th><th>Submission</th><th>Submitted</th><th>Items</th></tr></thead>
+      <tbody>${TENDERS.map(t => `<tr>
+        <td><span class="ref">${t.ref}</span> <span class="title">${esc(t.client)}</span>
+          <div class="sub" style="font-size:12px">${esc(t.title)} · owner ${t.owner}</div>
+          <div class="sub" style="font-size:11.5px;margin-top:4px;max-width:340px">${esc(t.note)}</div></td>
+        <td>${progressPill(t)} ${conditionPills(t)}</td>
+        <td class="num sub">${fmtD(t.received)}</td>
+        <td class="num sub">${fmtD(t.internal)}</td>
+        <td class="num sub">${fmtD(t.submission)}</td>
+        <td class="num sub">${t.submitted ? fmtD(t.submitted) : '—'}</td>
+        <td>${t.items.map(i => `<div style="font-size:12px">${esc(i.name)}
+          <span class="sub">· ${i.qty} ${i.unit} · ${i.quotes.length} quote${i.quotes.length === 1 ? '' : 's'}${
+            (i.noSupplier || []).length ? ` · No Supplier Found (${i.noSupplier.join(', ')})` : ''}${
+            i.outcome ? ` · <b>${i.outcome}</b> ${i.outcomeAt ? fmtD(i.outcomeAt) : ''}` : ''}${
+            i.quotes.some(x => x.mismatch) ? ' · <b style="color:var(--warn)">unit mismatch</b>' : ''}</span></div>`).join('')}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </details>`;
+}
+
+// ---------------------------------------------------------------------------
+function render() {
+  const v = state.variant;
+  document.getElementById('app').innerHTML =
+    v === 'B' ? variantB() : v === 'C' ? variantC() : v === 'lab' ? variantLab() : variantA();
+
+  document.querySelectorAll('[data-set]').forEach(n => n.addEventListener('click', () => {
+    state[n.dataset.set] = n.dataset.val;
+    render();
+  }));
+
+  const labels = { A: 'A · buildspec_1', B: 'B · action board', C: 'C · minimal', lab: 'Definition lab' };
+  document.getElementById('switcher').innerHTML =
+    Object.entries(labels).map(([k, l], idx) =>
+      (idx === 3 ? '<span class="sep"></span>' : '') +
+      `<button data-variant="${k}" class="${state.variant === k ? 'on' : ''}">${l}</button>`).join('');
+  document.querySelectorAll('[data-variant]').forEach(n => n.addEventListener('click', () => {
+    state.variant = n.dataset.variant;
+    history.replaceState(null, '', '?variant=' + state.variant);
+    render();
+    scrollTo(0, 0);
+  }));
+}
+render();
+</script>
+</body>
+</html>
