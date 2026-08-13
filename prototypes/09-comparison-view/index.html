@@ -272,6 +272,45 @@
     text-align: right; font-variant-numeric: tabular-nums; background: #fff;
   }
   .c-inline-input:focus { outline: 2px solid #99f6e4; outline-offset: -1px; }
+
+  /* =====================================================================
+     VARIANT D — the composite: C's ledger shell, A's dense table as the
+     expansion, and the app opens Items that still need a decision.
+     ===================================================================== */
+  .d-todo {
+    display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px;
+    padding: 10px 14px; background: #fff; border: 1px solid var(--line);
+    border-left: 3px solid var(--accent); border-radius: 8px; font-size: 13px;
+  }
+  .d-todo b { font-size: 14px; }
+  .d-todo .rest { color: var(--muted); }
+  table.d-tbl th {
+    text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--muted); font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--line); background: #f8fafc;
+  }
+  table.d-tbl > tbody > tr > td { padding: 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  table.d-tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.d-tbl tr.open > td { background: #f8fafc; border-bottom-color: transparent; }
+  table.d-tbl tr.done > td { background: #fff; }
+  .d-twist { background: none; border: 0; color: var(--muted); font-size: 11px; padding: 0; }
+  .d-panel { background: #f8fafc; }
+  .d-panel .inner { padding: 0 12px 16px 30px; }
+  table.d-quotes { background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  table.d-quotes th {
+    text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--muted); font-weight: 600; padding: 7px 10px; border-bottom: 1px solid var(--line); background: #f8fafc;
+  }
+  table.d-quotes td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.d-quotes tr:last-child td { border-bottom: 0; }
+  table.d-quotes tr.alt td { background: var(--warn-soft); }
+  table.d-quotes tr.selected td { background: var(--accent-soft); }
+  table.d-quotes tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  table.d-quotes td.num { text-align: right; }
+  .d-rank { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .d-selbtn { border: 1px solid var(--line-strong); background: #fff; border-radius: 6px; padding: 4px 10px; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  .d-selbtn:hover { border-color: var(--accent); color: var(--accent); }
+  .d-selbtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .d-needs { font-size: 11.5px; color: var(--accent); font-weight: 500; }
 </style>
 </head>
 <body>
@@ -396,7 +435,9 @@ const itemById = (id) => ITEMS.find((i) => i.id === id);
 const fmt = (n, dp = 2) =>
   n.toLocaleString("en-GB", { minimumFractionDigits: dp, maximumFractionDigits: dp });
 const CCY_SYM = { CNY: "¥", USD: "$", THB: "฿" };
-const money = (n, ccy, dp = 2) => CCY_SYM[ccy] + fmt(n, dp);
+const money = (n, ccy, places = 2) => CCY_SYM[ccy] + fmt(n, places);
+// Sub-baht unit prices need 3 places to separate suppliers; a ¥4,850 pump does not.
+const dp = (n) => (Math.abs(n) < 10 ? 3 : 2);
 const thb = (n, dp = 2) => "฿" + fmt(n, dp);
 
 /* =======================================================================
@@ -404,13 +445,14 @@ const thb = (n, dp = 2) => "฿" + fmt(n, dp);
    ======================================================================= */
 
 const STATE = {
-  variant: (new URLSearchParams(location.search).get("variant") || "A").toUpperCase(),
+  variant: (new URLSearchParams(location.search).get("variant") || "D").toUpperCase(),
   selected: { i1: "q1c", i2: null, i3: null, i4: "q4a" },
   landed: {},          // itemId -> per-unit THB, once touched or pre-filled
   landedTouched: {},
   selling: {},
   openItem: "i1",      // variant B
   expanded: { i1: true, i2: false, i3: false, i4: false }, // variant C
+  expandD: {},         // variant D — explicit twisty clicks only; see isOpenD
 };
 ITEMS.forEach((i) => { if (i.selling != null) STATE.selling[i.id] = i.selling; });
 
@@ -591,7 +633,7 @@ function itemBlockA(item) {
   dups.forEach((s) => {
     const qs = item.quotes.filter((q) => q.supplier === s);
     notes.push(`<div class="banner info"><b>Same supplier, two Assignees.</b>
-      <span>${s} quoted ${qs.map((q) => `${money(q.price, q.ccy, 3)} by ${USERS[q.by].name}`).join(" and ")}
+      <span>${s} quoted ${qs.map((q) => `${money(q.price, q.ccy, dp(q.price))} by ${USERS[q.by].name}`).join(" and ")}
       — kept as separate Quotes.</span></div>`);
   });
   (item.no_supplier_found || []).forEach((n) =>
@@ -611,7 +653,7 @@ function itemBlockA(item) {
                <div style="font-size:11px;color:var(--muted)">requested: ${item.name}</div>`
             : `<span style="font-size:12px;color:var(--muted)">as requested</span>`}</td>
       <td class="num unit-price">
-        <div class="money-orig">${money(q.price, q.ccy, 3)}</div>
+        <div class="money-orig">${money(q.price, q.ccy, dp(q.price))}</div>
         <div>${thbLine(q)}</div>
         <div class="derived-note">per ${q.unit}${q.unit !== item.unit ? ` <span class="chip stop">≠ ${item.unit}</span>` : ""}</div>
       </td>
@@ -752,7 +794,7 @@ function cardB(item, q) {
       <b>quoted: ${q.alt}</b></div>` : ""}
     <div class="body">
       <div class="supplier">${q.supplier}</div>
-      <div class="big">${money(q.price, q.ccy, 3)}</div>
+      <div class="big">${money(q.price, q.ccy, dp(q.price))}</div>
       <div class="per">per ${q.unit}
         ${q.unit !== item.unit ? `<span class="chip stop" style="margin-left:4px">Item asks ${item.unit}</span>` : ""}
         ${isLow ? `<span class="chip good" style="margin-left:4px">lowest</span>` : ""}</div>
@@ -782,7 +824,7 @@ function bidPanelB(item) {
     <div class="inner">
       ${sel ? `<div style="margin-bottom:12px">
           <span class="chip sel">${sel.supplier}</span>
-          <div class="derived-note" style="margin-top:6px">${money(sel.price, sel.ccy, 3)} per ${sel.unit}, sourced by ${USERS[sel.by].name}</div>
+          <div class="derived-note" style="margin-top:6px">${money(sel.price, sel.ccy, dp(sel.price))} per ${sel.unit}, sourced by ${USERS[sel.by].name}</div>
         </div>`
         : `<div class="banner info" style="margin-bottom:12px">No Quote selected yet — that is a normal resting state.</div>`}
       <div class="price-field">
@@ -863,7 +905,7 @@ function rowC(item) {
     </td>
     <td class="c-sel">${sel
       ? `<b>${sel.supplier}</b>
-         <div class="derived-note">${money(sel.price, sel.ccy, 3)} / ${sel.unit} · ${thbLine(sel)} · ${avatar(sel.by, "sm")}</div>
+         <div class="derived-note">${money(sel.price, sel.ccy, dp(sel.price))} / ${sel.unit} · ${thbLine(sel)} · ${avatar(sel.by, "sm")}</div>
          ${sel.alt ? `<div style="margin-top:3px"><span class="chip alt">ALT → ${sel.alt}</span></div>` : ""}`
       : `<span class="none">nothing selected</span>`}</td>
     <td class="num"><input class="c-inline-input" type="number" step="0.01"
@@ -893,7 +935,7 @@ function rowC(item) {
              <span style="color:var(--muted)"> (requested ${item.name})</span></div>` : ""}</td>
       <td style="width:120px">${avatar(q.by, "sm")} <span style="color:var(--muted)">${USERS[q.by].name}</span></td>
       <td class="num" style="width:170px">
-        <span class="money-orig">${money(q.price, q.ccy, 3)}</span>
+        <span class="money-orig">${money(q.price, q.ccy, dp(q.price))}</span>
         <span style="color:var(--muted)"> / ${q.unit}</span>
         ${q.unit !== item.unit ? ` <span class="chip stop">≠ ${item.unit}</span>` : ""}
         <div>${thbLine(q)} ${q.id === lo ? `<span class="chip good">lowest</span>` : ""}</div>
@@ -917,9 +959,183 @@ function rowC(item) {
 }
 
 /* =======================================================================
+   VARIANT D — "Working sheet". The composite, and the recommended answer.
+   C's ledger is the shell; A's dense table is the expansion; the app decides
+   what is open — Items still needing a decision start expanded, decided ones
+   collapse. Nothing scrolls sideways and nothing has to be navigated to.
+   ======================================================================= */
+
+const needsDecision = (item) => !STATE.selected[item.id];
+// Explicit twisty clicks win; otherwise openness is derived from the work left.
+const isOpenD = (item) =>
+  STATE.expandD[item.id] !== undefined ? STATE.expandD[item.id] : needsDecision(item);
+
+// The frozen-rate hazard: a lead this small can be an artifact of two Quotes
+// carrying rates frozen on different days. See the resolution on ticket 09.
+function tooCloseToCall(item) {
+  if (!rankable(item) || item.quotes.length < 2) return null;
+  const s = [...item.quotes].sort((a, b) => thbUnit(a) - thbUnit(b));
+  const gap = (thbUnit(s[1]) - thbUnit(s[0])) / thbUnit(s[0]);
+  const staleOne = [s[0], s[1]].find((q) => q.rate.stale);
+  if (gap < 0.03 && staleOne) return { gap, s, staleOne };
+  return null;
+}
+
+function variantD() {
+  const todo = ITEMS.filter(needsDecision).length;
+  return `<div class="wrap">
+    ${tenderHead("working sheet")}
+    <div class="d-todo">
+      ${todo
+        ? `<b>${todo} of ${ITEMS.length} Items still need a Quote selected.</b>
+           <span class="rest">They are open below. Decided Items are folded away.</span>`
+        : `<b>Every Item has a Selected Quote.</b><span class="rest">Ready to build the Bid.</span>`}
+    </div>
+    <div class="c-sheet">
+      <table class="d-tbl">
+        <thead><tr>
+          <th style="width:26px"></th><th>Tender Item</th><th>Selected Quote</th>
+          <th class="num" style="width:130px">Landed cost / unit</th>
+          <th class="num" style="width:120px">Selling / unit</th>
+          <th class="num" style="width:120px">Margin / unit</th>
+          <th class="num" style="width:150px">Margin on line</th>
+        </tr></thead>
+        <tbody>${ITEMS.map(rowD).join("")}</tbody>
+      </table>
+      <div class="c-totals">
+        <div><span>Coverage</span><b data-bid-coverage></b></div>
+        <div><span>Bid total</span><b data-bid-total></b></div>
+        <div><span>Landed cost</span><b data-bid-cost></b></div>
+        <div><span>Margin</span><b data-bid-margin></b></div>
+      </div>
+    </div>
+    <p class="derived-note" style="margin-top:12px">
+      THB figures are derived for comparison only: ECB mid-market + 2% buffer, frozen onto each Quote at entry.
+      Suppliers are paid in the currency they quoted.
+    </p>
+  </div>`;
+}
+
+function rowD(item) {
+  const sel = findQuote(item, STATE.selected[item.id]);
+  const cost = landedFor(item);
+  const m = marginFor(item);
+  const open = isOpenD(item);
+
+  let flag = "";
+  if (unitMismatch(item)) flag = `<span class="chip stop">unit mismatch — compare manually</span>`;
+  else if (allAlternatives(item)) flag = `<span class="chip alt">no exact match — all ${item.quotes.length} Quotes are Alternatives</span>`;
+  const nsf = (item.no_supplier_found || []).map((n) =>
+    `<span class="chip alt">No Supplier Found · ${USERS[n.by].name}</span>`).join("");
+  const untouched = TENDER.assignees.filter(
+    (a) => !item.quotes.some((q) => q.by === a) && !(item.no_supplier_found || []).some((n) => n.by === a));
+  const notLooked = untouched.length
+    ? `<span class="chip neutral">not yet sourced by ${untouched.map((a) => USERS[a].name).join(", ")}</span>` : "";
+
+  const main = `<tr class="${open ? "open" : "done"}">
+    <td><button class="d-twist" title="${open ? "fold away" : "open"}"
+        onclick="STATE.expandD['${item.id}']=${open ? "false" : "true"};render()">${open ? "▾" : "▸"}</button></td>
+    <td>
+      <div class="c-item-nm">${item.name}</div>
+      <div class="c-item-sub">${fmt(item.qty, 0)} ${item.unit} · ${item.quotes.length} Quote${item.quotes.length === 1 ? "" : "s"}</div>
+      <div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">${flag}${nsf}${notLooked}</div>
+    </td>
+    <td class="c-sel">${sel
+      ? `<b>${sel.supplier}</b>
+         <div class="derived-note">${money(sel.price, sel.ccy, dp(sel.price))} / ${sel.unit} · ${thbLine(sel)} · ${avatar(sel.by, "sm")}</div>
+         ${sel.alt ? `<div style="margin-top:3px"><span class="chip alt">ALT → ${sel.alt}</span></div>` : ""}`
+      : `<span class="d-needs">needs a decision ↓</span>`}</td>
+    <td class="num"><input class="c-inline-input" type="number" step="0.01"
+        value="${cost == null ? "" : fmt(cost, 4)}" oninput="onLanded('${item.id}', this.value)"
+        ${sel ? "" : "disabled"}></td>
+    <td class="num"><input class="c-inline-input" type="number" step="0.01"
+        value="${STATE.selling[item.id] ?? ""}" oninput="onSelling('${item.id}', this.value)"></td>
+    <td class="num"><span class="margin-out ${m ? (m.unit < 0 ? "neg" : "pos") : ""}" style="font-size:13px"
+        data-margin="${item.id}">${m ? thb(m.unit) + " / " + item.unit : "—"}</span></td>
+    <td class="num"><b data-margin-total="${item.id}">${m ? thb(m.total, 0) + ` (${fmt(m.pct, 1)}%)` : "—"}</b></td>
+  </tr>`;
+
+  if (!open) return main;
+
+  const lo = lowestId(item);
+  const dups = dupSuppliers(item);
+  const close = tooCloseToCall(item);
+  const ordered = rankable(item) ? [...item.quotes].sort((a, b) => thbUnit(a) - thbUnit(b)) : item.quotes;
+
+  const notes = [];
+  if (unitMismatch(item))
+    notes.push(`<div class="banner stop"><b>Unit mismatch — compare manually.</b>
+      <span>Quotes arrived in different units from the Item. Nothing here is ranked and no lowest is marked;
+      converting pack sizes silently would highlight the wrong supplier.</span></div>`);
+  if (allAlternatives(item))
+    notes.push(`<div class="banner warn"><b>No exact match.</b>
+      <span>All ${item.quotes.length} Quotes are Alternatives to <em>${item.spec.replace("Requested: ", "")}</em>.
+      The ranking is comparing different products.</span></div>`);
+  if (close)
+    notes.push(`<div class="banner warn"><b>Too close to call on frozen rates.</b>
+      <span>${close.s[0].supplier} leads ${close.s[1].supplier} by ${fmt(close.gap * 100, 1)}%, but
+      ${close.staleOne.supplier}'s rate was frozen on ${close.staleOne.rate.as_of}. The gap is smaller than the
+      rate drift — check both before choosing on price alone.</span></div>`);
+  dups.forEach((s) => {
+    const qs = item.quotes.filter((q) => q.supplier === s);
+    notes.push(`<div class="banner info"><b>Same supplier, two Assignees.</b>
+      <span>${s} quoted ${qs.map((q) => `${money(q.price, q.ccy, dp(q.price))} to ${USERS[q.by].name}`).join(" and ")}
+      — both kept, because the difference is the point.</span></div>`);
+  });
+  (item.no_supplier_found || []).forEach((n) =>
+    notes.push(`<div class="banner warn"><b>No Supplier Found</b>
+      <span>— ${USERS[n.by].name}, ${n.on}: “${n.note}”</span></div>`));
+
+  const rows = ordered.map((q, idx) => {
+    const isSel = STATE.selected[item.id] === q.id;
+    return `<tr class="${q.alt ? "alt" : ""} ${isSel ? "selected" : ""}">
+      <td class="d-rank" style="width:26px">${rankable(item) ? idx + 1 : "·"}</td>
+      <td><b>${q.supplier}</b>
+        ${dups.includes(q.supplier) ? `<div class="a-dup">also quoted to another Assignee</div>` : ""}</td>
+      <td style="white-space:nowrap;width:130px">${avatar(q.by, "sm")}
+        <span style="font-size:12px;color:var(--muted)">${USERS[q.by].name}</span></td>
+      <td>${q.alt
+            ? `<span class="chip alt">ALTERNATIVE</span>
+               <div style="font-size:12px;margin-top:4px"><b>${q.alt}</b></div>
+               <div style="font-size:11px;color:var(--muted)">requested: ${item.name}</div>`
+            : `<span style="font-size:12px;color:var(--muted)">as requested</span>`}</td>
+      <td class="num unit-price" style="width:150px">
+        <div class="money-orig">${money(q.price, q.ccy, dp(q.price))}
+          ${q.id === lo ? `<span class="chip good" style="margin-left:6px">lowest</span>` : ""}</div>
+        <div>${thbLine(q)}</div>
+        <div class="derived-note">per ${q.unit}${q.unit !== item.unit ? ` <span class="chip stop">≠ ${item.unit}</span>` : ""}</div>
+      </td>
+      <td class="num" style="width:140px">${q.unit === item.unit
+            ? `<div class="money-orig">${money(q.price * item.qty, q.ccy, 0)}</div>
+               <div class="money-thb">${q.ccy === "THB" ? "" : "≈ " + thb(thbUnit(q) * item.qty, 0)}</div>`
+            : `<span class="derived-note">not comparable</span>`}</td>
+      <td style="width:74px">${q.photos
+            ? `<span class="photo-badge" onclick="openLightbox('${q.id}',0)">📷 ${q.photos}</span>`
+            : `<span class="no-photo">none</span>`}</td>
+      <td style="width:96px" class="num">
+        <button class="d-selbtn ${isSel ? "on" : ""}" onclick="selectQuote('${item.id}','${q.id}')">
+          ${isSel ? "✓ Selected" : "Select"}</button></td>
+    </tr>`;
+  }).join("");
+
+  return main + `<tr class="d-panel"><td colspan="7"><div class="inner">
+    ${notes.map((n) => `<div style="margin-bottom:8px">${n}</div>`).join("")}
+    <table class="d-quotes">
+      <thead><tr>
+        <th></th><th>Supplier</th><th>Sourced by</th><th>Quoted product</th>
+        <th class="num">Unit price</th><th class="num">Line total (${fmt(item.qty, 0)} ${item.unit})</th>
+        <th>Photos</th><th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div></td></tr>`;
+}
+
+/* =======================================================================
    SWITCHER + RENDER
    ======================================================================= */
 const VARIANTS = [
+  { key: "D", name: "Working sheet — the composite (recommended)", fn: variantD },
   { key: "A", name: "Comparison sheet — dense tables, whole Tender", fn: variantA },
   { key: "B", name: "Sourcing desk — item rail + quote cards", fn: variantB },
   { key: "C", name: "Decision ledger — bid first, compare on demand", fn: variantC },
