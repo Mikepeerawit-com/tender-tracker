@@ -172,8 +172,10 @@ enable_refresh_token_rotation = true
 # Allows refresh tokens to be reused after expiry, up to the specified interval in seconds.
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
-# Allow/disallow new user signups to your project.
-enable_signup = true
+# Accounts exist only by invitation — the Org Admin invites by email and the invitee
+# sets a password. There is no self-signup and no other route into the app, so this is
+# off at the platform level rather than merely unlinked from the UI.
+enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -217,7 +219,10 @@ web3 = 30
 # secret = ""
 
 [auth.email]
-# Allow/disallow new user signups via email to your project.
+# Deliberately TRUE, and not the knob that stops self-signup — `[auth] enable_signup`
+# above is. This one toggles email as an auth *provider*: setting it false returns
+# `email_provider_disabled` on every password login, so nobody can sign in at all. It
+# reads like the narrower setting and is the broader one.
 enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
@@ -243,10 +248,13 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+# The invite is the only email this app sends. The template is customised because the
+# default one links to `{{ .ConfirmationURL }}`, which returns tokens in the URL
+# fragment — unreadable by a server, and readable only by client-side script that would
+# then persist the session where WebKit clears it after 7 days.
+[auth.email.template.invite]
+subject = "You have been invited / 邀请您加入 — Tender Tracker"
+content_path = "./supabase/templates/invite.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
@@ -269,9 +277,12 @@ max_frequency = "5s"
 # 4152127777 = "123456"
 
 # Configure logged in session timeouts.
-# [auth.sessions]
-# Force log out after the specified duration.
-# timebox = "24h"
+[auth.sessions]
+# Thirty days, and deliberately no `inactivity_timeout`. Usage here is reminder-driven
+# and therefore sparse by design: someone taps a WeCom link when a deadline nears and
+# may not open the app again for weeks. An idle timeout would log out exactly the
+# person the reminder just summoned, inside the webview, with no password manager.
+timebox = "720h"
 # Force log out if the user has been inactive longer than the specified duration.
 # inactivity_timeout = "8h"
 

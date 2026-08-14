@@ -12,5 +12,76 @@
     "label": "语言",
     "en": "English",
     "zh-Hans": "简体中文"
+  },
+  "login": {
+    "title": "登录",
+    "description": "招标跟踪仅限邀请使用。若您尚未有账号，请联系组织管理员邀请您。",
+    "email": "邮箱",
+    "password": "密码",
+    "submit": "登录",
+    "submitting": "正在登录…",
+    "error": {
+      "invalid": "邮箱与密码不匹配。若已忘记密码，请联系组织管理员重置。",
+      "disabled": "此账号已无法登录。请联系组织管理员。",
+      "incomplete": "请同时填写邮箱和密码。",
+      "link": "该邀请链接已过期或已被使用。请联系组织管理员重新发送。"
+    }
+  },
+  "setPassword": {
+    "title": "设置密码",
+    "description": "欢迎，{name}。设置密码后即可使用。",
+    "password": "新密码",
+    "confirmation": "重复密码",
+    "requirement": "至少 8 个字符。",
+    "submit": "保存并继续",
+    "submitting": "正在保存…",
+    "error": {
+      "too_short": "请至少使用 8 个字符。",
+      "mismatch": "两次输入的密码不一致。",
+      "no_session": "该邀请链接已过期或已被使用。请联系组织管理员重新发送。"
+    }
+  },
+  "chooseLanguage": {
+    "title": "Choose your language / 选择语言",
+    "option": {
+      "en": "English",
+      "zh-Hans": "简体中文"
+    }
+  },
+  "nav": {
+    "signOut": "退出登录",
+    "people": "成员"
+  },
+  "people": {
+    "title": "成员",
+    "description": "组织内的全部成员。账号仅可通过邀请创建，没有自助注册页面。",
+    "members": "成员列表",
+    "orgAdmin": "组织管理员",
+    "disabled": "已停用",
+    "invite": {
+      "title": "邀请同事",
+      "name": "姓名",
+      "email": "邮箱",
+      "submit": "发送邀请",
+      "submitting": "正在发送…",
+      "status": {
+        "sent": "邀请已发送。对方将通过链接自行设置密码。",
+        "not_admin": "只有组织管理员可以邀请成员。",
+        "already_invited": "该邮箱已存在账号。",
+        "send_failed": "邀请发送失败，请检查邮件配置。",
+        "incomplete": "请填写姓名和邮箱。"
+      }
+    },
+    "wecom": {
+      "label": "企业微信 userid",
+      "placeholder": "企业微信 userid",
+      "save": "保存",
+      "status": {
+        "saved": "已保存",
+        "not_admin": "只有组织管理员可以修改。",
+        "not_found": "该成员不属于您的组织。",
+        "taken": "该 userid 已被其他成员使用。"
+      }
+    }
   }
 }

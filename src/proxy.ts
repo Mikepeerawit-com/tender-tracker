@@ -1,0 +1,63 @@
+import { NextResponse, type NextRequest } from "next/server";
+
+import { createSessionClient } from "@/lib/supabase/session-client";
+import type { SessionCookieStore } from "@/lib/supabase/session-client";
+
+/**
+ * Refreshes the session on every request, and turns anyone without one away.
+ *
+ * The refresh is the load-bearing half. Access tokens last an hour; the 30-day session
+ * survives because each request quietly exchanges the refresh token and writes the new
+ * pair back as `Set-Cookie`. Without this the app would work perfectly for an hour and
+ * then log everyone out.
+ *
+ * (`proxy.ts`, not `middleware.ts` — the middleware filename is deprecated in Next 16.)
+ */
+
+const publicPaths = ["/login", "/auth/confirm", "/api/health"];
+
+export async function proxy(request: NextRequest): Promise<NextResponse> {
+  const response = NextResponse.next({ request });
+
+  const store: SessionCookieStore = {
+    getAll: () => request.cookies.getAll().map(({ name, value }) => ({ name, value })),
+    set: (name, value, options) => {
+      // Both sides: the request copy so anything rendering downstream sees the fresh
+      // token, and the response so the browser is actually told about it.
+      request.cookies.set(name, value);
+      response.cookies.set(name, value, options);
+    },
+  };
+
+  // `getUser()` is what performs the refresh, and it revalidates against the auth
+  // server rather than trusting the cookie as sent.
+  const {
+    data: { user },
+  } = await createSessionClient(store).auth.getUser();
+
+  const { pathname } = request.nextUrl;
+  const isPublic = publicPaths.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
+
+  if (!user && !isPublic) {
+    const login = request.nextUrl.clone();
+    login.pathname = "/login";
+    login.search = "";
+
+    return NextResponse.redirect(login);
+  }
+
+  return response;
+}
+
+export const config = {
+  matcher: [
+    /*
+     * Everything except Next's own assets and image files. Note that `/login` is still
+     * matched: a signed-out visitor needs the refresh attempt to run, and a page that
+     * skips the proxy entirely never gets its cookies rewritten.
+     */
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
+};

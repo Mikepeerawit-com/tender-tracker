@@ -1,0 +1,34 @@
+<!--
+  The only email this app sends.
+
+  The link carries `token_hash` and is verified server-side by /auth/confirm, rather
+  than using the default `{{ .ConfirmationURL }}`. That default lands the tokens in the
+  URL *fragment*, which is never sent to a server: reading it needs client-side
+  JavaScript, which needs a browser Supabase client, which would then persist the
+  session from script — and script-written storage is exactly what WebKit's Tracking
+  Prevention clears after 7 days. The whole session design falls over at this one link
+  if it is left as the default.
+
+  Both languages appear because the invitee has no locale yet, by definition: first
+  start-up is where they choose one, and this email is what gets them there.
+-->
+<h2>You have been invited / 邀请您加入</h2>
+
+<p>
+  You have been invited to join Tender Tracker. Follow the link below to choose a
+  password and sign in. The link can be used once.
+</p>
+<p>
+  您已被邀请加入 Tender Tracker。请点击下方链接设置密码并登录。该链接仅可使用一次。
+</p>
+
+<p>
+  <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite">
+    Set your password / 设置密码
+  </a>
+</p>
+
+<p>
+  If you were not expecting this invitation, you can ignore this email.<br />
+  如果您并未预期收到此邀请，可忽略本邮件。
+</p>

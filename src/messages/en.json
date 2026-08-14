@@ -12,5 +12,76 @@
     "label": "Language",
     "en": "English",
     "zh-Hans": "简体中文"
+  },
+  "login": {
+    "title": "Sign in",
+    "description": "Tender Tracker is invitation-only. If you do not have an account yet, ask your Org Admin to invite you.",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "error": {
+      "invalid": "That email and password do not match. Ask your Org Admin to reset your password if you cannot remember it.",
+      "disabled": "This account can no longer sign in. Ask your Org Admin.",
+      "incomplete": "Enter both your email and your password.",
+      "link": "That invitation link has expired or has already been used. Ask your Org Admin for a new one."
+    }
+  },
+  "setPassword": {
+    "title": "Choose a password",
+    "description": "Welcome, {name}. Choose a password and you are in.",
+    "password": "New password",
+    "confirmation": "Repeat password",
+    "requirement": "At least 8 characters.",
+    "submit": "Save and continue",
+    "submitting": "Saving…",
+    "error": {
+      "too_short": "Use at least 8 characters.",
+      "mismatch": "Those two passwords are not the same.",
+      "no_session": "That invitation link has expired or has already been used. Ask your Org Admin for a new one."
+    }
+  },
+  "chooseLanguage": {
+    "title": "Choose your language / 选择语言",
+    "option": {
+      "en": "English",
+      "zh-Hans": "简体中文"
+    }
+  },
+  "nav": {
+    "signOut": "Sign out",
+    "people": "People"
+  },
+  "people": {
+    "title": "People",
+    "description": "Everyone in the org. Accounts exist only by invitation — there is no sign-up page.",
+    "members": "Members",
+    "orgAdmin": "Org Admin",
+    "disabled": "Disabled",
+    "invite": {
+      "title": "Invite a colleague",
+      "name": "Name",
+      "email": "Email",
+      "submit": "Send invite",
+      "submitting": "Sending…",
+      "status": {
+        "sent": "Invitation sent. They set their own password from the link.",
+        "not_admin": "Only an Org Admin can invite.",
+        "already_invited": "That address already has an account.",
+        "send_failed": "The invitation could not be sent. Check the email settings.",
+        "incomplete": "Enter both a name and an email address."
+      }
+    },
+    "wecom": {
+      "label": "WeCom userid",
+      "placeholder": "WeCom userid",
+      "save": "Save",
+      "status": {
+        "saved": "Saved",
+        "not_admin": "Only an Org Admin can change this.",
+        "not_found": "That person is not in your org.",
+        "taken": "Another member already has that userid."
+      }
+    }
   }
 }

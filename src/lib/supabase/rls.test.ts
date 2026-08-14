@@ -218,6 +218,96 @@ describe("row-level security", () => {
   });
 });
 
+describe("membership is not business data", () => {
+  // RLS scopes rows to an org and deliberately stops there: inside one, everyone reads
+  // and writes everything, cost and margin included. Three columns cannot live under
+  // that rule. `is_org_admin` gates inviting (buildspec_2.md:154) and story 48 wants
+  // the Org Admin to be the only person who can invite — a gate you can grant yourself
+  // is not a gate. `disabled_at` is the same in reverse. `org_id` is the boundary
+  // itself. Column-level privileges handle those, because they are the layer that
+  // answers "which columns", where RLS answers "which rows".
+
+  it("refuses to let a member make themselves an Org Admin", async () => {
+    const client = await signedInAs(members.a.email);
+
+    const { error } = await client
+      .from("users")
+      .update({ is_org_admin: true })
+      .eq("id", members.a.id);
+
+    expect(error).not.toBeNull();
+  });
+
+  it("refuses to let a member re-enable a disabled colleague", async () => {
+    const client = await signedInAs(members.a.email);
+
+    const { error } = await client
+      .from("users")
+      .update({ disabled_at: null })
+      .eq("id", members.disabled.id);
+
+    expect(error).not.toBeNull();
+  });
+
+  it("refuses to let a member conjure an account", async () => {
+    const client = await signedInAs(members.a.email);
+
+    const { error } = await client
+      .from("users")
+      .insert({
+        id: crypto.randomUUID(),
+        org_id: orgs.a,
+        name: "Uninvited",
+        email: `uninvited-${run}@example.test`,
+      });
+
+    expect(error).not.toBeNull();
+  });
+
+  it("refuses to let a member delete an account", async () => {
+    const client = await signedInAs(members.a.email);
+
+    const { error } = await client.from("users").delete().eq("id", members.b.id);
+
+    // Users are never deleted — they are soft-disabled, because a Quote records who
+    // sourced it and that attribution has to survive someone leaving.
+    expect(error).not.toBeNull();
+  });
+
+  it("still lets a member edit their own name and language", async () => {
+    const client = await signedInAs(members.a.email);
+
+    const { error } = await client
+      .from("users")
+      .update({ name: "Nok", locale: "zh-Hans" })
+      .eq("id", members.a.id);
+
+    expect(error).toBeNull();
+  });
+
+  it("refuses to let a member rewrite the org's settings", async () => {
+    // No v1 screen edits these, and fx_buffer_pct silently re-prices every future
+    // Quote.
+    const client = await signedInAs(members.a.email);
+
+    const { error } = await client
+      .from("orgs")
+      .update({ fx_buffer_pct: 0.5 })
+      .eq("id", orgs.a);
+
+    expect(error).not.toBeNull();
+  });
+
+  it("still lets a member read the org, for its timezone and buffer", async () => {
+    const client = await signedInAs(members.a.email);
+
+    const { data, error } = await client.from("orgs").select("timezone").eq("id", orgs.a);
+
+    expect(error).toBeNull();
+    expect(data).toHaveLength(1);
+  });
+});
+
 describe("fx_rates", () => {
   // Shared reference data with no org to scope by. The only legitimate writer is the
   // daily Frankfurter fetch, which runs with the service role.
