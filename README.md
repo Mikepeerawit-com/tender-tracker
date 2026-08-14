@@ -56,12 +56,63 @@ what ships. See "Testing Decisions" in `buildspec_2.md`.
 
 ## Deploying
 
-Vercel, with Supabase in Singapore (`ap-southeast-1`). Two steps need a human with
-account access:
-
-1. Import the repo into Vercel and set the environment variables from
-   `.env.example` against the hosted Supabase project.
-2. Point the custom domain at the Vercel deployment.
+Vercel, with Supabase in Singapore (`ap-southeast-1`). Live at
+<https://tenders.mikepeerawit.com>.
 
 `GET /api/health` returns `{"status":"ok","database":"reachable"}` when the deployment
-can reach Postgres — that is the check to run against the domain once it resolves.
+can reach Postgres. It is the acceptance check for every step below, and it
+distinguishes its own failure modes — read the body, never just the status code:
+
+| Response | Meaning |
+| --- | --- |
+| `200 {"database":"reachable"}` | Everything is wired up. |
+| `503 {"database":"unreachable"}` | Credentials are fine; `health_check()` is missing, so the migration never reached this database. |
+| `500 {"status":"misconfigured"}` | The deployment has no Supabase credentials at all. |
+
+### 1. Vercel project and Supabase credentials
+
+Import the repo into Vercel, then add Supabase through the **Vercel Marketplace**
+integration rather than setting the variables by hand. The integration supplies
+`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and the `POSTGRES_*` set, and
+keeps them correct if a key is ever rotated. Hand-copied values are how a deployment
+ends up pointed at the local stack in `.env.local`.
+
+Environment variables added after the first build do not trigger a rebuild — redeploy
+once, or `/api/health` keeps reporting the state from before they landed.
+
+### 2. Apply migrations to the hosted database
+
+Vercel deploys the app; nothing deploys the schema. This is a separate, easily
+forgotten step, and the app boots fine without it — `/api/health` is what catches it.
+
+```sh
+supabase link --project-ref <project-ref>   # needs the database password
+supabase db push
+supabase migration list                     # Local and Remote columns must match
+```
+
+If a migration is ever applied out of band (`psql`, the dashboard SQL editor), the
+remote history will not know about it and the next `db push` will try to re-apply it.
+Fix with `supabase migration repair --status applied <version>`.
+
+### 3. Custom domain
+
+DNS is at Cloudflare; Vercel still needs the hostname registered so it routes by Host
+header and issues the certificate.
+
+```sh
+vercel domains add <host> tender-tracker
+vercel domains inspect <host>   # prints the exact record to create — do not recite one from memory
+```
+
+Then create that record at Cloudflare with **Proxy status: DNS only** (grey cloud).
+If you do proxy it, Cloudflare SSL/TLS must be **Full (strict)** — Flexible causes a
+redirect loop, and that breaks the WeCom in-app webview entry path this product
+depends on, where there is no way out to Safari to work around it.
+
+The certificate takes a few minutes after DNS resolves; TLS handshakes fail until it
+is issued, which is not a misconfiguration. `vercel certs ls` shows when it lands.
+
+Because the record points at Vercel rather than moving nameservers,
+`vercel domains inspect` reports the nameservers as "not intended" forever. That is
+expected and not a fault.
