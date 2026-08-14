@@ -3,11 +3,6 @@
     "name": "招标跟踪",
     "description": "记录招标、针对招标收集的报价，以及我们最终的投标内容。"
   },
-  "placeholder": {
-    "heading": "招标跟踪已运行",
-    "body": "此处尚未构建任何功能。本页面用于验证应用可以启动、可以通过文案键渲染，并且能够连接数据库。",
-    "healthLabel": "健康检查"
-  },
   "localeSwitcher": {
     "label": "语言",
     "en": "English",
@@ -50,7 +45,73 @@
   },
   "nav": {
     "signOut": "退出登录",
-    "people": "成员"
+    "people": "成员",
+    "tenders": "招标"
+  },
+  "tenders": {
+    "title": "招标",
+    "description": "客户提出的全部需求，按客户投标截止日期由近及远排列。",
+    "empty": "暂无招标。录入第一条，它就不再只躺在邮箱里。",
+    "record": "录入招标",
+    "recordDescription": "客户要什么、什么时候必须回复，以及其中包含的每一项产品。",
+    "edit": "编辑招标",
+    "editDescription": "编号一经生成不再更改。下方的招标明细逐条添加、修改和删除。",
+    "backToList": "全部招标",
+    "notSet": "未填写",
+    "client": "客户",
+    "tenderTitle": "标题",
+    "owner": "负责人",
+    "ownedBy": "负责人：{name}",
+    "dateReceived": "收到日期",
+    "internalQuoteDeadline": "内部报价截止日期",
+    "internalQuoteHint": "参与人必须在此之前提交供应商报价。",
+    "internalQuoteDue": "内部报价截止日期：{date}",
+    "clientSubmissionDeadline": "客户投标截止日期",
+    "clientSubmissionHint": "我们的投标必须在此之前送达客户。逾期即失去这次招标。",
+    "clientSubmissionDue": "客户投标截止日期：{date}",
+    "expectedDecisionDate": "预计决标日期",
+    "expectedDecisionHint": "选填——客户很少给出明确日期。",
+    "notes": "备注",
+    "itemCount": "{count, plural, other {# 项明细}}",
+    "item": {
+      "plural": "招标明细",
+      "hint": "一条招标至少包含一项产品，包含多项也很常见。",
+      "numbered": "第 {number} 项",
+      "add": "添加明细",
+      "remove": "删除",
+      "productName": "产品",
+      "description": "说明",
+      "quantity": "数量",
+      "unit": "单位",
+      "unitPlaceholder": "个、50 支/盒",
+      "quantified": "{quantity, number} × {unit}"
+    },
+    "form": {
+      "create": "录入招标",
+      "save": "保存",
+      "saving": "正在保存…",
+      "cancel": "取消"
+    },
+    "assignees": {
+      "title": "参与人",
+      "none": "还没有人负责寻源。",
+      "pick": "选择要添加的同事",
+      "add": "添加",
+      "addMe": "加入我",
+      "remove": "移除",
+      "removeMe": "退出该招标"
+    },
+    "error": {
+      "forbidden": "您尚未登录，或此项只有负责人可以更改。",
+      "not_found": "该招标已不存在。",
+      "incomplete": "请填写客户、标题，以及每一项明细的全部字段。",
+      "invalid_date": "请检查日期，其中有一个不是有效日期。",
+      "deadlines_out_of_order": "内部报价截止日期必须早于或等于客户投标截止日期。",
+      "no_items": "一条招标至少包含一项产品，请添加明细。",
+      "invalid_quantity": "每项明细的数量必须大于零。",
+      "last_item": "这是该招标唯一的明细，无法删除。",
+      "failed": "保存失败，请重试。"
+    }
   },
   "people": {
     "title": "成员",

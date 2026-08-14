@@ -501,19 +501,30 @@ describe("uniqueness", () => {
     expect(error).not.toBeNull();
   });
 
-  it("refuses a second Tender with the same reference in one org", async () => {
-    const { error } = await service.from("tenders").insert({
-      org_id: fixture.orgId,
-      reference: `S-${run}`,
-      client_name: "Bangkok General",
-      title: "Duplicate reference",
-      date_received: "2026-08-01",
-      internal_quote_deadline: "2026-08-10",
-      client_submission_deadline: "2026-08-17",
-      owner_user_id: fixture.userId,
-    });
+  it("will not let two Tenders in one org share a reference", async () => {
+    // `tenders_org_reference_key` is still there and still the backstop, but it can no
+    // longer be reached from a client: since the reference became generated, a caller
+    // supplying a duplicate gets a fresh one issued instead of an error. The guarantee
+    // is the same and it is now unbreakable rather than merely enforced.
+    const { data, error } = await service
+      .from("tenders")
+      .insert({
+        org_id: fixture.orgId,
+        reference: `S-${run}`,
+        client_name: "Bangkok General",
+        title: "Duplicate reference",
+        date_received: "2026-08-01",
+        internal_quote_deadline: "2026-08-10",
+        client_submission_deadline: "2026-08-17",
+        owner_user_id: fixture.userId,
+      })
+      .select("id, reference")
+      .single();
 
-    expect(error).not.toBeNull();
+    expect(error).toBeNull();
+    expect(data?.reference).not.toBe(`S-${run}`);
+
+    await service.from("tenders").delete().eq("id", data?.id);
   });
 });
 

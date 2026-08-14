@@ -1,0 +1,195 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+
+import {
+  addAssignee,
+  addTenderItem,
+  createTender,
+  removeAssignee,
+  removeTenderItem,
+  updateTender,
+  updateTenderItem,
+  type TenderFields,
+  type TenderItemFields,
+  type TenderProblem,
+} from "@/lib/tenders/tenders";
+
+/**
+ * The request boundary for Tenders. `cookies()` is resolved here and handed down, so
+ * everything under `@/lib/tenders` is reachable from a test without a Next request
+ * context — the same shape as the auth actions and as ADR-0010's run instant.
+ */
+
+export type TenderFormState = { error?: TenderProblem };
+
+export async function createTenderAction(
+  _previous: TenderFormState,
+  formData: FormData,
+): Promise<TenderFormState> {
+  const result = await createTender(
+    { ...tenderFields(formData), items: itemsFrom(formData) },
+    await cookies(),
+  );
+
+  if (!result.ok) return { error: result.reason };
+
+  revalidatePath("/tenders");
+
+  redirect(`/tenders/${result.tenderId}`);
+}
+
+export async function updateTenderAction(
+  _previous: TenderFormState,
+  formData: FormData,
+): Promise<TenderFormState> {
+  const tenderId = text(formData, "tenderId");
+  const result = await updateTender(
+    { tenderId, ...tenderFields(formData) },
+    await cookies(),
+  );
+
+  if (!result.ok) return { error: result.reason };
+
+  revalidatePath("/tenders");
+
+  redirect(`/tenders/${tenderId}`);
+}
+
+export async function addTenderItemAction(
+  _previous: TenderFormState,
+  formData: FormData,
+): Promise<TenderFormState> {
+  const result = await addTenderItem(
+    { tenderId: text(formData, "tenderId"), ...itemAt(formData, 0) },
+    await cookies(),
+  );
+
+  return afterTenderWrite(result, text(formData, "tenderId"));
+}
+
+export async function updateTenderItemAction(
+  _previous: TenderFormState,
+  formData: FormData,
+): Promise<TenderFormState> {
+  const result = await updateTenderItem(
+    { itemId: text(formData, "itemId"), ...itemAt(formData, 0) },
+    await cookies(),
+  );
+
+  return afterTenderWrite(result, text(formData, "tenderId"));
+}
+
+export async function removeTenderItemAction(
+  _previous: TenderFormState,
+  formData: FormData,
+): Promise<TenderFormState> {
+  const result = await removeTenderItem(text(formData, "itemId"), await cookies());
+
+  return afterTenderWrite(result, text(formData, "tenderId"));
+}
+
+export async function addAssigneeAction(
+  _previous: TenderFormState,
+  formData: FormData,
+): Promise<TenderFormState> {
+  const tenderId = text(formData, "tenderId");
+  const result = await addAssignee(
+    { tenderId, userId: text(formData, "userId") },
+    await cookies(),
+  );
+
+  return afterTenderWrite(result, tenderId);
+}
+
+export async function removeAssigneeAction(
+  _previous: TenderFormState,
+  formData: FormData,
+): Promise<TenderFormState> {
+  const tenderId = text(formData, "tenderId");
+  const result = await removeAssignee(
+    { tenderId, userId: text(formData, "userId") },
+    await cookies(),
+  );
+
+  return afterTenderWrite(result, tenderId);
+}
+
+/**
+ * Report the refusal, or refresh the Tender.
+ *
+ * The whole `/tenders/[id]` subtree, not just the page the form is on: an Item edited
+ * from `/tenders/[id]/edit` changes what `/tenders/[id]` says, and revalidating only the
+ * page you can see is how the detail screen ends up showing the Items you just replaced.
+ */
+function afterTenderWrite(
+  result: { ok: true } | { ok: false; reason: TenderProblem },
+  tenderId: string,
+): TenderFormState {
+  if (!result.ok) return { error: result.reason };
+
+  revalidatePath(`/tenders/${tenderId}`, "layout");
+  revalidatePath("/tenders");
+
+  return {};
+}
+
+function tenderFields(formData: FormData): TenderFields {
+  return {
+    clientName: text(formData, "clientName"),
+    title: text(formData, "title"),
+    dateReceived: text(formData, "dateReceived"),
+    internalQuoteDeadline: text(formData, "internalQuoteDeadline"),
+    clientSubmissionDeadline: text(formData, "clientSubmissionDeadline"),
+    expectedDecisionDate: optionalText(formData, "expectedDecisionDate"),
+    ownerUserId: text(formData, "ownerUserId"),
+    notes: optionalText(formData, "notes"),
+  };
+}
+
+/**
+ * The Item rows, read as four parallel lists.
+ *
+ * A form posts repeated fields in document order, so the nth `itemProductName` belongs
+ * with the nth `itemQuantity`. A row where the user typed nothing at all is the blank
+ * row the form always offers and is dropped; a row where they typed *something* is
+ * kept, so a half-filled row comes back as `incomplete` rather than vanishing.
+ */
+function itemsFrom(formData: FormData): TenderItemFields[] {
+  const count = formData.getAll("itemProductName").length;
+
+  return Array.from({ length: count }, (_unused, index) => index)
+    .filter((index) => !isBlankRow(formData, index))
+    .map((index) => itemAt(formData, index));
+}
+
+function itemAt(formData: FormData, index: number): TenderItemFields {
+  return {
+    productName: at(formData, "itemProductName", index),
+    description: at(formData, "itemDescription", index) || null,
+    // `Number("")` is 0, which the quantity check refuses — an Item with no quantity
+    // cannot be turned into what the line is worth.
+    quantity: Number(at(formData, "itemQuantity", index)),
+    unit: at(formData, "itemUnit", index),
+  };
+}
+
+function isBlankRow(formData: FormData, index: number): boolean {
+  return ["itemProductName", "itemDescription", "itemQuantity", "itemUnit"].every(
+    (name) => at(formData, name, index) === "",
+  );
+}
+
+function at(formData: FormData, name: string, index: number): string {
+  return String(formData.getAll(name)[index] ?? "").trim();
+}
+
+function text(formData: FormData, name: string): string {
+  return String(formData.get(name) ?? "").trim();
+}
+
+function optionalText(formData: FormData, name: string): string | null {
+  return text(formData, name) || null;
+}

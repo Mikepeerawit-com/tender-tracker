@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
@@ -27,10 +28,15 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <>
       <header className="border-border flex items-center justify-between gap-4 border-b px-4 py-3">
-        <span className="text-sm font-medium">{user.name}</span>
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/tenders" />}>
+            {t("tenders")}
+          </Button>
+          <span className="text-muted-foreground text-sm">{user.name}</span>
+        </div>
         <div className="flex items-center gap-2">
           {user.isOrgAdmin ? (
-            <Button variant="ghost" size="sm" render={<a href="/admin/people" />}>
+            <Button variant="ghost" size="sm" nativeButton={false} render={<a href="/admin/people" />}>
               {t("people")}
             </Button>
           ) : null}

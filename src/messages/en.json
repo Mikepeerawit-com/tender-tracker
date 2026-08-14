@@ -3,11 +3,6 @@
     "name": "Tender Tracker",
     "description": "Tenders, the quotes gathered against them, and what was bid back."
   },
-  "placeholder": {
-    "heading": "Tender Tracker is running",
-    "body": "Nothing has been built here yet. This page exists to prove the app boots, renders from message keys, and can reach its database.",
-    "healthLabel": "Health check"
-  },
   "localeSwitcher": {
     "label": "Language",
     "en": "English",
@@ -50,7 +45,73 @@
   },
   "nav": {
     "signOut": "Sign out",
-    "people": "People"
+    "people": "People",
+    "tenders": "Tenders"
+  },
+  "tenders": {
+    "title": "Tenders",
+    "description": "Everything a client has asked us for, soonest client submission deadline first.",
+    "empty": "No tenders yet. Record the first one and it stops living in an inbox.",
+    "record": "Record a tender",
+    "recordDescription": "What the client asked for, when it has to be back with them, and every product it asks for.",
+    "edit": "Edit tender",
+    "editDescription": "The reference stays as issued. Items are added, changed and removed one at a time below.",
+    "backToList": "All tenders",
+    "notSet": "Not set",
+    "client": "Client",
+    "tenderTitle": "Title",
+    "owner": "Owner",
+    "ownedBy": "Owner: {name}",
+    "dateReceived": "Date received",
+    "internalQuoteDeadline": "Internal quote deadline",
+    "internalQuoteHint": "When assignees must have their suppliers' quotes in.",
+    "internalQuoteDue": "Internal quote deadline: {date}",
+    "clientSubmissionDeadline": "Client submission deadline",
+    "clientSubmissionHint": "When our bid must reach the client. Missing it kills the tender.",
+    "clientSubmissionDue": "Client submission deadline: {date}",
+    "expectedDecisionDate": "Expected decision date",
+    "expectedDecisionHint": "Optional — clients rarely state one.",
+    "notes": "Notes",
+    "itemCount": "{count, plural, =1 {# item} other {# items}}",
+    "item": {
+      "plural": "Tender items",
+      "hint": "A tender always asks for at least one product, and several is normal.",
+      "numbered": "Item {number}",
+      "add": "Add an item",
+      "remove": "Remove",
+      "productName": "Product",
+      "description": "Description",
+      "quantity": "Quantity",
+      "unit": "Unit",
+      "unitPlaceholder": "piece, box of 50",
+      "quantified": "{quantity, number} × {unit}"
+    },
+    "form": {
+      "create": "Record tender",
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel"
+    },
+    "assignees": {
+      "title": "Assignees",
+      "none": "Nobody is sourcing this yet.",
+      "pick": "Colleague to assign",
+      "add": "Add",
+      "addMe": "Add me",
+      "remove": "Remove",
+      "removeMe": "Take me off"
+    },
+    "error": {
+      "forbidden": "You are not signed in, or this is the owner's to change.",
+      "not_found": "That tender is no longer there.",
+      "incomplete": "Fill in the client, the title, and every field on each item.",
+      "invalid_date": "Check the dates — one of them is not a real day.",
+      "deadlines_out_of_order": "The internal quote deadline has to come on or before the client submission deadline.",
+      "no_items": "A tender asks for at least one product. Add an item.",
+      "invalid_quantity": "Give each item a quantity greater than zero.",
+      "last_item": "This is the tender's only item, so it cannot be removed.",
+      "failed": "That could not be saved. Try again."
+    }
   },
   "people": {
     "title": "People",
