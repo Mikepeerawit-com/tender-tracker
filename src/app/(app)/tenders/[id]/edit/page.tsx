@@ -9,7 +9,7 @@ import {
   EditTenderItemForm,
 } from "@/components/tenders/tender-item-forms";
 import { currentUser } from "@/lib/auth/session";
-import { listMembers } from "@/lib/org/members";
+import { listMembers, ownerOptions } from "@/lib/org/members";
 import { getTender } from "@/lib/tenders/tenders";
 
 export default async function EditTenderPage({
@@ -39,7 +39,16 @@ export default async function EditTenderPage({
           <p className="text-muted-foreground text-sm">{t("editDescription")}</p>
         </header>
 
-        <EditTenderForm tenderId={tender.id} members={members} defaults={tender} />
+        {/* The Owner this Tender already has, even if they have since been disabled and
+            so are not in `members`: a picker that cannot show them reassigns them. */}
+        <EditTenderForm
+          tenderId={tender.id}
+          members={ownerOptions(members, {
+            id: tender.ownerUserId,
+            name: tender.ownerName,
+          })}
+          defaults={tender}
+        />
 
         <section className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">

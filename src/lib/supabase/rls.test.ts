@@ -25,8 +25,12 @@ const run = crypto.randomUUID().slice(0, 8);
 const service = createServiceClient();
 
 const orgs: Record<"a" | "b", string> = { a: "", b: "" };
-const members: Record<"a" | "b" | "disabled", { id: string; email: string }> = {
+const members: Record<"a" | "mate" | "b" | "disabled", { id: string; email: string }> = {
   a: { id: "", email: `a-${run}@example.test` },
+  // A second *active member of org A*. `b` is across the org boundary, so a write aimed
+  // at it proves only that the boundary holds — anything about what one colleague may
+  // do to another has to be asked inside a single org.
+  mate: { id: "", email: `mate-${run}@example.test` },
   b: { id: "", email: `b-${run}@example.test` },
   disabled: { id: "", email: `disabled-${run}@example.test` },
 };
@@ -113,6 +117,7 @@ beforeAll(async () => {
   orgs.b = await createOrg(`Org B ${run}`);
 
   await createMember(orgs.a, members.a);
+  await createMember(orgs.a, members.mate);
   await createMember(orgs.b, members.b);
   await createMember(orgs.a, members.disabled, "2026-08-01T00:00:00.000Z");
 
@@ -283,6 +288,33 @@ describe("membership is not business data", () => {
       .eq("id", members.a.id);
 
     expect(error).toBeNull();
+  });
+
+  it("refuses to let a member edit a colleague's name or language", async () => {
+    // Their *own* org's colleague, so the org boundary is not what is being tested.
+    // The column grant says which columns are writable and nothing about whose row, so
+    // without a row-scoped rule `name` and `locale` are two of the org's columns rather
+    // than two of your own — and flipping a colleague's `locale` switches the language
+    // of their app on next load.
+    const client = await signedInAs(members.a.email);
+
+    const { error } = await client
+      .from("users")
+      .update({ name: "Renamed by a colleague", locale: "zh-Hans" })
+      .eq("id", members.mate.id);
+
+    // PostgREST reports an update that matches no updatable row as a success over zero
+    // rows, so the row itself is what has to be checked.
+    expect(error).toBeNull();
+
+    const { data } = await service
+      .from("users")
+      .select("name, locale")
+      .eq("id", members.mate.id)
+      .single();
+
+    expect(data?.name).not.toBe("Renamed by a colleague");
+    expect(data?.locale).not.toBe("zh-Hans");
   });
 
   it("refuses to let a member rewrite the org's settings", async () => {

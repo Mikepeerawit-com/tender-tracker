@@ -96,6 +96,9 @@ beforeAll(async () => {
     product_name: "Nitrile gloves, size M",
     quantity: 500,
     unit: "box of 50",
+    // `ordinal` has no default on purpose: an Item with no place in the list is a bug in
+    // whoever inserted it, and a default would hide it by stacking every Item on 0.
+    ordinal: 0,
   });
 });
 
@@ -218,6 +221,7 @@ describe("the Selected Quote", () => {
       product_name: "Surgical gowns",
       quantity: 40,
       unit: "piece",
+      ordinal: 1,
     });
     other.quoteId = await insert("quotes", quote({ tender_item_id: other.itemId }));
   });
@@ -285,6 +289,7 @@ describe("the Selected Quote", () => {
       product_name: "Cannulas",
       quantity: 10,
       unit: "piece",
+      ordinal: 0,
     });
     const quoteId = await insert("quotes", quote({ tender_item_id: itemId }));
 
@@ -378,6 +383,9 @@ describe("tender_items", () => {
       product_name: "Surgical masks",
       quantity: 100,
       unit: "box",
+      // Every Item has a place in its Tender's list, and the column is `not null` with
+      // no default so that an insert which forgot one says so rather than guessing.
+      ordinal: 2,
       ...overrides,
     };
   }

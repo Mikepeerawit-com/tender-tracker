@@ -61,6 +61,7 @@
     "client": "客户",
     "tenderTitle": "标题",
     "owner": "负责人",
+    "formerMember": "{name}（已停用）",
     "ownedBy": "负责人：{name}",
     "dateReceived": "收到日期",
     "internalQuoteDeadline": "内部报价截止日期",
@@ -104,6 +105,7 @@
     "error": {
       "forbidden": "您尚未登录，或此项只有负责人可以更改。",
       "not_found": "该招标已不存在。",
+      "unassignable": "无法将该招标交给此人，其账号可能已停用。",
       "incomplete": "请填写客户、标题，以及每一项明细的全部字段。",
       "invalid_date": "请检查日期，其中有一个不是有效日期。",
       "deadlines_out_of_order": "内部报价截止日期必须早于或等于客户投标截止日期。",

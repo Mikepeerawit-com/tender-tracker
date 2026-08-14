@@ -37,16 +37,25 @@ export type TenderFields = {
   notes: string | null;
 };
 
-export type TenderProblem =
-  | "forbidden"
-  | "not_found"
-  | "incomplete"
-  | "invalid_date"
-  | "deadlines_out_of_order"
-  | "no_items"
-  | "invalid_quantity"
-  | "last_item"
-  | "failed";
+/**
+ * Every way a write here can be refused, as a list rather than a bare union: the
+ * wording lives in the message files, and a reason with none renders to the user as its
+ * own key. `messages.test.ts` walks this to hold both locales to it.
+ */
+export const tenderProblems = [
+  "forbidden",
+  "not_found",
+  "unassignable",
+  "incomplete",
+  "invalid_date",
+  "deadlines_out_of_order",
+  "no_items",
+  "invalid_quantity",
+  "last_item",
+  "failed",
+] as const;
+
+export type TenderProblem = (typeof tenderProblems)[number];
 
 export type TenderResult<T = Record<never, never>> =
   | ({ ok: true } & T)
@@ -141,7 +150,9 @@ export async function createTender(
 
   const { error: itemsError } = await supabase
     .from("tender_items")
-    .insert(input.items.map((item) => itemRow(item, caller.orgId, data.id)));
+    .insert(
+      input.items.map((item, index) => itemRow(item, caller.orgId, data.id, index)),
+    );
 
   if (itemsError) {
     // PostgREST has no transaction across the two inserts, and a Tender with no Items
@@ -163,7 +174,24 @@ export async function updateTender(
   if (!caller) return { ok: false, reason: "forbidden" };
 
   const supabase = createSessionClient(store);
-  const problem = (await assignableProblem(input.ownerUserId, supabase)) ?? fieldProblem(input);
+
+  // RLS turns "another org's Tender" into no row, which is the same answer as a Tender
+  // deleted while the form was open.
+  const { data: existing } = await supabase
+    .from("tenders")
+    .select("owner_user_id")
+    .eq("id", tenderId)
+    .maybeSingle();
+
+  if (!existing) return { ok: false, reason: "not_found" };
+
+  const problem =
+    // Only a *change* of Owner is an assignment. Somebody leaving is exactly when their
+    // Tenders get edited, and if an untouched Owner had to pass the disabled check, the
+    // dates on their Tenders could not be fixed without reassigning them first.
+    (existing.owner_user_id === input.ownerUserId
+      ? null
+      : await assignableProblem(input.ownerUserId, supabase)) ?? fieldProblem(input);
 
   if (problem) return { ok: false, reason: problem };
 
@@ -175,8 +203,8 @@ export async function updateTender(
 
   if (error !== null) return { ok: false, reason: "failed" };
 
-  // RLS turns "another org's Tender" into "no rows matched", which is the same answer
-  // as a Tender that was deleted while the form was open.
+  // Still checked after the write: the read above and this update are two statements,
+  // and the Tender can go between them.
   return data.length === 1 ? { ok: true } : { ok: false, reason: "not_found" };
 }
 
@@ -201,9 +229,21 @@ export async function addTenderItem(
 
   if (!tender) return { ok: false, reason: "not_found" };
 
+  // An Item added later belongs at the end of the list, not wherever the heap puts it.
+  // Two adds racing can read the same last place; readers break the tie on `id`, so the
+  // worst case is two Items whose order between themselves is arbitrary but stable —
+  // not a list that reshuffles on every read.
+  const { data: last } = await supabase
+    .from("tender_items")
+    .select("ordinal")
+    .eq("tender_id", tenderId)
+    .order("ordinal", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const { data, error } = await supabase
     .from("tender_items")
-    .insert(itemRow(item, caller.orgId, tenderId))
+    .insert(itemRow(item, caller.orgId, tenderId, (last?.ordinal ?? -1) + 1))
     .select("id")
     .single();
 
@@ -357,7 +397,10 @@ export async function getTender(
         `items:tender_items(${itemColumns}), assignees:tender_assignees(user:users(id, name))`,
     )
     .eq("id", tenderId)
-    .order("created_at", { referencedTable: "tender_items" })
+    // `ordinal` is the order the Items were typed in; `id` only breaks a tie between two
+    // that were added concurrently, so the list is never arbitrary twice running.
+    .order("ordinal", { referencedTable: "tender_items" })
+    .order("id", { referencedTable: "tender_items" })
     .maybeSingle()
     .overrideTypes<TenderDbRow, { merge: false }>();
 
@@ -423,8 +466,13 @@ function itemFields(item: TenderItemFields) {
   };
 }
 
-function itemRow(item: TenderItemFields, orgId: string, tenderId: string) {
-  return { org_id: orgId, tender_id: tenderId, ...itemFields(item) };
+function itemRow(
+  item: TenderItemFields,
+  orgId: string,
+  tenderId: string,
+  ordinal: number,
+) {
+  return { org_id: orgId, tender_id: tenderId, ordinal, ...itemFields(item) };
 }
 
 /**
@@ -461,6 +509,10 @@ async function standingProblem(
  * row is still visible to their colleagues — RLS hides it from *them*, not from the org —
  * so a posted id would otherwise hand a Tender to somebody who reads nothing and can act
  * on none of it.
+ *
+ * The refusal is `unassignable`, never `not_found`: what is missing is the *person*, and
+ * on /tenders/new there is no Tender to report as gone. The two share a shape and cannot
+ * share a sentence.
  */
 async function assignableProblem(
   userId: string,
@@ -475,7 +527,7 @@ async function assignableProblem(
     .is("disabled_at", null)
     .maybeSingle();
 
-  return data ? null : "not_found";
+  return data ? null : "unassignable";
 }
 
 function fieldProblem(input: TenderFields): TenderProblem | null {

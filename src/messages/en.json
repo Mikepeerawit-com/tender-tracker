@@ -61,6 +61,7 @@
     "client": "Client",
     "tenderTitle": "Title",
     "owner": "Owner",
+    "formerMember": "{name} (no longer active)",
     "ownedBy": "Owner: {name}",
     "dateReceived": "Date received",
     "internalQuoteDeadline": "Internal quote deadline",
@@ -104,6 +105,7 @@
     "error": {
       "forbidden": "You are not signed in, or this is the owner's to change.",
       "not_found": "That tender is no longer there.",
+      "unassignable": "That person cannot be given this tender — they may have left the team.",
       "incomplete": "Fill in the client, the title, and every field on each item.",
       "invalid_date": "Check the dates — one of them is not a real day.",
       "deadlines_out_of_order": "The internal quote deadline has to come on or before the client submission deadline.",

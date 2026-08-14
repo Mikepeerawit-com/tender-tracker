@@ -8,7 +8,7 @@ import { updateTenderAction, type TenderFormState } from "@/app/actions/tenders"
 import { TenderFieldInputs } from "@/components/tenders/tender-fields";
 import { TenderProblemNotice } from "@/components/tenders/tender-problem";
 import { Button } from "@/components/ui/button";
-import type { Member } from "@/lib/org/members";
+import type { OwnerOption } from "@/lib/org/members";
 import type { TenderFields } from "@/lib/tenders/tenders";
 
 const initialState: TenderFormState = {};
@@ -24,7 +24,7 @@ export function EditTenderForm({
   defaults,
 }: {
   tenderId: string;
-  members: Member[];
+  members: OwnerOption[];
   defaults: TenderFields;
 }) {
   const t = useTranslations("tenders");

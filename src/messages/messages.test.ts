@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { defaultLocale, locales } from "@/i18n/config";
+import { tenderProblems } from "@/lib/tenders/tenders";
 
 /**
  * Both locales are complete at launch, and stay complete.
@@ -92,5 +93,22 @@ describe.each(others)("%s", (locale) => {
         "tenders.item.quantified",
       ].sort(),
     );
+  });
+});
+
+/**
+ * `TenderProblemNotice` renders `tenders.error.<reason>` for whatever the server
+ * refused, so a reason added to `TenderProblem` with no message renders as the raw key
+ * — in the one place a user is already stuck. The union is derived from this list so
+ * that adding a reason and forgetting its wording is a failing test rather than a
+ * screen reading `tenders.error.unassignable`.
+ */
+describe.each(locales)("%s refusals", (locale) => {
+  const flat = flatten(messages(locale));
+
+  it("has wording for every reason a write can be refused", () => {
+    const missing = tenderProblems.filter((problem) => !flat.has(`tenders.error.${problem}`));
+
+    expect(missing).toEqual([]);
   });
 });

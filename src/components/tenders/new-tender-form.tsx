@@ -9,7 +9,7 @@ import { TenderFieldInputs } from "@/components/tenders/tender-fields";
 import { TenderItemInputs } from "@/components/tenders/tender-item-fields";
 import { TenderProblemNotice } from "@/components/tenders/tender-problem";
 import { Button } from "@/components/ui/button";
-import type { Member } from "@/lib/org/members";
+import type { OwnerOption } from "@/lib/org/members";
 
 const initialState: TenderFormState = {};
 
@@ -24,7 +24,7 @@ export function NewTenderForm({
   members,
   defaultOwnerId,
 }: {
-  members: Member[];
+  members: OwnerOption[];
   defaultOwnerId: string;
 }) {
   const t = useTranslations("tenders");

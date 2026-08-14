@@ -235,7 +235,10 @@ describe("createTender", () => {
       await signedInAs(owner.email),
     );
 
-    expect(result).toEqual({ ok: false, reason: "not_found" });
+    // Not `not_found`: on /tenders/new there is no Tender yet, so "that tender is no
+    // longer there" is a sentence about something that never existed. What is wrong is
+    // the person.
+    expect(result).toEqual({ ok: false, reason: "unassignable" });
 
     await service.from("users").update({ disabled_at: null }).eq("id", mate.id);
   });
@@ -246,7 +249,7 @@ describe("createTender", () => {
       await signedInAs(owner.email),
     );
 
-    expect(result).toEqual({ ok: false, reason: "not_found" });
+    expect(result).toEqual({ ok: false, reason: "unassignable" });
   });
 
   it("refuses a caller with no session", async () => {
@@ -297,6 +300,63 @@ describe("updateTender", () => {
     });
   });
 
+  it("still edits a Tender whose Owner has since been Disabled", async () => {
+    // Someone leaving is exactly when their Tenders get opened, and reassigning the
+    // Owner cannot be the price of fixing a date on one. An Owner who is not being
+    // changed is not being assigned to anybody.
+    const tenderId = await aTender({ ownerUserId: mate.id });
+    const store = await signedInAs(owner.email);
+
+    await service.from("users").update({ disabled_at: disabledAt }).eq("id", mate.id);
+
+    const result = await updateTender(
+      {
+        tenderId,
+        clientName: "Bangkok General Hospital",
+        title: "Surgical consumables Q3 — revised",
+        dateReceived: "2026-08-01",
+        internalQuoteDeadline: "2026-08-20",
+        clientSubmissionDeadline: "2026-08-28",
+        expectedDecisionDate: null,
+        ownerUserId: mate.id,
+        notes: null,
+      },
+      store,
+    );
+
+    expect(result).toEqual({ ok: true });
+
+    await service.from("users").update({ disabled_at: null }).eq("id", mate.id);
+  });
+
+  it("still refuses to hand a Tender to a Disabled colleague", async () => {
+    // The mirror of the test above: leaving the Owner alone is fine, making somebody
+    // who reads nothing the new Owner is not.
+    const tenderId = await aTender();
+    const store = await signedInAs(owner.email);
+
+    await service.from("users").update({ disabled_at: disabledAt }).eq("id", mate.id);
+
+    const result = await updateTender(
+      {
+        tenderId,
+        clientName: "Bangkok General Hospital",
+        title: "Surgical consumables Q3",
+        dateReceived: "2026-08-01",
+        internalQuoteDeadline: "2026-08-20",
+        clientSubmissionDeadline: "2026-08-28",
+        expectedDecisionDate: null,
+        ownerUserId: mate.id,
+        notes: null,
+      },
+      store,
+    );
+
+    expect(result).toEqual({ ok: false, reason: "unassignable" });
+
+    await service.from("users").update({ disabled_at: null }).eq("id", mate.id);
+  });
+
   it("refuses a Tender in another org", async () => {
     const tenderId = await aTender();
 
@@ -320,6 +380,80 @@ describe("updateTender", () => {
 });
 
 describe("Tender Items", () => {
+  const threeItems = [
+    { productName: "Nitrile gloves", description: null, quantity: 500, unit: "box of 50" },
+    { productName: "Surgical masks", description: null, quantity: 20000, unit: "piece" },
+    { productName: "Isolation gowns", description: null, quantity: 800, unit: "piece" },
+  ];
+
+  it("keeps the Items in the order they were entered", async () => {
+    const tenderId = await aTender({ items: threeItems });
+    const store = await signedInAs(owner.email);
+
+    const items = (await getTender(tenderId, store))?.items ?? [];
+
+    expect(items.map((item) => item.productName)).toEqual([
+      "Nitrile gloves",
+      "Surgical masks",
+      "Isolation gowns",
+    ]);
+  });
+
+  it("keeps that order after one of them is edited", async () => {
+    // Every Item of a new Tender is inserted in one statement, so `now()` gives them all
+    // the same `created_at` to the microsecond. Ordering on it has no tiebreak and falls
+    // through to whatever order the heap hands back — and an updated row is rewritten at
+    // the end of it. The list a user typed then silently reshuffles on the way back from
+    // fixing a typo in one line.
+    const tenderId = await aTender({ items: threeItems });
+    const store = await signedInAs(owner.email);
+    const [first] = (await getTender(tenderId, store))?.items ?? [];
+
+    await updateTenderItem(
+      {
+        itemId: first.id,
+        productName: "Nitrile gloves, powder-free",
+        description: null,
+        quantity: 500,
+        unit: "box of 50",
+      },
+      store,
+    );
+
+    const items = (await getTender(tenderId, store))?.items ?? [];
+
+    expect(items.map((item) => item.productName)).toEqual([
+      "Nitrile gloves, powder-free",
+      "Surgical masks",
+      "Isolation gowns",
+    ]);
+  });
+
+  it("puts an Item added later at the end", async () => {
+    const tenderId = await aTender({ items: threeItems });
+    const store = await signedInAs(owner.email);
+
+    await addTenderItem(
+      {
+        tenderId,
+        productName: "Face shields",
+        description: null,
+        quantity: 300,
+        unit: "piece",
+      },
+      store,
+    );
+
+    const items = (await getTender(tenderId, store))?.items ?? [];
+
+    expect(items.map((item) => item.productName)).toEqual([
+      "Nitrile gloves",
+      "Surgical masks",
+      "Isolation gowns",
+      "Face shields",
+    ]);
+  });
+
   it("adds another Item to an existing Tender", async () => {
     const tenderId = await aTender();
     const store = await signedInAs(mate.email);
@@ -499,7 +633,7 @@ describe("Assignees", () => {
       await signedInAs(owner.email),
     );
 
-    expect(result).toEqual({ ok: false, reason: "not_found" });
+    expect(result).toEqual({ ok: false, reason: "unassignable" });
 
     await service.from("users").update({ disabled_at: null }).eq("id", mate.id);
   });
@@ -532,7 +666,7 @@ describe("Assignees", () => {
       await signedInAs(owner.email),
     );
 
-    expect(result).toEqual({ ok: false, reason: "not_found" });
+    expect(result).toEqual({ ok: false, reason: "unassignable" });
   });
 });
 

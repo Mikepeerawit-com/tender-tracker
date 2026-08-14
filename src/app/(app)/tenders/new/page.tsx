@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 
 import { NewTenderForm } from "@/components/tenders/new-tender-form";
 import { currentUser } from "@/lib/auth/session";
-import { listMembers } from "@/lib/org/members";
+import { listMembers, ownerOptions } from "@/lib/org/members";
 
 export default async function NewTenderPage() {
   const store = await cookies();
@@ -25,7 +25,8 @@ export default async function NewTenderPage() {
 
         {/* The Owner defaults to whoever is recording it — they are the one who has the
             client's email open — and stays changeable in the same breath. */}
-        <NewTenderForm members={members} defaultOwnerId={user.id} />
+        {/* Nothing is owned yet, so there is no former Owner to keep. */}
+        <NewTenderForm members={ownerOptions(members, null)} defaultOwnerId={user.id} />
       </main>
     </div>
   );

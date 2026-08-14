@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import type { Member } from "@/lib/org/members";
+import type { OwnerOption } from "@/lib/org/members";
 import type { TenderFields } from "@/lib/tenders/tenders";
 
 /**
@@ -17,7 +17,7 @@ export function TenderFieldInputs({
   members,
   defaults,
 }: {
-  members: Member[];
+  members: OwnerOption[];
   defaults: TenderFields;
 }) {
   const t = useTranslations("tenders");
@@ -72,7 +72,7 @@ export function TenderFieldInputs({
           >
             {members.map((member) => (
               <option key={member.id} value={member.id}>
-                {member.name}
+                {member.former ? t("formerMember", { name: member.name }) : member.name}
               </option>
             ))}
           </NativeSelect>
