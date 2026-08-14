@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { TenderItemFields } from "@/lib/tenders/tenders";
+import type { SubmittedItem } from "@/lib/tenders/tender-form";
 
 /**
  * One Item's fields.
@@ -23,7 +23,7 @@ export function TenderItemInputs({
   defaults,
 }: {
   domId: string;
-  defaults?: TenderItemFields;
+  defaults?: SubmittedItem;
 }) {
   const t = useTranslations("tenders.item");
 
@@ -45,7 +45,7 @@ export function TenderItemInputs({
           <Input
             id={`${domId}-description`}
             name="itemDescription"
-            defaultValue={defaults?.description ?? ""}
+            defaultValue={defaults?.description}
             className="h-11"
           />
         </div>

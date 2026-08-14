@@ -37,6 +37,7 @@ export function LoginForm({ linkError = false }: { linkError?: boolean }) {
           inputMode="email"
           autoCapitalize="none"
           autoCorrect="off"
+          defaultValue={state.email}
           required
           className="h-11"
         />

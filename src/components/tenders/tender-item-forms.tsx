@@ -12,6 +12,7 @@ import {
 import { TenderItemInputs } from "@/components/tenders/tender-item-fields";
 import { TenderProblemNotice } from "@/components/tenders/tender-problem";
 import { Button } from "@/components/ui/button";
+import { itemAsSubmitted } from "@/lib/tenders/tender-form";
 import type { TenderItem } from "@/lib/tenders/tenders";
 
 const initialState: TenderFormState = {};
@@ -39,7 +40,12 @@ export function EditTenderItemForm({
         <input type="hidden" name="itemId" value={item.id} />
 
         <TenderProblemNotice error={state.error} />
-        <TenderItemInputs domId={`item-${item.id}`} defaults={item} />
+        {/* What the last submit was refused for, if it was — otherwise the Item as it
+            is saved. React restores the inputs from these on every submit. */}
+        <TenderItemInputs
+          domId={`item-${item.id}`}
+          defaults={state.submitted?.items?.[0] ?? itemAsSubmitted(item)}
+        />
 
         <div>
           <Button
@@ -102,7 +108,12 @@ export function AddTenderItemForm({ tenderId }: { tenderId: string }) {
       <h3 className="text-sm font-medium">{t("item.add")}</h3>
 
       <TenderProblemNotice error={state.error} />
-      <TenderItemInputs domId={`item-new-${tenderId}`} />
+      {/* Nothing after a successful add, so the panel comes back blank for the next
+          Item; the refused row, so it does not have to be typed again. */}
+      <TenderItemInputs
+        domId={`item-new-${tenderId}`}
+        defaults={state.submitted?.items?.[0]}
+      />
 
       <div>
         <Button type="submit" variant="outline" disabled={isPending} className="h-11">

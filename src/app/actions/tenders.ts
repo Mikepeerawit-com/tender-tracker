@@ -5,6 +5,13 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import {
+  refused,
+  submittedItems,
+  submittedTender,
+  type Submitted,
+  type TenderFormState,
+} from "@/lib/tenders/tender-form";
+import {
   addAssignee,
   addTenderItem,
   createTender,
@@ -21,9 +28,14 @@ import {
  * The request boundary for Tenders. `cookies()` is resolved here and handed down, so
  * everything under `@/lib/tenders` is reachable from a test without a Next request
  * context — the same shape as the auth actions and as ADR-0010's run instant.
+ *
+ * Every refusal carries back what was typed. React resets an uncontrolled form on every
+ * function-action submit, refused ones included, restoring each input from its
+ * `defaultValue` — so a refusal that returns only a reason is a refusal that empties the
+ * form it is complaining about.
  */
 
-export type TenderFormState = { error?: TenderProblem };
+export type { TenderFormState };
 
 export async function createTenderAction(
   _previous: TenderFormState,
@@ -34,7 +46,14 @@ export async function createTenderAction(
     await cookies(),
   );
 
-  if (!result.ok) return { error: result.reason };
+  if (!result.ok) {
+    // The whole screen, not just the reason: a refused create otherwise takes the
+    // client, the title, three dates and every Item row down with it.
+    return refused(result.reason, {
+      tender: submittedTender(formData),
+      items: submittedItems(formData),
+    });
+  }
 
   revalidatePath("/tenders");
 
@@ -51,7 +70,7 @@ export async function updateTenderAction(
     await cookies(),
   );
 
-  if (!result.ok) return { error: result.reason };
+  if (!result.ok) return refused(result.reason, { tender: submittedTender(formData) });
 
   revalidatePath("/tenders");
 
@@ -67,7 +86,11 @@ export async function addTenderItemAction(
     await cookies(),
   );
 
-  return afterTenderWrite(result, text(formData, "tenderId"));
+  // On success nothing is carried back, and the reset React performs anyway is what
+  // leaves the panel blank for the next Item.
+  return afterTenderWrite(result, text(formData, "tenderId"), {
+    items: submittedItems(formData),
+  });
 }
 
 export async function updateTenderItemAction(
@@ -79,7 +102,9 @@ export async function updateTenderItemAction(
     await cookies(),
   );
 
-  return afterTenderWrite(result, text(formData, "tenderId"));
+  return afterTenderWrite(result, text(formData, "tenderId"), {
+    items: submittedItems(formData),
+  });
 }
 
 export async function removeTenderItemAction(
@@ -127,8 +152,9 @@ export async function removeAssigneeAction(
 function afterTenderWrite(
   result: { ok: true } | { ok: false; reason: TenderProblem },
   tenderId: string,
+  submitted: Submitted = {},
 ): TenderFormState {
-  if (!result.ok) return { error: result.reason };
+  if (!result.ok) return refused(result.reason, submitted);
 
   revalidatePath(`/tenders/${tenderId}`, "layout");
   revalidatePath("/tenders");

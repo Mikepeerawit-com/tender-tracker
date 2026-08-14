@@ -41,18 +41,24 @@ export function NewTenderForm({
 
       <TenderFieldInputs
         members={members}
-        defaults={{
-          clientName: "",
-          title: "",
-          // No date is pre-filled. "Today" is a day in the org's timezone, and a server
-          // running UTC would offer the wrong one for seven hours of every evening.
-          dateReceived: "",
-          internalQuoteDeadline: "",
-          clientSubmissionDeadline: "",
-          expectedDecisionDate: null,
-          ownerUserId: defaultOwnerId,
-          notes: null,
-        }}
+        // What the last submit was refused for, if it was: React restores every input
+        // from these on submit, so an empty set here is a screenful of typing lost to a
+        // date in the wrong order.
+        defaults={
+          state.submitted?.tender ?? {
+            clientName: "",
+            title: "",
+            // No date is pre-filled. "Today" is a day in the org's timezone, and a
+            // server running UTC would offer the wrong one for seven hours of every
+            // evening.
+            dateReceived: "",
+            internalQuoteDeadline: "",
+            clientSubmissionDeadline: "",
+            expectedDecisionDate: "",
+            ownerUserId: defaultOwnerId,
+            notes: "",
+          }
+        }
       />
 
       <section className="flex flex-col gap-4">
@@ -81,7 +87,12 @@ export function NewTenderForm({
                 </Button>
               ) : null}
             </div>
-            <TenderItemInputs domId={`item-${rowId}`} />
+            {/* The rows post in document order, so the nth row's values come back at
+                the nth index — the same pairing the action reads them by. */}
+            <TenderItemInputs
+              domId={`item-${rowId}`}
+              defaults={state.submitted?.items?.[index]}
+            />
           </div>
         ))}
 

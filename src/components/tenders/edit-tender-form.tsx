@@ -9,6 +9,7 @@ import { TenderFieldInputs } from "@/components/tenders/tender-fields";
 import { TenderProblemNotice } from "@/components/tenders/tender-problem";
 import { Button } from "@/components/ui/button";
 import type { OwnerOption } from "@/lib/org/members";
+import { tenderAsSubmitted } from "@/lib/tenders/tender-form";
 import type { TenderFields } from "@/lib/tenders/tenders";
 
 const initialState: TenderFormState = {};
@@ -35,7 +36,10 @@ export function EditTenderForm({
       <input type="hidden" name="tenderId" value={tenderId} />
 
       <TenderProblemNotice error={state.error} />
-      <TenderFieldInputs members={members} defaults={defaults} />
+      <TenderFieldInputs
+        members={members}
+        defaults={state.submitted?.tender ?? tenderAsSubmitted(defaults)}
+      />
 
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={isPending} className="h-11">

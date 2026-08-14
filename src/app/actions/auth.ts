@@ -15,7 +15,17 @@ import { chooseLocale } from "@/lib/auth/preferences";
  * the injected run instant in ADR-0010.
  */
 
-export type SignInState = { error?: "invalid" | "disabled" | "incomplete" };
+/**
+ * `email` comes back on a refusal because React resets the form on every submit,
+ * restoring each input from its `defaultValue` — so a refusal that carries only a reason
+ * makes the user retype their address to try again. The password deliberately does not:
+ * it is the field they got wrong, and a secret is not something to echo through a server
+ * response and back into the page.
+ */
+export type SignInState = {
+  error?: "invalid" | "disabled" | "incomplete";
+  email?: string;
+};
 
 export async function signInAction(
   _previous: SignInState,
@@ -23,16 +33,17 @@ export async function signInAction(
 ): Promise<SignInState> {
   const email = formData.get("email");
   const password = formData.get("password");
+  const typed = typeof email === "string" ? email : "";
 
   if (typeof email !== "string" || typeof password !== "string" || !email || !password) {
-    return { error: "incomplete" };
+    return { error: "incomplete", email: typed };
   }
 
   const store = await cookies();
   const result = await signIn({ email, password }, store);
 
   if (!result.ok) {
-    return { error: result.reason };
+    return { error: result.reason, email: typed };
   }
 
   // Carry the stored choice into the cookie the renderer reads, so the very next page

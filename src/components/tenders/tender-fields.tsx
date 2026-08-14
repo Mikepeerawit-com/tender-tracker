@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import type { OwnerOption } from "@/lib/org/members";
-import type { TenderFields } from "@/lib/tenders/tenders";
+import type { SubmittedTender } from "@/lib/tenders/tender-form";
 
 /**
  * The Tender's own fields, shared by the record and edit screens so the two cannot
@@ -18,7 +18,7 @@ export function TenderFieldInputs({
   defaults,
 }: {
   members: OwnerOption[];
-  defaults: TenderFields;
+  defaults: SubmittedTender;
 }) {
   const t = useTranslations("tenders");
 
@@ -115,7 +115,7 @@ export function TenderFieldInputs({
           id="expectedDecisionDate"
           name="expectedDecisionDate"
           type="date"
-          defaultValue={defaults.expectedDecisionDate ?? ""}
+          defaultValue={defaults.expectedDecisionDate}
           className="h-11 sm:max-w-64"
         />
         <p className="text-muted-foreground text-xs">{t("expectedDecisionHint")}</p>
@@ -123,7 +123,7 @@ export function TenderFieldInputs({
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="notes">{t("notes")}</Label>
-        <Textarea id="notes" name="notes" defaultValue={defaults.notes ?? ""} rows={3} />
+        <Textarea id="notes" name="notes" defaultValue={defaults.notes} rows={3} />
       </div>
     </div>
   );
