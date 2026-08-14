@@ -34,6 +34,9 @@ function localSupabaseEnv(): Record<string, string> {
 
   return {
     NEXT_PUBLIC_SUPABASE_URL: required(status, "API_URL"),
+    // The key the browser gets. RLS tests need it: they must ask the database the way
+    // an untrusted client does, which the service-role key cannot do.
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: required(status, "ANON_KEY"),
     SUPABASE_SERVICE_ROLE_KEY: required(status, "SERVICE_ROLE_KEY"),
   };
 }

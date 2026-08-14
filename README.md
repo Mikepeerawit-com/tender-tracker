@@ -116,3 +116,18 @@ is issued, which is not a misconfiguration. `vercel certs ls` shows when it land
 Because the record points at Vercel rather than moving nameservers,
 `vercel domains inspect` reports the nameservers as "not intended" forever. That is
 expected and not a fault.
+
+### 4. Supabase Free → Pro, before the first real Tender
+
+**Upgrade Supabase from Free to Pro before the first real (non-test) Tender is
+entered.** Not "when we need it" — that moment never announces itself, and by then the
+thing it protects against has already happened.
+
+Supabase Free has **no automated backups**. There is no legacy system to fall back on:
+the spreadsheets and chat threads this app replaces stop being maintained the day the
+team starts using it, so a lost database is lost work with nothing behind it. Pro adds
+daily backups and point-in-time recovery.
+
+This is a human step — nothing in the codebase can check it, and no deploy will fail
+without it. Verify the current plan terms at the time rather than trusting this
+paragraph; Supabase has changed what sits behind the Free/Pro line before.
