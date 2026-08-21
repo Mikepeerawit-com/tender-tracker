@@ -36,9 +36,14 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         </div>
         <div className="flex items-center gap-2">
           {user.isOrgAdmin ? (
-            <Button variant="ghost" size="sm" nativeButton={false} render={<a href="/admin/people" />}>
-              {t("people")}
-            </Button>
+            <>
+              <Button variant="ghost" size="sm" nativeButton={false} render={<a href="/admin/people" />}>
+                {t("people")}
+              </Button>
+              <Button variant="ghost" size="sm" nativeButton={false} render={<a href="/admin/group-robot" />}>
+                {t("groupRobot")}
+              </Button>
+            </>
           ) : null}
           <LocaleSwitcher />
           <form action={signOutAction}>

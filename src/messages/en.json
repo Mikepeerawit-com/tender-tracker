@@ -46,7 +46,8 @@
   "nav": {
     "signOut": "Sign out",
     "people": "People",
-    "tenders": "Tenders"
+    "tenders": "Tenders",
+    "groupRobot": "Group Robot"
   },
   "tenders": {
     "title": "Tenders",
@@ -153,9 +154,29 @@
           "not_admin": "Only an Org Admin can send this.",
           "not_found": "That person is not in your org.",
           "no_userid": "Save their WeCom userid first.",
-          "send_failed": "WeCom would not take the message. Nobody was notified — try again."
+          "send_failed": "WeCom would not take the message. Nobody was notified — try again.",
+          "no_robot": "No Group Robot is set up yet, so nothing can be sent."
         }
       }
+    }
+  },
+  "groupRobot": {
+    "title": "Group Robot",
+    "description": "The WeCom group robot every reminder, outcome and daily Digest is posted through. One per org.",
+    "configured": "Set up. Last changed {when}.",
+    "notConfigured": "Not set up yet — nobody is being notified of anything.",
+    "label": "Webhook URL",
+    "placeholder": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=…",
+    "help": "Copy it from the robot's settings in the WeCom group. Treat it like a password: anyone who has it can post to that group as this app. It is never shown again once saved.",
+    "save": "Save",
+    "saving": "Saving…",
+    "remove": "Remove",
+    "status": {
+      "saved": "Saved. Send a test @mention from the People screen to check it reaches someone.",
+      "cleared": "Removed. Nothing will be posted to the group until a new one is saved.",
+      "not_admin": "Only an Org Admin can change this.",
+      "not_a_wecom_webhook": "That is not a WeCom group robot webhook. It should start https://qyapi.weixin.qq.com/ and carry a key.",
+      "save_failed": "That could not be saved. The webhook is unchanged — try again."
     }
   }
 }

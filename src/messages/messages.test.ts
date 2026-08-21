@@ -91,6 +91,8 @@ describe.each(others)("%s", (locale) => {
         "chooseLanguage.option.zh-Hans",
         // A quantity beside its unit, and the × is the whole message.
         "tenders.item.quantified",
+        // A URL WeCom issues. Translating it would make it a different address.
+        "groupRobot.placeholder",
       ].sort(),
     );
   });

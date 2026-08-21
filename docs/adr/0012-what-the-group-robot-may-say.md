@@ -1,5 +1,7 @@
 # What the group robot may say, and how the seam is shaped
 
+> **Partly superseded by [ADR-0013](0013-group-robot-webhook-is-org-data.md).** The webhook is no longer an environment variable — it is per-org data an Org Admin sets in the app. Every other decision below stands.
+
 Ticket 32 ([#32](https://github.com/Mikepeerawit-com/tender-tracker/issues/32)) builds the one outbound integration in v1: a plain HTTPS POST to the WeCom group-robot webhook. [ADR-0005](0005-reminder-delivery-semantics.md) already settles the *delivery* semantics — pace ~3s apart, never mark `sent` on a non-zero errcode, mention by `mentioned_list` rather than `mentioned_mobile_list`, and `errcode 0` means accepted rather than notified. This ADR settles what remained open: **what the messages may contain, what language they are in, and where the boundary sits.**
 
 ## Decisions

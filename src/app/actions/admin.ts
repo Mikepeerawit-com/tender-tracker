@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { invite, setWecomUserid } from "@/lib/auth/invite";
+import { setGroupRobot } from "@/lib/wecom/group-robot";
 import { sendTestMention } from "@/lib/wecom/test-mention";
 
 export type InviteState = {
@@ -57,7 +58,7 @@ export async function setWecomUseridAction(
  * sentence the admin reads is translated, and this is bracketed after it.
  */
 export type TestMentionState = {
-  status?: "sent" | "not_admin" | "not_found" | "no_userid" | "send_failed";
+  status?: "sent" | "not_admin" | "not_found" | "no_userid" | "no_robot" | "send_failed";
   detail?: string;
 };
 
@@ -76,4 +77,31 @@ export async function sendTestMentionAction(
   return result.reason === "send_failed"
     ? { status: result.reason, detail: result.detail }
     : { status: result.reason };
+}
+
+export type GroupRobotState = {
+  status?: "saved" | "cleared" | "not_admin" | "not_a_wecom_webhook" | "save_failed";
+};
+
+/**
+ * Set or remove the org's Group Robot webhook.
+ *
+ * Removing is a real operation with its own button, rather than saving an empty box: a
+ * group gets recreated, or the URL leaks, and revoking it is the thing you want to be
+ * able to do without a deploy. Clearing by accident should take a deliberate press.
+ */
+export async function setGroupRobotAction(
+  _previous: GroupRobotState,
+  formData: FormData,
+): Promise<GroupRobotState> {
+  const clearing = String(formData.get("intent") ?? "") === "clear";
+  const webhook = clearing ? null : String(formData.get("webhook") ?? "");
+
+  const result = await setGroupRobot({ webhook }, await cookies());
+
+  if (!result.ok) return { status: result.reason };
+
+  revalidatePath("/admin/group-robot");
+
+  return { status: clearing ? "cleared" : "saved" };
 }

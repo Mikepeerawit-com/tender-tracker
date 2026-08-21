@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service-client";
 import type { SessionCookieStore } from "@/lib/supabase/session-client";
 import { currentUser } from "@/lib/auth/session";
 
+import { webhookFor } from "./group-robot";
 import { testMentionMessage } from "./messages";
 import { sendGroupMessages, type RobotBoundary } from "./robot";
 
@@ -16,7 +17,7 @@ import { sendGroupMessages, type RobotBoundary } from "./robot";
  */
 export type TestMentionResult =
   | { ok: true }
-  | { ok: false; reason: "not_admin" | "not_found" | "no_userid" }
+  | { ok: false; reason: "not_admin" | "not_found" | "no_userid" | "no_robot" }
   | { ok: false; reason: "send_failed"; detail: string };
 
 /**
@@ -61,7 +62,17 @@ export async function sendTestMention(
     return { ok: false, reason: "no_userid" };
   }
 
+  // After the checks that need no round trip. An org with no Group Robot is not a
+  // failed send and must not be reported as one: "try again" is useless advice, and
+  // what is actually needed is one screen away.
+  const webhook = await webhookFor(caller.orgId);
+
+  if (webhook === null) {
+    return { ok: false, reason: "no_robot" };
+  }
+
   const [outcome] = await sendGroupMessages(
+    webhook,
     [testMentionMessage({ wecomUserid })],
     boundary,
   );

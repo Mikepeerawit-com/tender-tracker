@@ -128,6 +128,13 @@ describe("the group robot", () => {
     expect(offendingFiles(/next-intl/, join(sourceRoot, "lib", "wecom"))).toEqual([]);
   });
 
+  it("takes its webhook from the org, never from the environment", () => {
+    // ADR-0013: one source of truth. An env var creeping back would mean two places to
+    // look when a notification lands in the wrong group — and the fallback would win
+    // silently on exactly the deployment whose org row was never filled in.
+    expect(offendingFiles(/WECOM_ROBOT_WEBHOOK/)).toEqual([]);
+  });
+
   it.each(userFacingText.filter((path) => path.endsWith(".json")))(
     "never says a test mention arrived (%s)",
     (path) => {

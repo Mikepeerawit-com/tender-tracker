@@ -1,13 +1,16 @@
 import "server-only";
 
-import { requiredEnv } from "@/lib/env";
-
 /**
  * The WeCom group-robot webhook: the one outbound integration in v1.
  *
- * A plain HTTPS POST to a URL held in an environment variable. No access token, no app
- * credentials, no OAuth, no domain of ours — it is the single WeCom surface exempt from
- * every gate this project hit (ADR-0008, docs/research/14-wecom-mention-targeting.md).
+ * A plain HTTPS POST to a URL the org owns. No access token, no app credentials, no
+ * OAuth, no domain of ours — it is the single WeCom surface exempt from every gate this
+ * project hit (ADR-0008, docs/research/14-wecom-mention-targeting.md).
+ *
+ * The URL comes from `./group-robot.ts`, not from the environment: it is a per-org
+ * setting an Org Admin changes in the app (ADR-0013). It is also a bearer credential —
+ * whoever holds it can post to the company group as this app — so it is passed in
+ * explicitly rather than reached for, and never logged.
  *
  * ## `errcode 0` means accepted, never notified
  *
@@ -72,24 +75,28 @@ type TextPayload = {
 };
 
 /**
- * Post a batch of messages to the group robot, paced, reporting each one's fate.
+ * Post a batch of messages to the org's Group Robot, paced, reporting each one's fate.
  *
  * Outcomes come back aligned with `messages` by index. One failure does not abandon the
  * batch: the daily cron sends everybody's reminders in one run, and one unreachable
  * send must not silence the rest of the org.
  *
- * @throws when `WECOM_ROBOT_WEBHOOK` is unset — a deployment that cannot notify anyone
- * must say so, rather than post nowhere and report success forever.
+ * @throws when `webhook` is blank. Callers resolve it from the org first and report an
+ * unconfigured robot as exactly that — an org that has not set one up yet is a
+ * different thing from a send that failed, and only one of them is worth retrying.
  */
 export async function sendGroupMessages(
+  webhook: string,
   messages: GroupMessage[],
   boundary: RobotBoundary = {},
 ): Promise<SendOutcome[]> {
-  // Before the environment is read: a cron run with nothing due must not crash a
-  // deployment for want of a webhook it was never going to use.
+  // A run with nothing due is not a misconfiguration, so this comes first.
   if (messages.length === 0) return [];
 
-  const webhook = requiredEnv("WECOM_ROBOT_WEBHOOK");
+  if (webhook.trim() === "") {
+    throw new Error("The Group Robot has no webhook; resolve it before sending.");
+  }
+
   const post = boundary.fetch ?? globalThis.fetch;
   const wait = boundary.wait ?? sleep;
 

@@ -414,3 +414,96 @@ describe("fx_rates", () => {
     expect(data).toEqual([]);
   });
 });
+
+/**
+ * The one value in this schema the org boundary is not enough for.
+ *
+ * Everywhere else, "inside an org everyone sees everything" is the deliberate design —
+ * cost and margin included. The Group Robot's webhook is different in kind: it is a
+ * bearer credential, and anyone holding it can post to the company WeCom group *as the
+ * app*. So the question here is not whether the org boundary holds. It is whether a
+ * perfectly ordinary, active member of the org that owns the row can reach it at all.
+ *
+ * They must not. Not to read it — the URL is the credential, and it reaches nothing
+ * less than the whole company's group chat. And not to write it either: an unnoticed
+ * repoint is worse than a leak, because every reminder and Digest the org sends would
+ * keep reporting success while arriving somewhere nobody is watching.
+ */
+describe("the Group Robot's webhook", () => {
+  const webhook = `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=secret-${run}`;
+
+  async function storedWebhook(): Promise<string | null> {
+    const { data } = await service
+      .from("group_robots")
+      .select("webhook_url")
+      .eq("org_id", orgs.a)
+      .maybeSingle();
+
+    return data?.webhook_url ?? null;
+  }
+
+  beforeAll(async () => {
+    const { error } = await service
+      .from("group_robots")
+      .insert({ org_id: orgs.a, webhook_url: webhook });
+
+    if (error) throw error;
+  });
+
+  it("cannot be read by a member of the org that owns it", async () => {
+    const client = await signedInAs(members.a.email);
+
+    const { data } = await client.from("group_robots").select("webhook_url");
+
+    // Asserted on the value, not just the row count: whether the database refuses with
+    // a permission error or hands back an empty set, what must never happen is the URL
+    // arriving at something holding the anon key.
+    expect(data ?? []).toEqual([]);
+    expect(JSON.stringify(data ?? [])).not.toContain(`secret-${run}`);
+  });
+
+  it("cannot be read across the org boundary either", async () => {
+    const client = await signedInAs(members.b.email);
+
+    const { data } = await client.from("group_robots").select("webhook_url");
+
+    expect(data ?? []).toEqual([]);
+  });
+
+  it("cannot be repointed by a member", async () => {
+    // The dangerous write. It would not look like an attack or like a bug: every send
+    // afterwards still returns errcode 0, from a group nobody is reading.
+    const client = await signedInAs(members.mate.email);
+
+    await client
+      .from("group_robots")
+      .update({ webhook_url: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=theirs" })
+      .eq("org_id", orgs.a);
+
+    // PostgREST reports an update matching no updatable row as a success over zero
+    // rows, so the stored value is what has to be checked.
+    await expect(storedWebhook()).resolves.toBe(webhook);
+  });
+
+  it("cannot be given to an org that has none", async () => {
+    const client = await signedInAs(members.b.email);
+
+    await client
+      .from("group_robots")
+      .insert({ org_id: orgs.b, webhook_url: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=theirs" });
+
+    const { data } = await service.from("group_robots").select("org_id").eq("org_id", orgs.b);
+
+    expect(data ?? []).toEqual([]);
+  });
+
+  it("cannot be deleted by a member", async () => {
+    // Deleting it silences the org without a trace: nothing is misconfigured, there is
+    // simply no robot any more.
+    const client = await signedInAs(members.a.email);
+
+    await client.from("group_robots").delete().eq("org_id", orgs.a);
+
+    await expect(storedWebhook()).resolves.toBe(webhook);
+  });
+});

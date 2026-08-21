@@ -46,7 +46,8 @@
   "nav": {
     "signOut": "退出登录",
     "people": "成员",
-    "tenders": "招标"
+    "tenders": "招标",
+    "groupRobot": "群机器人"
   },
   "tenders": {
     "title": "招标",
@@ -153,9 +154,29 @@
           "not_admin": "只有组织管理员可以发送。",
           "not_found": "此人不在你的组织中。",
           "no_userid": "请先保存对方的企业微信 userid。",
-          "send_failed": "企业微信没有接收这条消息。没有人收到通知,请重试。"
+          "send_failed": "企业微信没有接收这条消息。没有人收到通知,请重试。",
+          "no_robot": "还没有配置群机器人,无法发送。"
         }
       }
+    }
+  },
+  "groupRobot": {
+    "title": "群机器人",
+    "description": "所有催办、结果通知和每日摘要都通过这个企业微信群机器人发出。每个组织一个。",
+    "configured": "已配置。最近修改:{when}。",
+    "notConfigured": "尚未配置——目前没有任何人会收到通知。",
+    "label": "Webhook 地址",
+    "placeholder": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=…",
+    "help": "在群里的机器人设置中复制。请当作密码对待:拿到它的人都能以本应用的身份在该群发言。保存后不会再次显示。",
+    "save": "保存",
+    "saving": "保存中…",
+    "remove": "删除",
+    "status": {
+      "saved": "已保存。请到「成员」页面发送一条测试 @ 提醒,确认能送达。",
+      "cleared": "已删除。在保存新的地址之前,不会向群里发送任何消息。",
+      "not_admin": "只有组织管理员可以修改。",
+      "not_a_wecom_webhook": "这不是企业微信群机器人的 webhook 地址。它应以 https://qyapi.weixin.qq.com/ 开头,并带有 key 参数。",
+      "save_failed": "保存失败。地址未被修改,请重试。"
     }
   }
 }

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createServiceClient } from "@/lib/supabase/service-client";
 import { memoryCookieStore } from "@/lib/supabase/session-client";
@@ -87,13 +87,15 @@ beforeAll(async () => {
   await createMember(otherOrgId, stranger, { wecomUserid: `stranger-${run}` });
 });
 
-beforeAll(() => {
-  vi.stubEnv("WECOM_ROBOT_WEBHOOK", webhook);
+beforeAll(async () => {
+  const { error } = await service
+    .from("group_robots")
+    .insert({ org_id: orgId, webhook_url: webhook });
+
+  if (error) throw error;
 });
 
 afterAll(async () => {
-  vi.unstubAllEnvs();
-
   const ids = [admin.id, mentionable.id, unlinked.id, stranger.id].filter(Boolean);
 
   await service.from("users").delete().in("id", ids);
@@ -170,6 +172,31 @@ describe("sendTestMention", () => {
 
     expect(result).toEqual({ ok: false, reason: "not_found" });
     expect(boundary.sent).toEqual([]);
+  });
+
+  it("says so when the org has no Group Robot set up, rather than blaming the send", async () => {
+    // "Try again" is useless advice for an org that has never configured a webhook, and
+    // the thing actually needed is one screen away.
+    await service.from("group_robots").delete().eq("org_id", orgId);
+
+    const store = await signedInAs(admin.email);
+    const boundary = recordingRobot();
+
+    const result = await sendTestMention({ userId: mentionable.id }, store, boundary);
+
+    expect(result).toEqual({ ok: false, reason: "no_robot" });
+    expect(boundary.sent).toEqual([]);
+
+    await service.from("group_robots").insert({ org_id: orgId, webhook_url: webhook });
+  });
+
+  it("posts to the webhook the org has stored", async () => {
+    const store = await signedInAs(admin.email);
+    const boundary = recordingRobot();
+
+    await sendTestMention({ userId: mentionable.id }, store, boundary);
+
+    expect(boundary.sent[0].url).toBe(webhook);
   });
 
   it("never calls a non-zero errcode a success, and reports which one", async () => {
