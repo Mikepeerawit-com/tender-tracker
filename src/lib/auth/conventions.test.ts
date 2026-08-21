@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 import { requiredEnv } from "@/lib/env";
 
 /**
- * Four rules this ticket depends on that no runtime test can catch, because breaking
- * them produces code that works perfectly in every environment a developer will try.
+ * Rules this project depends on that no runtime test can catch, because breaking them
+ * produces code that works perfectly in every environment a developer will try.
  *
  * They are checked by reading the source, which is blunt, and which is the point: each
  * one fails weeks later, on someone else's phone, in a way nobody will connect back to
@@ -40,8 +40,8 @@ function code(path: string): string {
     .join("\n");
 }
 
-function offendingFiles(pattern: RegExp): string[] {
-  return sourceFiles(sourceRoot).filter((path) => pattern.test(code(path)));
+function offendingFiles(pattern: RegExp, root = sourceRoot): string[] {
+  return sourceFiles(root).filter((path) => pattern.test(code(path)));
 }
 
 const userFacingText = [
@@ -110,4 +110,41 @@ describe("the way in", () => {
       error_code: "signup_disabled",
     });
   });
+});
+
+describe("the group robot", () => {
+  it("never mentions anyone by mobile number", () => {
+    // Both mention routes bind, and they fail at different scales. A typo'd userid
+    // drops one person; a mis-formatted mobile binds for *nobody*, and the format a
+    // Thai person naturally types is one of the ones that binds for nobody. So the
+    // whole org goes unreachable at once, with `errcode 0` on every send. ADR-0012.
+    expect(offendingFiles(/mentioned_mobile_list/)).toEqual([]);
+  });
+
+  it("keeps the robot's text out of the i18n system", () => {
+    // The messages are broadcast into one group and rendered once for everyone, so
+    // there is no reader whose locale could choose between two versions. Half-inside
+    // next-intl is worse than outside it: it looks like a setting and obeys nobody.
+    expect(offendingFiles(/next-intl/, join(sourceRoot, "lib", "wecom"))).toEqual([]);
+  });
+
+  it.each(userFacingText.filter((path) => path.endsWith(".json")))(
+    "never says a test mention arrived (%s)",
+    (path) => {
+      // `errcode 0` means accepted, never notified — a nonexistent userid and an empty
+      // string are both accepted silently. Success wording that promises delivery is
+      // the whole silent failure, dressed as reassurance, so the one string reporting a
+      // successful send must ask the human to confirm instead. ADR-0012.
+      //
+      // Only the *success* message is checked: "nobody was notified" on a failure is an
+      // honest thing to say, and a guard forbidding the word outright would push that
+      // wording somewhere vaguer.
+      const sent = JSON.parse(readFileSync(path, "utf8")).people.wecom.test.status.sent;
+
+      expect(sent).not.toMatch(/\b(delivered|notified|received it|reached them)\b/i);
+      expect(sent).not.toMatch(/已通知|已送达|已收到|已提醒/);
+      // It has to point at the only verification that exists.
+      expect(sent).toMatch(/confirm|确认/);
+    },
+  );
 });

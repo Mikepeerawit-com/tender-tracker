@@ -114,6 +114,13 @@ Submitted, with Outcomes still unrecorded. Not a failure — the normal resting 
 a live Tender, and a prompt to chase the client.
 _Avoid_: pending, open, in progress
 
+**Group Robot**:
+The WeCom webhook every notification leaves through — one URL, posting into one group
+chat. The only WeCom surface this project is not gated out of, and the only outbound
+integration in v1. What it says is deliberately narrow: never a price, a Margin or a
+supplier's name (ADR-0012).
+_Avoid_: bot, webhook, notifier, WeCom integration
+
 **Digest**:
 The once-daily post to the WeCom group listing every open Tender and its next
 milestone. Answers "what is going on right now"; distinct from a reminder, which fires
@@ -172,6 +179,13 @@ log in by scanning instead of typing a password. Linking happens once, while alr
 signed in — never inferred at login. A user who is not Connected loses nothing but
 convenience.
 _Avoid_: WeCom user, linked account, SSO user
+
+**Test Mention**:
+A message an Org Admin posts to the group @ing one colleague, to find out whether their
+`wecom_userid` actually reaches them. The only verification that exists: WeCom accepts a
+wrong userid without complaint, so a colleague replying is the sole evidence. Done once
+per person, by hand.
+_Avoid_: test message, ping, verification, delivery check
 
 **Disabled**:
 A user whose access has been revoked but whose row remains, because they own Tenders and

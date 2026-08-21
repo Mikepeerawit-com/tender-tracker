@@ -144,6 +144,17 @@
         "not_admin": "Only an Org Admin can change this.",
         "not_found": "That person is not in your org.",
         "taken": "Another member already has that userid."
+      },
+      "test": {
+        "send": "Send test @mention",
+        "sending": "Posting…",
+        "status": {
+          "sent": "Posted to the group. Ask them to confirm they were @mentioned — WeCom accepts a wrong userid without complaint.",
+          "not_admin": "Only an Org Admin can send this.",
+          "not_found": "That person is not in your org.",
+          "no_userid": "Save their WeCom userid first.",
+          "send_failed": "WeCom would not take the message. Nobody was notified — try again."
+        }
       }
     }
   }

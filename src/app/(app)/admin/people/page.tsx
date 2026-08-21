@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { InviteForm } from "@/components/admin/invite-form";
+import { TestMentionButton } from "@/components/admin/test-mention-button";
 import { WecomUseridForm } from "@/components/admin/wecom-userid-form";
 import { currentUser } from "@/lib/auth/session";
 import { createSessionClient } from "@/lib/supabase/session-client";
@@ -63,7 +64,13 @@ export default async function PeoplePage() {
                     </span>
                   ) : null}
                 </div>
-                <WecomUseridForm userId={member.id} value={member.wecom_userid} />
+                <div className="flex flex-wrap items-center gap-2">
+                  <WecomUseridForm userId={member.id} value={member.wecom_userid} />
+                  <TestMentionButton
+                    userId={member.id}
+                    hasUserid={Boolean(member.wecom_userid)}
+                  />
+                </div>
               </li>
             ))}
           </ul>
