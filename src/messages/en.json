@@ -103,6 +103,35 @@
       "remove": "Remove",
       "removeMe": "Take me off"
     },
+    "referenceImages": {
+      "title": "Reference images",
+      "hint": "The pictures the client sent. Drop several in at once, then say which item each one is of.",
+      "add": "Add reference images",
+      "uploading": "Uploading {done} of {total}…",
+      "none": "No reference images yet.",
+      "unassigned": "Not yet assigned to an item",
+      "unassignedOption": "Not yet assigned",
+      "assignTo": "Item this picture is of",
+      "remove": "Remove",
+      "altOf": "Reference image: {label}",
+      "altUploaded": "Reference image uploaded by {name}",
+      "viewing": "{position} of {total}",
+      "close": "Close",
+      "previous": "Previous",
+      "next": "Next",
+      "unavailable": "This picture could not be loaded.",
+      "openCount": "Open {count, plural, =1 {# reference image} other {# reference images}} for {label}",
+      "error": {
+        "forbidden": "You are not signed in.",
+        "not_found": "That tender, item or picture is no longer there.",
+        "no_images": "Choose at least one picture.",
+        "too_many": "That is too many pictures at once. Add them in smaller batches.",
+        "too_large": "One of those pictures is too big, even after shrinking. Keep each one under 10 MB.",
+        "not_an_image": "One of those files is not a picture this app can store.",
+        "not_uploaded": "One of those pictures did not finish uploading. Try again.",
+        "failed": "That could not be saved. Try again."
+      }
+    },
     "error": {
       "forbidden": "You are not signed in, or this is the owner's to change.",
       "not_found": "That tender is no longer there.",

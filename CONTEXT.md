@@ -23,10 +23,19 @@ Distinct from a Quote, which points the other way.
 _Avoid_: our quote, submission, proposal
 
 **Reference Image**:
-A picture the *client* supplied showing what a Tender Item is asking for. Attached to
-the Tender Item, not the Tender, so it sits beside the Quote Photos it is meant to be
-compared against. Points the opposite way to a Quote Photo and is never called a photo.
+A picture the *client* supplied showing what a Tender Item is asking for. It belongs on
+the Tender Item, so that it sits beside the Quote Photos it is meant to be compared
+against. Points the opposite way to a Quote Photo and is never called a photo.
 _Avoid_: photo, client photo, RFQ image, attachment
+
+**Unassigned**:
+A Reference Image that has arrived on a Tender but has not yet been said to be of any one
+Tender Item. The state every Reference Image starts in, and a finished one rather than a
+half-written one: they arrive as a single email carrying five pictures, with nothing in it
+saying which Item each is about, so the upload is per-Tender and the assignment is a
+separate act afterwards. Shown on the Tender rather than hidden until somebody places it,
+because the ones nobody has placed are the ones with work outstanding on them.
+_Avoid_: orphan, pending, untagged, unlinked
 
 ### The supplier side
 

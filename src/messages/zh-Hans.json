@@ -103,6 +103,35 @@
       "remove": "移除",
       "removeMe": "退出该招标"
     },
+    "referenceImages": {
+      "title": "客户参考图",
+      "hint": "客户发来的图片。可一次上传多张，之后再指定每张对应哪个条目。",
+      "add": "添加参考图",
+      "uploading": "正在上传第 {done} 张，共 {total} 张…",
+      "none": "还没有参考图。",
+      "unassigned": "尚未指定条目",
+      "unassignedOption": "尚未指定",
+      "assignTo": "此图对应的条目",
+      "remove": "删除",
+      "altOf": "参考图：{label}",
+      "altUploaded": "由 {name} 上传的参考图",
+      "viewing": "第 {position} 张，共 {total} 张",
+      "close": "关闭",
+      "previous": "上一张",
+      "next": "下一张",
+      "unavailable": "此图片无法加载。",
+      "openCount": "查看 {label} 的 {count} 张参考图",
+      "error": {
+        "forbidden": "你尚未登录。",
+        "not_found": "该招标、条目或图片已不存在。",
+        "no_images": "请至少选择一张图片。",
+        "too_many": "一次选择的图片过多，请分批添加。",
+        "too_large": "其中一张图片压缩后仍然过大，每张请控制在 10 MB 以内。",
+        "not_an_image": "其中一个文件不是本应用可以保存的图片。",
+        "not_uploaded": "其中一张图片没有上传完成，请重试。",
+        "failed": "保存失败，请重试。"
+      }
+    },
     "error": {
       "forbidden": "您尚未登录，或此项只有负责人可以更改。",
       "not_found": "该招标已不存在。",

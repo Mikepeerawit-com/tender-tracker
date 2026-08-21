@@ -2,6 +2,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { requiredEnv } from "@/lib/env";
+import { imagesBucket } from "@/lib/images/images";
+import { onePixelJpeg } from "@/lib/images/one-pixel-jpeg";
 
 import { createServiceClient } from "./service-client";
 
@@ -505,5 +507,92 @@ describe("the Group Robot's webhook", () => {
     await client.from("group_robots").delete().eq("org_id", orgs.a);
 
     await expect(storedWebhook()).resolves.toBe(webhook);
+  });
+});
+
+describe("the images bucket", () => {
+  // One private bucket holds every image the app stores — Reference Images now, Quote
+  // Photos next — with the path carrying the org boundary: `{org_id}/{entity}/{id}/…`
+  // (A13). Storage has no `org_id` column to write a policy against, so the leading
+  // path segment *is* the tenancy check, and a naming convention that nothing enforces
+  // is not one. Everything below asks the database the way the browser's anon key
+  // would, because that is the only key a signed upload URL is ever minted with.
+  // Every path any test here names, so the bucket is left as it was found: nothing
+  // cascades from an org into Storage, and `afterAll` only tears down rows.
+  const objects: string[] = [];
+
+  const objectIn = (orgId: string, tenderId: string) => {
+    const path = `${orgId}/tenders/${tenderId}/${crypto.randomUUID()}.jpg`;
+
+    objects.push(path);
+
+    return path;
+  };
+
+  it("lets a member upload into their own org's folder through a signed URL", async () => {
+    const client = await signedInAs(members.a.email);
+    const path = objectIn(orgs.a, tenders.a);
+
+    const { data: signed, error: signError } = await client.storage
+      .from(imagesBucket)
+      .createSignedUploadUrl(path);
+
+    expect(signError).toBeNull();
+
+    // The browser's half. It carries the token and no session at all, which is the
+    // whole point of the route: the upload leaves the phone for Storage directly.
+    const { error: uploadError } = await client.storage
+      .from(imagesBucket)
+      .uploadToSignedUrl(path, signed!.token, onePixelJpeg());
+
+    expect(uploadError).toBeNull();
+  });
+
+  it("refuses to sign an upload into another org's folder", async () => {
+    const client = await signedInAs(members.a.email);
+
+    const { error } = await client.storage
+      .from(imagesBucket)
+      .createSignedUploadUrl(objectIn(orgs.b, tenders.b));
+
+    expect(error).not.toBeNull();
+  });
+
+  it("will not sign a read of another org's object", async () => {
+    const path = objectIn(orgs.b, tenders.b);
+    const { error: seedError } = await service.storage
+      .from(imagesBucket)
+      .upload(path, onePixelJpeg(), { contentType: "image/jpeg" });
+
+    expect(seedError).toBeNull();
+
+    const client = await signedInAs(members.a.email);
+    const { error } = await client.storage.from(imagesBucket).createSignedUrl(path, 60);
+
+    expect(error).not.toBeNull();
+  });
+
+  it("will not sign an upload for a disabled user", async () => {
+    // `current_org_id()` is null for them, and `= null` is null rather than true, so the
+    // same policy that scopes an org also ends a disabled member's uploads.
+    const client = await signedInAs(members.disabled.email);
+
+    const { error } = await client.storage
+      .from(imagesBucket)
+      .createSignedUploadUrl(objectIn(orgs.a, tenders.a));
+
+    expect(error).not.toBeNull();
+  });
+
+  afterAll(async () => {
+    if (objects.length > 0) await service.storage.from(imagesBucket).remove(objects);
+  });
+
+  it("is not public", async () => {
+    // A public bucket serves every object to anyone who can guess a uuid, and these are
+    // a client's Reference Images and a supplier's price evidence.
+    const { data } = await service.storage.getBucket(imagesBucket);
+
+    expect(data?.public).toBe(false);
   });
 });

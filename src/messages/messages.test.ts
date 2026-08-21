@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { defaultLocale, locales } from "@/i18n/config";
+import { referenceImageProblems } from "@/lib/images/reference-images";
 import { tenderProblems } from "@/lib/tenders/tenders";
 
 /**
@@ -110,6 +111,16 @@ describe.each(locales)("%s refusals", (locale) => {
 
   it("has wording for every reason a write can be refused", () => {
     const missing = tenderProblems.filter((problem) => !flat.has(`tenders.error.${problem}`));
+
+    expect(missing).toEqual([]);
+  });
+
+  it("has wording for every reason an image can be refused", () => {
+    // Same argument, second union. An upload that fails is the one moment somebody is
+    // holding a phone with five pictures on it and no idea what to do next.
+    const missing = referenceImageProblems.filter(
+      (problem) => !flat.has(`tenders.referenceImages.error.${problem}`),
+    );
 
     expect(missing).toEqual([]);
   });

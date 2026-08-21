@@ -4,9 +4,11 @@ import { notFound, redirect } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
 
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
+import { ReferenceImageBadge } from "@/components/tenders/reference-image-badge";
 import { Button } from "@/components/ui/button";
 import { currentUser } from "@/lib/auth/session";
 import { calendarDate, calendarDateFormat } from "@/lib/calendar-date";
+import { listReferenceImages } from "@/lib/images/reference-images";
 import { listMembers } from "@/lib/org/members";
 import { getTender } from "@/lib/tenders/tenders";
 
@@ -28,6 +30,12 @@ export default async function TenderPage({ params }: PageProps<"/tenders/[id]">)
   const day = (value: string) =>
     format.dateTime(calendarDate(value), calendarDateFormat);
   const members = await listMembers(store);
+  // Signed URLs, minted on this render and good for the hour. They are why this page
+  // cannot be cached beyond the request that drew it.
+  const referenceImages = await listReferenceImages(tender.id, store);
+  const unassignedImages = referenceImages.filter(
+    (image) => image.tenderItemId === null,
+  );
 
   return (
     <div className="flex flex-1 flex-col gap-8 p-6">
@@ -97,10 +105,35 @@ export default async function TenderPage({ params }: PageProps<"/tenders/[id]">)
                 <span className="text-muted-foreground text-sm">
                   {t("item.quantified", { quantity: item.quantity, unit: item.unit })}
                 </span>
+
+                {/* On the Item, and a count rather than a strip — buildspec_2.md screen 5.
+                    This screen becomes the comparison working sheet, where thumbnails were
+                    measured eating the horizontal room the money columns need. */}
+                <ReferenceImageBadge
+                  label={item.productName}
+                  images={referenceImages.filter(
+                    (image) => image.tenderItemId === item.id,
+                  )}
+                />
               </li>
             ))}
           </ul>
         </section>
+
+        {/* Unassigned images are shown on the Tender rather than held back until somebody
+            places them: they are the ones with work outstanding, and the placing itself
+            happens on the edit screen, where the pictures can be looked at. */}
+        {unassignedImages.length > 0 ? (
+          <section className="flex flex-col items-start gap-2">
+            <h2 className="text-sm font-medium">
+              {t("referenceImages.unassigned")}
+            </h2>
+            <ReferenceImageBadge
+              label={t("referenceImages.unassigned")}
+              images={unassignedImages}
+            />
+          </section>
+        ) : null}
 
         <AssigneeControls
           tenderId={tender.id}

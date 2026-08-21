@@ -4,11 +4,14 @@ import { getTranslations } from "next-intl/server";
 
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { EditTenderForm } from "@/components/tenders/edit-tender-form";
+import { ReferenceImageGallery } from "@/components/tenders/reference-image-gallery";
+import { ReferenceImageUploader } from "@/components/tenders/reference-image-uploader";
 import {
   AddTenderItemForm,
   EditTenderItemForm,
 } from "@/components/tenders/tender-item-forms";
 import { currentUser } from "@/lib/auth/session";
+import { listReferenceImages } from "@/lib/images/reference-images";
 import { listMembers, ownerOptions } from "@/lib/org/members";
 import { getTender } from "@/lib/tenders/tenders";
 
@@ -27,6 +30,7 @@ export default async function EditTenderPage({
 
   const t = await getTranslations("tenders");
   const members = await listMembers(store);
+  const referenceImages = await listReferenceImages(tender.id, store);
 
   return (
     <div className="flex flex-1 flex-col gap-8 p-6">
@@ -68,6 +72,23 @@ export default async function EditTenderPage({
           ))}
 
           <AddTenderItemForm tenderId={tender.id} />
+        </section>
+
+        {/* Buildspec screen 3 puts Reference Images on this screen, and they upload
+            per-Tender: five pictures arrive in one email with nothing saying which Item
+            each is of, so the placing happens below, against pictures you can see. */}
+        <section className="flex flex-col gap-4">
+          <h2 className="text-sm font-medium">{t("referenceImages.title")}</h2>
+
+          {/* The hint lives on the input rather than on the heading — one sentence, beside
+              the thing it is about. */}
+          <ReferenceImageUploader tenderId={tender.id} />
+
+          <ReferenceImageGallery
+            tenderId={tender.id}
+            images={referenceImages}
+            items={tender.items}
+          />
         </section>
 
         {/* Buildspec screen 3 names Assignees alongside the dates and the Items. They
