@@ -68,3 +68,69 @@ export function isStorableImage(contentType: string): boolean {
  * Photo input.
  */
 export const imageAccept = "image/*";
+
+/**
+ * The Quote Photo input's `accept`.
+ *
+ * `capture` is the difference from {@link imageAccept}, and it is a difference in
+ * *gesture*: a Quote Photo is taken during or just after the call, on the phone in the
+ * hand, so the camera is the thing to open. A Reference Image arrived by email an hour
+ * ago and is already in the library.
+ *
+ * **`capture` is a hint, not a guarantee** (buildspec_2.md A4). It was measured opening
+ * the camera straight away inside the WeCom webview on an iPhone; Android is unmeasured,
+ * and the research on Android WebView is bad enough that the picker has to stay reachable
+ * without it. A visible file-picker fallback beside this input is therefore required,
+ * not optional — see `quote-photo-uploader.tsx`.
+ */
+export const photoAccept = "image/*";
+
+/**
+ * Which entity a stored image hangs off, and the folder segment that says so.
+ *
+ * The path is `{org_id}/{entity}/{entity_id}/{uuid}.{ext}`, and the org id leads because
+ * it is the only segment the storage policy can match cheaply. This middle segment is
+ * what keeps a Tender's pictures and a Quote's photos apart inside one org's folder —
+ * they are the same kind of object to Storage, and the row that points at one is the
+ * only thing that makes it a client's picture or a supplier's.
+ */
+export type ImageOwner = "tenders" | "quotes";
+
+/** The one folder an entity's images may live in. */
+export function entityFolder(orgId: string, owner: ImageOwner, entityId: string): string {
+  return `${orgId}/${owner}/${entityId}`;
+}
+
+/** One image as the browser knows it, before it has uploaded anything. */
+export type PendingImage = { contentType: string; byteSize: number };
+
+/** One signed upload: where the object goes, and the token that lets it. */
+export type StoredImageUpload = { storagePath: string; token: string };
+
+/**
+ * Every way an image write can be refused, as a list rather than a bare union, for the
+ * same reason `tenderProblems` is one: the wording lives in the message files, and a
+ * reason with none renders to the user as its own key. `messages.test.ts` walks this to
+ * hold both locales to it.
+ *
+ * One union for Reference Images and Quote Photos together. The reasons are the same
+ * sentences — an upload that did not finish is an upload that did not finish — and two
+ * copies would be two sets of wording to keep in step for no difference a reader could
+ * see.
+ */
+export const imageProblems = [
+  "forbidden",
+  "not_found",
+  "no_images",
+  "too_many",
+  "too_large",
+  "not_an_image",
+  "not_uploaded",
+  "failed",
+] as const;
+
+export type ImageProblem = (typeof imageProblems)[number];
+
+export type ImageResult<T = Record<never, never>> =
+  | ({ ok: true } & T)
+  | { ok: false; reason: ImageProblem };

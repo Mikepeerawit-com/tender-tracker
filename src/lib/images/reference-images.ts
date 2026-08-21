@@ -2,12 +2,18 @@ import "server-only";
 
 import { currentUser } from "@/lib/auth/session";
 import {
-  imageContentTypes,
-  imagesBucket,
-  isStorableImage,
-  maxImageBytes,
-  maxImagesAtOnce,
+  type ImageProblem,
+  type ImageResult,
+  type PendingImage,
+  type StoredImageUpload,
 } from "@/lib/images/images";
+import {
+  confirmUploaded,
+  pendingProblem,
+  removeObject,
+  signUploads,
+  signedReadUrls,
+} from "@/lib/images/stored-images";
 import {
   createSessionClient,
   type SessionCookieStore,
@@ -22,61 +28,35 @@ import {
  * nullable for exactly this reason, so an unassigned image is a finished row rather
  * than a half-written one.
  *
- * The whole image path lands here once and Quote Photos reuse it: one private bucket,
- * paths keyed by org and entity id, the upload going browser-to-Storage through
- * `createSignedUploadUrl()`, and every read a signed URL. Nothing streams a file
- * through this app — a phone on mobile data inside the WeCom webview uploads to Storage
- * directly, and the server only ever hands out a token and records what came back.
+ * The path underneath — one private bucket, `{org_id}/tenders/{tender_id}/{uuid}.{ext}`,
+ * the upload going browser-to-Storage through `createSignedUploadUrl()`, and every read a
+ * signed URL — lives in `./stored-images.ts` and is shared with Quote Photos. Nothing
+ * streams a file through this app: a phone on mobile data inside the WeCom webview
+ * uploads to Storage directly, and the server only ever hands out a token and records
+ * what came back.
  *
  * Everything reads and writes through the *session* client, so RLS is what keeps one
  * org out of another's images, on the `reference_images` rows and on the Storage objects
  * alike. See supabase/migrations/20260821010000_one_private_bucket_for_every_image.sql.
  */
 
-/** How long a signed read URL lives. Long enough to open a lightbox, and no longer. */
-const readUrlSeconds = 60 * 60;
-
 /**
- * Every way a write here can be refused, as a list rather than a bare union, for the
- * same reason `tenderProblems` is one: the wording lives in the message files, and a
- * reason with none renders to the user as its own key. `messages.test.ts` walks this to
- * hold both locales to it.
+ * The refusal union, now shared with Quote Photos — the reasons are the same sentences.
+ * Re-exported under the old names because this is the vocabulary the Reference Image
+ * screens speak, and the wording they render lives at `images.error.<reason>`.
  */
-export const referenceImageProblems = [
-  "forbidden",
-  "not_found",
-  "no_images",
-  "too_many",
-  "too_large",
-  "not_an_image",
-  "not_uploaded",
-  "failed",
-] as const;
-
-export type ReferenceImageProblem = (typeof referenceImageProblems)[number];
-
-export type ReferenceImageResult<T = Record<never, never>> =
-  | ({ ok: true } & T)
-  | { ok: false; reason: ReferenceImageProblem };
-
-/** One image as the browser knows it, before it has uploaded anything. */
-export type PendingImage = { contentType: string; byteSize: number };
-
-/** One signed upload: where the object goes, and the token that lets it. */
-export type ReferenceImageUpload = { storagePath: string; token: string };
+export { imageProblems as referenceImageProblems } from "@/lib/images/images";
+export type { PendingImage };
+export type ReferenceImageProblem = ImageProblem;
+export type ReferenceImageResult<T = Record<never, never>> = ImageResult<T>;
+export type ReferenceImageUpload = StoredImageUpload;
 
 /**
  * Sign an upload for each image, all or nothing.
  *
- * Five pictures are one act. A batch that half-succeeded would leave the user counting
- * thumbnails to work out which of the five never made it, so a single image over the cap
- * refuses the lot and says why — and because compression runs first, an image that is
- * still over 10 MB afterwards is a genuinely unusual file rather than a phone photo.
- *
- * The token is minted through the caller's own session, so the storage policy is what
- * decides whether the path is theirs to write. Handing back a token rather than
- * accepting bytes is the point: this is the route measured working inside the WeCom
- * webview, and it is the only one this project uses.
+ * Five pictures are one act, so a single image over the cap refuses the lot and says
+ * why. The token is minted through the caller's own session, so the storage policy is
+ * what decides whether the path is theirs to write.
  */
 export async function signReferenceImageUploads(
   { tenderId, images }: { tenderId: string; images: PendingImage[] },
@@ -86,15 +66,11 @@ export async function signReferenceImageUploads(
 
   if (!caller) return { ok: false, reason: "forbidden" };
 
-  if (images.length === 0) return { ok: false, reason: "no_images" };
-  if (images.length > maxImagesAtOnce) return { ok: false, reason: "too_many" };
+  // Before the Tender is looked up, so a batch that was never going to be accepted costs
+  // no round trip and says what is wrong with the pictures rather than about the Tender.
+  const problem = pendingProblem(images);
 
-  for (const image of images) {
-    if (image.byteSize > maxImageBytes) return { ok: false, reason: "too_large" };
-    if (!isStorableImage(image.contentType)) {
-      return { ok: false, reason: "not_an_image" };
-    }
-  }
+  if (problem) return { ok: false, reason: problem };
 
   const supabase = createSessionClient(store);
 
@@ -108,20 +84,10 @@ export async function signReferenceImageUploads(
 
   if (!tender) return { ok: false, reason: "not_found" };
 
-  const uploads: ReferenceImageUpload[] = [];
-
-  for (const image of images) {
-    const path = objectPath(caller.orgId, tenderId, image.contentType);
-    const { data, error } = await supabase.storage
-      .from(imagesBucket)
-      .createSignedUploadUrl(path);
-
-    if (error !== null || !data) return { ok: false, reason: "failed" };
-
-    uploads.push({ storagePath: data.path, token: data.token });
-  }
-
-  return { ok: true, uploads };
+  return signUploads(
+    { orgId: caller.orgId, owner: "tenders", entityId: tenderId, images },
+    supabase,
+  );
 }
 
 /** One Reference Image as a screen needs it: a signed URL, and where it belongs. */
@@ -147,10 +113,7 @@ export type ReferenceImage = {
  *
  * Split from signing because the upload happens between the two and this app is not on
  * that path — it hands out tokens and then hears what came back. Both halves of that
- * hearsay are checked: the path has to be one this Tender's folder could have produced,
- * and the object has to actually be there. Without the first, a caller could file
- * Tender A's pictures under Tender B; without the second, a row could name an object
- * that was never uploaded, which renders as a broken image for good.
+ * hearsay are checked in `confirmUploaded`.
  */
 export async function recordReferenceImages(
   { tenderId, storagePaths }: { tenderId: string; storagePaths: string[] },
@@ -160,35 +123,13 @@ export async function recordReferenceImages(
 
   if (!caller) return { ok: false, reason: "forbidden" };
 
-  if (storagePaths.length === 0) return { ok: false, reason: "no_images" };
-
-  const folder = tenderFolder(caller.orgId, tenderId);
-  const prefix = `${folder}/`;
-  const names = storagePaths.map((path) => path.slice(prefix.length));
-
-  if (
-    !storagePaths.every((path, index) => path.startsWith(prefix) && !names[index].includes("/"))
-  ) {
-    // The path is not this Tender's, so as far as this Tender is concerned there is
-    // nothing there — the same answer RLS gives for another org's folder.
-    return { ok: false, reason: "not_found" };
-  }
-
   const supabase = createSessionClient(store);
+  const problem = await confirmUploaded(
+    { orgId: caller.orgId, owner: "tenders", entityId: tenderId, storagePaths },
+    supabase,
+  );
 
-  // One listing rather than one existence check per path: five images off one email is
-  // the normal batch, and a phone on mobile data pays for every round trip.
-  const { data: present, error: listError } = await supabase.storage
-    .from(imagesBucket)
-    .list(folder, { limit: 1000 });
-
-  if (listError !== null) return { ok: false, reason: "failed" };
-
-  const uploaded = new Set((present ?? []).map((object) => object.name));
-
-  if (!names.every((name) => uploaded.has(name))) {
-    return { ok: false, reason: "not_uploaded" };
-  }
+  if (problem) return { ok: false, reason: problem };
 
   const { data, error } = await supabase
     .from("reference_images")
@@ -290,22 +231,9 @@ export async function listReferenceImages(
     .overrideTypes<ReferenceImageDbRow[], { merge: false }>();
 
   const rows = data ?? [];
-
-  if (rows.length === 0) return [];
-
-  // One call for the whole page. Signing is a round trip per URL otherwise, and the
-  // Tender screen renders every image on the Tender at once.
-  const { data: signed } = await supabase.storage
-    .from(imagesBucket)
-    .createSignedUrls(
-      rows.map((row) => row.storage_path),
-      readUrlSeconds,
-    );
-
-  const urls = new Map(
-    (signed ?? [])
-      .filter((entry) => entry.signedUrl)
-      .map((entry) => [entry.path, entry.signedUrl] as const),
+  const urls = await signedReadUrls(
+    rows.map((row) => row.storage_path),
+    supabase,
   );
 
   return rows.map((row) => ({
@@ -321,14 +249,8 @@ export async function listReferenceImages(
 }
 
 /**
- * Take a Reference Image off its Tender, bytes and all.
- *
- * The row goes first and the object second, and the order is the honest one: the row is
- * what the Tender shows, so deleting it is what the user asked for. If the object
- * removal then fails, the result is a few orphaned bytes nothing can reach — against the
- * other order, where a failed row delete leaves a permanently broken image on the
- * screen. There is deliberately no retention rule in v1, so nothing sweeps up after
- * either way.
+ * Take a Reference Image off its Tender, bytes and all. The row goes first and the
+ * object second — `removeObject` carries the argument for that order.
  */
 export async function removeReferenceImage(
   imageId: string,
@@ -356,7 +278,7 @@ export async function removeReferenceImage(
   if (error !== null) return { ok: false, reason: "failed" };
   if (data.length !== 1) return { ok: false, reason: "not_found" };
 
-  await supabase.storage.from(imagesBucket).remove([image.storage_path]);
+  await removeObject(image.storage_path, supabase);
 
   return { ok: true };
 }
@@ -373,28 +295,3 @@ type ReferenceImageDbRow = {
   uploaded_at: string;
   uploader: { name: string } | null;
 };
-
-/**
- * The one folder a Tender's Reference Images may live in: `{org_id}/tenders/{tender_id}`.
- *
- * Written once and used by all three of the places that need it — minting a path, listing
- * what has been uploaded, and deciding whether a path handed back is this Tender's. The
- * shape is the boundary (the storage policy matches on the leading segment), so three
- * hand-rolled template strings would be three chances to make it not one.
- */
-function tenderFolder(orgId: string, tenderId: string): string {
-  return `${orgId}/tenders/${tenderId}`;
-}
-
-/**
- * A new object in that folder.
- *
- * The uuid is the file name, not the one the phone gave it: two pictures off the same
- * camera are routinely both `IMG_0042.HEIC`, and a path collision would have the second
- * upload refused or — worse, with upsert — silently replace the first.
- */
-function objectPath(orgId: string, tenderId: string, contentType: string): string {
-  const extension = imageContentTypes.get(contentType);
-
-  return `${tenderFolder(orgId, tenderId)}/${crypto.randomUUID()}.${extension}`;
-}

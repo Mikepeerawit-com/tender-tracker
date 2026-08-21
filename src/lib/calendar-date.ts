@@ -25,3 +25,23 @@ export function isCalendarDate(value: string): boolean {
 
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(value);
 }
+
+/**
+ * Which day it is, in a given timezone, at a given instant.
+ *
+ * Both arguments are required on purpose. The timezone is the org's (`orgs.timezone`),
+ * never the server's — Vercel runs UTC, which rolls the day seven hours early for
+ * everybody in Bangkok. The instant is passed in rather than read here, so that nothing
+ * downstream of a request boundary calls the wall clock (ADR-0010).
+ *
+ * `en-CA` is not a language choice: it is the one widely-supported locale whose short
+ * date format is already `yyyy-mm-dd`, which is what the `date` columns hold.
+ */
+export function todayIn(timezone: string, at: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(at);
+}

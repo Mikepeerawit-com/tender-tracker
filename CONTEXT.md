@@ -144,6 +144,22 @@ in. Quotes are always stored in the currency the supplier quoted; conversion is 
 display only and is always shown as derived.
 _Avoid_: base currency, home currency, display currency
 
+**Frozen Rate**:
+The pair of exchange rates a Quote stores at the moment it is entered — ECB mid-market
+and the buffered rate actually applied — together with the day ECB published them. Never
+re-fetched, so a ranking somebody saw is reproducible from the row a year later and no
+dashboard total moves because a currency did. Both are kept so the buffer stays visible
+and cannot be applied twice. A THB Quote's are both 1 and it is not converted at all.
+_Avoid_: exchange rate, fx rate, conversion rate
+
+**Stale Rate**:
+A Frozen Rate taken from the last one this app stored, because the rate service could not
+be reached. Recorded rather than refused: an Assignee holding a price the supplier just
+gave them must never be stopped by a service in Frankfurt. It is shown as stale wherever
+the converted figure is, because two Quotes frozen on different days can differ by more
+than the gap the comparison is claiming to show.
+_Avoid_: old rate, cached rate, fallback rate
+
 **Landed Cost**:
 What a Tender Item actually costs us — the Selected Quote's price converted to THB,
 plus shipping, duty and handling. Pre-filled from the Quote, then edited, because

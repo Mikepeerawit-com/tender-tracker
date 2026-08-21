@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { defaultLocale, locales } from "@/i18n/config";
-import { referenceImageProblems } from "@/lib/images/reference-images";
+import { imageProblems } from "@/lib/images/images";
+import { quoteProblems } from "@/lib/quotes/quotes";
 import { tenderProblems } from "@/lib/tenders/tenders";
 
 /**
@@ -94,6 +95,9 @@ describe.each(others)("%s", (locale) => {
         "tenders.item.quantified",
         // A URL WeCom issues. Translating it would make it a different address.
         "groupRobot.placeholder",
+        // A converted amount behind the mathematical sign for it. There is no word in
+        // either language to translate.
+        "quotes.approx",
       ].sort(),
     );
   });
@@ -116,10 +120,20 @@ describe.each(locales)("%s refusals", (locale) => {
   });
 
   it("has wording for every reason an image can be refused", () => {
-    // Same argument, second union. An upload that fails is the one moment somebody is
-    // holding a phone with five pictures on it and no idea what to do next.
-    const missing = referenceImageProblems.filter(
-      (problem) => !flat.has(`tenders.referenceImages.error.${problem}`),
+    // Same argument, second union — and one union for Reference Images and Quote Photos
+    // alike, because the sentences are the same whoever sent the picture. An upload that
+    // fails is the one moment somebody is holding a phone with pictures on it and no
+    // idea what to do next.
+    const missing = imageProblems.filter(
+      (problem) => !flat.has(`images.error.${problem}`),
+    );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("has wording for every reason a Quote can be refused", () => {
+    const missing = quoteProblems.filter(
+      (problem) => !flat.has(`quotes.error.${problem}`),
     );
 
     expect(missing).toEqual([]);

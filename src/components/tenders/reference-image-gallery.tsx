@@ -8,8 +8,8 @@ import {
   removeReferenceImageAction,
   type ReferenceImageFormState,
 } from "@/app/actions/reference-images";
-import { ReferenceImageLightbox } from "@/components/tenders/reference-image-lightbox";
-import { ReferenceImageProblemNotice } from "@/components/tenders/reference-image-uploader";
+import { ImageLightbox } from "@/components/images/image-lightbox";
+import { ImageProblemNotice } from "@/components/images/image-problem-notice";
 import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 import type { ReferenceImage } from "@/lib/images/reference-images";
@@ -24,7 +24,7 @@ import type { ReferenceImage } from "@/lib/images/reference-images";
  * already dealt with.
  *
  * The pictures are shown here rather than counted, which is the opposite of the Tender
- * detail screen (see `reference-image-badge.tsx`). Assigning needs *seeing*: nobody can
+ * detail screen (see `image-count-badge.tsx`). Assigning needs *seeing*: nobody can
  * say which Item a picture is of from a filename. There are no generated derivatives to
  * show instead, so each tile loads the full compressed upload — hence `loading="lazy"` on
  * every one of them, and hence tapping one being what opens it at size rather than a
@@ -46,6 +46,9 @@ export function ReferenceImageGallery({
   items: ItemOption[];
 }) {
   const t = useTranslations("tenders.referenceImages");
+  // The wording shared with Quote Photos: what a lightbox says, and what a picture that
+  // will not load says.
+  const shared = useTranslations("images");
   const [openAt, setOpenAt] = useState<number | null>(null);
 
   const groups = [
@@ -85,7 +88,7 @@ export function ReferenceImageGallery({
                     // Said out loud, because the alternative is a picture that quietly
                     // disappears off the Tender and cannot be removed.
                     <span className="text-muted-foreground p-2 text-center text-xs">
-                      {t("unavailable")}
+                      {shared("unavailable")}
                     </span>
                   ) : (
                     /* A plain `img`, not `next/image`: the source is a signed URL that
@@ -111,7 +114,7 @@ export function ReferenceImageGallery({
       ))}
 
       {openAt === null ? null : (
-        <ReferenceImageLightbox
+        <ImageLightbox
           images={ordered}
           at={openAt}
           onMove={setOpenAt}
@@ -164,7 +167,7 @@ function AssignForm({
         ))}
       </NativeSelect>
 
-      <ReferenceImageProblemNotice error={state.error} />
+      <ImageProblemNotice error={state.error} />
     </form>
   );
 }
@@ -194,7 +197,7 @@ function RemoveForm({ tenderId, imageId }: { tenderId: string; imageId: string }
         {t("remove")}
       </Button>
 
-      <ReferenceImageProblemNotice error={state.error} />
+      <ImageProblemNotice error={state.error} />
     </form>
   );
 }

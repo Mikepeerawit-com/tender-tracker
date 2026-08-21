@@ -1,0 +1,189 @@
+import { cookies, headers } from "next/headers";
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { getFormatter, getTranslations } from "next-intl/server";
+
+import { ImageCountBadge } from "@/components/images/image-count-badge";
+import { NoSupplierFoundForm } from "@/components/quotes/no-supplier-found-form";
+import { QuoteForm } from "@/components/quotes/quote-form";
+import { QuoteList } from "@/components/quotes/quote-list";
+import { AssigneeControls } from "@/components/tenders/assignee-controls";
+import { Button } from "@/components/ui/button";
+import { currentUser } from "@/lib/auth/session";
+import { calendarDate, calendarDateFormat, todayIn } from "@/lib/calendar-date";
+import { listQuotePhotosByQuote } from "@/lib/images/quote-photos";
+import { listReferenceImages } from "@/lib/images/reference-images";
+import { listMembers } from "@/lib/org/members";
+import { getOrgSettings } from "@/lib/org/org";
+import { blankQuote } from "@/lib/quotes/quote-form";
+import { listItemSourcing, listQuotes } from "@/lib/quotes/quotes";
+import { runInstantFromHeaders } from "@/lib/run-instant";
+import { getTender } from "@/lib/tenders/tenders";
+
+/**
+ * Sourcing one Tender Item — buildspec_2.md screen 4.
+ *
+ * Everything an Assignee does after ringing a supplier is on this one page: what has
+ * already been recorded against the Item, the form for what was just heard, and the way
+ * to say that nobody could supply it at all. They ring several suppliers in a row for the
+ * same Item, so the screen is built for coming back to rather than for one pass through.
+ *
+ * The client's own Reference Images sit at the top, because the question a supplier is
+ * being asked about is *this picture* — and because the Quote Photos that come back are
+ * only judgeable next to it.
+ */
+export default async function ItemSourcingPage({
+  params,
+}: PageProps<"/tenders/[id]/items/[itemId]/quote">) {
+  const { id, itemId } = await params;
+  const store = await cookies();
+  const user = await currentUser(store);
+
+  if (!user) redirect("/login");
+
+  const tender = await getTender(id, store);
+
+  // Another org's Tender and a deleted one are the same answer through RLS, and the same
+  // answer is the right one to give.
+  if (!tender) notFound();
+
+  const item = tender.items.find((candidate) => candidate.id === itemId);
+
+  // An Item id that is not on *this* Tender, which is a different page from the one that
+  // was asked for whether or not the Item exists somewhere else.
+  if (!item) notFound();
+
+  const t = await getTranslations("quotes");
+  const tenders = await getTranslations("tenders");
+  const format = await getFormatter();
+
+  // Only an Assignee may enter a Quote on a Tender: they are the one who actually rang
+  // the supplier, and every Quote records which of them it was. Nothing is wrong with
+  // anybody else — Assignees enrol themselves (ADR-0004) — so the page offers the way in
+  // rather than refusing.
+  const isAssignee = tender.assignees.some((assignee) => assignee.id === user.id);
+
+  const quotes = await listQuotes(itemId, store);
+  const photos = await listQuotePhotosByQuote(
+    quotes.map((quote) => quote.id),
+    store,
+  );
+  const sourcing = (await listItemSourcing(tender.id, store)).get(itemId);
+  const refusals = sourcing?.noSupplierFound ?? [];
+  const referenceImages = (await listReferenceImages(tender.id, store)).filter(
+    (image) => image.tenderItemId === itemId,
+  );
+
+  // The day the org is having, not the one the server is having: Vercel runs UTC, which
+  // would default a Bangkok evening's Quote to yesterday. The instant is resolved once
+  // here, at the top of the render, and passed down (ADR-0010).
+  const { timezone } = await getOrgSettings(store);
+  const today = todayIn(timezone, runInstantFromHeaders(await headers()));
+
+  return (
+    <div className="flex flex-1 flex-col gap-8 p-6">
+      <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-col gap-2">
+            <span className="text-muted-foreground font-mono text-xs">
+              {tender.reference} · {tender.clientName}
+            </span>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {item.productName}
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              {tenders("item.quantified", {
+                quantity: item.quantity,
+                unit: item.unit,
+              })}
+            </p>
+            {item.description ? (
+              <p className="text-muted-foreground text-sm">{item.description}</p>
+            ) : null}
+            <p className="text-muted-foreground text-xs">
+              {tenders("internalQuoteDue", {
+                date: format.dateTime(
+                  calendarDate(tender.internalQuoteDeadline),
+                  calendarDateFormat,
+                ),
+              })}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="h-11"
+              nativeButton={false}
+              render={<Link href={`/tenders/${tender.id}`} />}
+            >
+              {t("backToTender")}
+            </Button>
+          </div>
+        </header>
+
+        {referenceImages.length > 0 ? (
+          <section className="flex flex-col items-start gap-2">
+            <h2 className="text-sm font-medium">{tenders("referenceImages.title")}</h2>
+            <ImageCountBadge
+              openLabel={tenders("referenceImages.openCount", {
+                label: item.productName,
+                count: referenceImages.length,
+              })}
+              images={referenceImages}
+            />
+          </section>
+        ) : null}
+
+        <section className="flex flex-col gap-4">
+          <h2 className="text-sm font-medium">
+            {t("recorded", { count: quotes.length })}
+          </h2>
+          <QuoteList tenderId={tender.id} quotes={quotes} photos={photos} />
+        </section>
+
+        {isAssignee ? (
+          <>
+            <section className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-sm font-medium">{t("add")}</h2>
+                <p className="text-muted-foreground text-xs">{t("addHint")}</p>
+              </div>
+
+              <QuoteForm
+                tenderId={tender.id}
+                tenderItemId={item.id}
+                defaults={blankQuote({ unit: item.unit, today })}
+              />
+            </section>
+
+            <section className="border-border rounded-lg border border-dashed p-4">
+              <NoSupplierFoundForm
+                tenderId={tender.id}
+                tenderItemId={item.id}
+                mine={refusals.find((row) => row.userId === user.id) ?? null}
+                others={refusals.filter((row) => row.userId !== user.id)}
+              />
+            </section>
+          </>
+        ) : (
+          <section className="flex flex-col gap-4">
+            <p className="border-border rounded-lg border px-3 py-2 text-sm">
+              {t("notAssignee")}
+            </p>
+
+            {/* The way in, on the page that just said no — rather than a sentence sending
+                somebody back to a screen to find a control they have not seen. */}
+            <AssigneeControls
+              tenderId={tender.id}
+              assignees={tender.assignees}
+              members={await listMembers(store)}
+              callerId={user.id}
+              isOwner={tender.ownerUserId === user.id}
+            />
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}

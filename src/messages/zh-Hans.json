@@ -49,6 +49,24 @@
     "tenders": "招标",
     "groupRobot": "群机器人"
   },
+  "images": {
+    "viewing": "第 {position} 张，共 {total} 张",
+    "close": "关闭",
+    "previous": "上一张",
+    "next": "下一张",
+    "unavailable": "此图片无法加载。",
+    "altUploaded": "由 {name} 上传的参考图",
+    "error": {
+      "forbidden": "你尚未登录。",
+      "not_found": "该招标、条目或图片已不存在。",
+      "no_images": "请至少选择一张图片。",
+      "too_many": "一次选择的图片过多，请分批添加。",
+      "too_large": "其中一张图片压缩后仍然过大，每张请控制在 10 MB 以内。",
+      "not_an_image": "其中一个文件不是本应用可以保存的图片。",
+      "not_uploaded": "其中一张图片没有上传完成，请重试。",
+      "failed": "保存失败，请重试。"
+    }
+  },
   "tenders": {
     "title": "招标",
     "description": "客户提出的全部需求，按客户投标截止日期由近及远排列。",
@@ -114,23 +132,7 @@
       "assignTo": "此图对应的条目",
       "remove": "删除",
       "altOf": "参考图：{label}",
-      "altUploaded": "由 {name} 上传的参考图",
-      "viewing": "第 {position} 张，共 {total} 张",
-      "close": "关闭",
-      "previous": "上一张",
-      "next": "下一张",
-      "unavailable": "此图片无法加载。",
-      "openCount": "查看 {label} 的 {count} 张参考图",
-      "error": {
-        "forbidden": "你尚未登录。",
-        "not_found": "该招标、条目或图片已不存在。",
-        "no_images": "请至少选择一张图片。",
-        "too_many": "一次选择的图片过多，请分批添加。",
-        "too_large": "其中一张图片压缩后仍然过大，每张请控制在 10 MB 以内。",
-        "not_an_image": "其中一个文件不是本应用可以保存的图片。",
-        "not_uploaded": "其中一张图片没有上传完成，请重试。",
-        "failed": "保存失败，请重试。"
-      }
+      "openCount": "查看 {label} 的 {count} 张参考图"
     },
     "error": {
       "forbidden": "您尚未登录，或此项只有负责人可以更改。",
@@ -142,6 +144,84 @@
       "no_items": "一条招标至少包含一项产品，请添加明细。",
       "invalid_quantity": "每项明细的数量必须大于零。",
       "last_item": "这是该招标唯一的明细，无法删除。",
+      "failed": "保存失败，请重试。"
+    },
+    "sourcing": {
+      "quoted": "{count, plural, other {# 条报价}}",
+      "noSupplierFound": "找不到供应商 — {count, plural, other {# 人}}",
+      "notYetSourced": "尚未询价",
+      "source": "为该产品询价"
+    }
+  },
+  "quotes": {
+    "backToTender": "返回标书",
+    "recorded": "{count, plural, other {已记录 # 条报价}}",
+    "none": "该产品项下尚未记录任何内容。",
+    "add": "新增报价",
+    "addHint": "按供应商实际给出的币种和计价单位填写。换算由系统负责，不需要你算。",
+    "notAssignee": "只有本标书的负责人才能录入报价——打电话给供应商的是他们。在下方把自己加进来，表单就会出现。",
+    "supplier": "供应商",
+    "supplierHint": "只需输入一次。若本组织已有同名供应商，将直接沿用。",
+    "quotedAt": "报价日期",
+    "quotedAtHint": "供应商给出价格的那一天。冻结哪一天的汇率由它决定。",
+    "unitPrice": "单价",
+    "currency": "币种",
+    "quotedUnit": "计价单位",
+    "quotedUnitHint": "填供应商的单位，即使与我方不同——单位不一致会使该产品无法排名，这正是要点所在。",
+    "matchType": {
+      "label": "报的是什么",
+      "hint": "替代品是与客户所要求不同的产品，必须写明它自己的名称。",
+      "exact": "与要求完全一致",
+      "alternative": "替代品"
+    },
+    "alternativeProductName": "供应商实际报价的产品",
+    "alternativeProductHint": "填它自己的名称，而不是描述。审核的人要拿它和客户提供的参考图对照。",
+    "leadTimeDays": "交货周期（天）",
+    "leadTimeHint": "选填。",
+    "detailNotes": "备注",
+    "detailNotesHint": "选填——包装、起订量，以及电话里说过的任何事。",
+    "save": "保存报价",
+    "saving": "保存中…",
+    "sourcedBy": "由 {name} 询得",
+    "perUnit": "每 {unit}",
+    "quotedInThb": "以泰铢报价，无需换算。",
+    "approx": "≈ {amount}",
+    "atRate": "汇率 {rate}，{date}",
+    "staleRate": "汇率非当日",
+    "notStated": "未注明",
+    "days": "{count, plural, other {# 天}}",
+    "photos": {
+      "take": "拍照",
+      "choose": "从相册选择",
+      "uploading": "正在上传第 {done} / {total} 张…",
+      "remove": "删除",
+      "removeNumbered": "删除第 {position} 张照片",
+      "openCount": "查看 {count, plural, other {# 张供应商照片}}",
+      "alt": "供应商照片 {position}"
+    },
+    "noSupplier": {
+      "title": "找不到供应商",
+      "hint": "仅代表你自己。它表示你问过的供应商都做不了——同事仍可能找到。",
+      "note": "备注",
+      "notePlaceholder": "已停产、起订量太高…",
+      "record": "我找不到供应商",
+      "clear": "我后来找到了",
+      "mine": "你已记录：找不到该产品的供应商。",
+      "mineWithNote": "你已记录：找不到该产品的供应商——{note}",
+      "by": "{name} 找不到该产品的供应商。",
+      "byWithNote": "{name} 找不到该产品的供应商——{note}"
+    },
+    "error": {
+      "forbidden": "你尚未登录。",
+      "not_found": "该产品项已不存在。",
+      "not_assignee": "只有本标书的负责人才能录入报价。请先把自己加入该标书。",
+      "incomplete": "请填写供应商，以及价格所对应的单位。",
+      "invalid_price": "价格须大于零。若无人愿意报价，请改为记录“找不到供应商”。",
+      "invalid_lead_time": "交货周期须为整数天，或留空。",
+      "invalid_date": "请检查报价日期——它不是一个真实的日期。",
+      "unsupported_currency": "该币种没有公布的参考汇率，价格无法换算。请供应商改用所提供的币种之一报价。",
+      "alternative_unnamed": "替代品必须写明供应商实际报价的产品名称。",
+      "no_rate": "该币种的汇率取不到，且从未存过任何一次。请稍后重试，或改用泰铢录入价格。",
       "failed": "保存失败，请重试。"
     }
   },

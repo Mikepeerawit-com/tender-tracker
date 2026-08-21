@@ -4,33 +4,46 @@ import { useEffect } from "react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
-import type { ReferenceImage } from "@/lib/images/reference-images";
 
 /**
  * One picture, at the size of the screen.
  *
- * Its own file because both screens open it and neither owns it: the Tender detail screen
- * reaches it from a count badge, the edit screen from a thumbnail, and there is exactly
- * one full-size fetch either way — there are no generated derivatives, so what opens here
- * is the same object a thumbnail would have loaded.
+ * Shared by Reference Images and Quote Photos, and typed on what a lightbox actually
+ * needs rather than on either of them: a signed URL and whose picture it is. Nothing here
+ * can tell a client's picture of what they asked for from a supplier's picture of what
+ * they can supply, and nothing here should — they are the same photograph opened the same
+ * way, and the comparison view puts them side by side on purpose.
+ *
+ * Its own file because no screen owns it: the Tender detail screen reaches it from a
+ * count badge, the edit screen from a thumbnail, the Item's sourcing screen from a Quote,
+ * and there is exactly one full-size fetch either way — there are no generated
+ * derivatives, so what opens here is the same object a thumbnail would have loaded.
  *
  * A positioned overlay rather than `<dialog>`: this is opened almost entirely inside the
  * WeCom in-app webview, and a plain fixed element with its own Escape handler has no
  * support question attached to it. Paging has tap targets as well as keys, because on the
  * phone there is no keyboard to page with.
  */
-export function ReferenceImageLightbox({
+
+/** What a lightbox needs of a picture, and no more. */
+export type ViewableImage = {
+  /** A signed URL, or "" when Storage would not sign one. */
+  url: string;
+  uploadedByName: string;
+};
+
+export function ImageLightbox({
   images,
   at,
   onMove,
   onClose,
 }: {
-  images: ReferenceImage[];
+  images: ViewableImage[];
   at: number;
   onMove: (at: number) => void;
   onClose: () => void;
 }) {
-  const t = useTranslations("tenders.referenceImages");
+  const t = useTranslations("images");
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {

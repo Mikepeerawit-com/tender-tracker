@@ -30,7 +30,19 @@ export class InvalidRunInstantError extends Error {
  * pinned instant that silently falls back to "now" would make a test pass by lying.
  */
 export function runInstantFrom(request: Request): Date {
-  const pinned = request.headers.get(runInstantHeader);
+  return runInstantFromHeaders(request.headers);
+}
+
+/**
+ * The same resolution, for a boundary that has headers but no `Request`.
+ *
+ * A Server Component is one: it is a request boundary — the top of a render, where the
+ * clock is read once and passed down — but Next hands it `headers()` rather than the
+ * request itself. Without this, a page that needs to know what day it is in the org's
+ * timezone has no way to obey ADR-0010 except by breaking it.
+ */
+export function runInstantFromHeaders(headers: Headers): Date {
+  const pinned = headers.get(runInstantHeader);
 
   if (pinned === null || !runInstantHeaderAllowed()) {
     return new Date();

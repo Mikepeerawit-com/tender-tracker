@@ -4,12 +4,13 @@ import { notFound, redirect } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
 
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
-import { ReferenceImageBadge } from "@/components/tenders/reference-image-badge";
+import { ImageCountBadge } from "@/components/images/image-count-badge";
 import { Button } from "@/components/ui/button";
 import { currentUser } from "@/lib/auth/session";
 import { calendarDate, calendarDateFormat } from "@/lib/calendar-date";
 import { listReferenceImages } from "@/lib/images/reference-images";
 import { listMembers } from "@/lib/org/members";
+import { listItemSourcing, type ItemSourcing } from "@/lib/quotes/quotes";
 import { getTender } from "@/lib/tenders/tenders";
 
 export default async function TenderPage({ params }: PageProps<"/tenders/[id]">) {
@@ -33,6 +34,11 @@ export default async function TenderPage({ params }: PageProps<"/tenders/[id]">)
   // Signed URLs, minted on this render and good for the hour. They are why this page
   // cannot be cached beyond the request that drew it.
   const referenceImages = await listReferenceImages(tender.id, store);
+  // What is known about each Item's sourcing. An Item absent from this map is Not Yet
+  // Sourced — the third state, and the only one that is overdue.
+  const sourcing = await listItemSourcing(tender.id, store);
+  const imagesOf = (itemId: string) =>
+    referenceImages.filter((image) => image.tenderItemId === itemId);
   const unassignedImages = referenceImages.filter(
     (image) => image.tenderItemId === null,
   );
@@ -109,12 +115,38 @@ export default async function TenderPage({ params }: PageProps<"/tenders/[id]">)
                 {/* On the Item, and a count rather than a strip — buildspec_2.md screen 5.
                     This screen becomes the comparison working sheet, where thumbnails were
                     measured eating the horizontal room the money columns need. */}
-                <ReferenceImageBadge
-                  label={item.productName}
-                  images={referenceImages.filter(
-                    (image) => image.tenderItemId === item.id,
-                  )}
+                <ImageCountBadge
+                  openLabel={t("referenceImages.openCount", {
+                    label: item.productName,
+                    count: imagesOf(item.id).length,
+                  })}
+                  images={imagesOf(item.id)}
                 />
+
+                {/* The three sourcing states, per screen 5: Quoted · No Supplier Found ·
+                    Not Yet Sourced. The difference between the last two decides whether it
+                    is worth waiting before bidding — an Item nobody has touched means
+                    different work from one somebody has already given up on. */}
+                <SourcingChips
+                  sourcing={sourcing.get(item.id)}
+                  quoted={t("sourcing.quoted", {
+                    count: sourcing.get(item.id)?.quoteCount ?? 0,
+                  })}
+                  noSupplier={t("sourcing.noSupplierFound", {
+                    count: sourcing.get(item.id)?.noSupplierFound.length ?? 0,
+                  })}
+                  notYetSourced={t("sourcing.notYetSourced")}
+                />
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-1 h-11 w-fit"
+                  nativeButton={false}
+                  render={<Link href={`/tenders/${tender.id}/items/${item.id}/quote`} />}
+                >
+                  {t("sourcing.source")}
+                </Button>
               </li>
             ))}
           </ul>
@@ -128,8 +160,11 @@ export default async function TenderPage({ params }: PageProps<"/tenders/[id]">)
             <h2 className="text-sm font-medium">
               {t("referenceImages.unassigned")}
             </h2>
-            <ReferenceImageBadge
-              label={t("referenceImages.unassigned")}
+            <ImageCountBadge
+              openLabel={t("referenceImages.openCount", {
+                label: t("referenceImages.unassigned"),
+                count: unassignedImages.length,
+              })}
               images={unassignedImages}
             />
           </section>
@@ -144,6 +179,47 @@ export default async function TenderPage({ params }: PageProps<"/tenders/[id]">)
         />
       </main>
     </div>
+  );
+}
+
+/**
+ * Which of the three sourcing states an Item is in, as chips.
+ *
+ * Not Yet Sourced is the *absence* of the other two, which is why it is computed from an
+ * absent map entry rather than stored: an Item with a Quote and an Item somebody has
+ * given up on have both been answered, and only the untouched one is overdue.
+ */
+function SourcingChips({
+  sourcing,
+  quoted,
+  noSupplier,
+  notYetSourced,
+}: {
+  sourcing: ItemSourcing | undefined;
+  quoted: string;
+  noSupplier: string;
+  notYetSourced: string;
+}) {
+  const quotes = sourcing?.quoteCount ?? 0;
+  const refusals = sourcing?.noSupplierFound.length ?? 0;
+
+  if (quotes === 0 && refusals === 0) {
+    return <Chip className="bg-muted text-muted-foreground">{notYetSourced}</Chip>;
+  }
+
+  return (
+    <div className="mt-1 flex flex-wrap gap-1.5">
+      {quotes > 0 ? <Chip className="bg-primary/10 text-foreground">{quoted}</Chip> : null}
+      {refusals > 0 ? (
+        <Chip className="bg-amber-500/20 text-foreground">{noSupplier}</Chip>
+      ) : null}
+    </div>
+  );
+}
+
+function Chip({ className, children }: { className: string; children: string }) {
+  return (
+    <span className={`w-fit rounded px-2 py-0.5 text-xs ${className}`}>{children}</span>
   );
 }
 
