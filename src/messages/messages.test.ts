@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { defaultLocale, locales } from "@/i18n/config";
+import { selectionProblems } from "@/lib/comparison/sheet";
 import { imageProblems } from "@/lib/images/images";
 import { quoteProblems } from "@/lib/quotes/quotes";
 import { tenderProblems } from "@/lib/tenders/tenders";
@@ -126,6 +127,17 @@ describe.each(locales)("%s refusals", (locale) => {
     // idea what to do next.
     const missing = imageProblems.filter(
       (problem) => !flat.has(`images.error.${problem}`),
+    );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("has wording for every reason a selection can be refused", () => {
+    // The shortest of the four unions, and the one whose silence would be worst: a
+    // Select button that does nothing leaves the row looking pressed and the person
+    // walking away believing the Item is decided.
+    const missing = selectionProblems.filter(
+      (problem) => !flat.has(`comparison.error.${problem}`),
     );
 
     expect(missing).toEqual([]);

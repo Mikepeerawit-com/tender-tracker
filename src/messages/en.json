@@ -225,6 +225,78 @@
       "failed": "That could not be saved. Try again."
     }
   },
+  "comparison": {
+    "header": {
+      "undecided": "{count, plural, =1 {# of {total} items still needs a quote selected} other {# of {total} items still need a quote selected}}",
+      "undecidedRest": "They are open below; decided items are folded away.",
+      "allDecided": "Every item has a selected quote.",
+      "allDecidedRest": "Ready to build the bid."
+    },
+    "column": {
+      "item": "Tender item",
+      "selectedQuote": "Selected quote",
+      "landedCost": "Landed cost / unit",
+      "selling": "Selling / unit",
+      "marginPerUnit": "Margin / unit",
+      "marginOnLine": "Margin on line"
+    },
+    "twisty": {
+      "open": "Show the quotes for {item}",
+      "fold": "Fold away {item}"
+    },
+    "item": {
+      "quantified": "{quantity} × {unit} · {quotes, plural, =1 {# quote} other {# quotes}}"
+    },
+    "referenceImages": {
+      "label": "Client reference images",
+      "open": "Open {count, plural, =1 {# reference image} other {# reference images}} for {item}"
+    },
+    "needsDecision": "Needs a decision ↓",
+    "provisional": "Provisional",
+    "noQuotes": "Nothing recorded against this item yet.",
+    "select": "Select",
+    "selected": "✓ Selected",
+    "derivedNote": "THB figures are derived for comparison only, at the rate frozen onto each quote when it was entered. Suppliers are paid in the currency they quoted.",
+    "quote": {
+      "rank": "Rank",
+      "supplier": "Supplier",
+      "sourcedBy": "Sourced by",
+      "quotedProduct": "Quoted product",
+      "unitPrice": "Unit price",
+      "lineTotal": "Line total ({quantity} {unit})",
+      "photos": "Photos",
+      "asRequested": "As requested",
+      "requested": "Requested: {product}",
+      "lowest": "lowest",
+      "notComparable": "Not comparable",
+      "openPhotos": "Open {count, plural, =1 {# photo} other {# photos}} from {supplier}"
+    },
+    "banner": {
+      "unitMismatch": {
+        "title": "Not ranked.",
+        "body": "Quotes arrived in units other than {unit}. Nothing here is ranked and nothing is marked lowest — converting pack sizes silently would highlight the wrong supplier."
+      },
+      "allAlternatives": {
+        "title": "No exact match.",
+        "body": "{count, plural, =1 {# quote, and it is an alternative} other {# quotes, and all of them are alternatives}} to {product}. The ranking is comparing different products."
+      },
+      "tooClose": {
+        "title": "Too close to call on frozen rates.",
+        "body": "{leader} leads {runnerUp} by {gap}%, but {supplier}'s rate was frozen on {date}. The gap is smaller than the drift between two rates frozen on different days — check both before choosing on price alone."
+      },
+      "duplicateSupplier": {
+        "title": "The same supplier, quoted more than once.",
+        "body": "{supplier} quoted {prices} — every one kept, because the difference is the point.",
+        "price": "{amount} to {name}",
+        "and": " and "
+      }
+    },
+    "error": {
+      "forbidden": "You are not signed in.",
+      "not_found": "That quote is no longer on this item.",
+      "failed": "Could not record the selection. Try again."
+    }
+  },
   "people": {
     "title": "People",
     "description": "Everyone in the org. Accounts exist only by invitation — there is no sign-up page.",

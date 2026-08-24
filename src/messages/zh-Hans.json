@@ -225,6 +225,78 @@
       "failed": "保存失败，请重试。"
     }
   },
+  "comparison": {
+    "header": {
+      "undecided": "{count, plural, =1 {共 {total} 个产品项，还有 1 个尚未选定报价} other {共 {total} 个产品项，还有 # 个尚未选定报价}}",
+      "undecidedRest": "它们已在下方展开；已定的产品项则收起。",
+      "allDecided": "每个产品项都已选定报价。",
+      "allDecidedRest": "可以着手编制投标了。"
+    },
+    "column": {
+      "item": "产品项",
+      "selectedQuote": "已选定报价",
+      "landedCost": "到岸成本 / 单位",
+      "selling": "售价 / 单位",
+      "marginPerUnit": "毛利 / 单位",
+      "marginOnLine": "该行毛利"
+    },
+    "twisty": {
+      "open": "展开 {item} 的报价",
+      "fold": "收起 {item}"
+    },
+    "item": {
+      "quantified": "{quantity} × {unit} · {quotes, plural, other {# 条报价}}"
+    },
+    "referenceImages": {
+      "label": "客户参考图",
+      "open": "查看 {item} 的 {count, plural, other {# 张客户参考图}}"
+    },
+    "needsDecision": "待定 ↓",
+    "provisional": "暂估",
+    "noQuotes": "该产品项下尚未记录任何内容。",
+    "select": "选定",
+    "selected": "✓ 已选定",
+    "derivedNote": "泰铢金额仅用于比价，按录入该报价时冻结的汇率换算得出。付给供应商的仍是他们报价的币种。",
+    "quote": {
+      "rank": "排名",
+      "supplier": "供应商",
+      "sourcedBy": "询价人",
+      "quotedProduct": "所报产品",
+      "unitPrice": "单价",
+      "lineTotal": "行合计（{quantity} {unit}）",
+      "photos": "照片",
+      "asRequested": "与要求一致",
+      "requested": "客户要求：{product}",
+      "lowest": "最低",
+      "notComparable": "无法比较",
+      "openPhotos": "查看 {supplier} 的 {count, plural, other {# 张照片}}"
+    },
+    "banner": {
+      "unitMismatch": {
+        "title": "未作排名。",
+        "body": "有报价所用的单位不是「{unit}」。此处一律不排名、不标最低——若默默换算包装规格，会把错的供应商标成最优。"
+      },
+      "allAlternatives": {
+        "title": "无完全一致的报价。",
+        "body": "{count, plural, other {# 条报价，且全部都是替代品}}，对应客户要求的「{product}」。此处排的是不同的产品。"
+      },
+      "tooClose": {
+        "title": "汇率已冻结，差距不足以定论。",
+        "body": "{leader} 比 {runnerUp} 低 {gap}%，但 {supplier} 的汇率冻结于 {date}。两条报价的汇率冻结日不同，其漂移已大于这点差距——别只看价格，两家都再核一遍。"
+      },
+      "duplicateSupplier": {
+        "title": "同一供应商，报了不止一次。",
+        "body": "{supplier} 报了 {prices}——全部保留，差异本身就是要看的东西。",
+        "price": "对 {name} 报 {amount}",
+        "and": "，"
+      }
+    },
+    "error": {
+      "forbidden": "你尚未登录。",
+      "not_found": "该报价已不在这个产品项下。",
+      "failed": "选定失败，请重试。"
+    }
+  },
   "people": {
     "title": "成员",
     "description": "组织内的全部成员。账号仅可通过邀请创建，没有自助注册页面。",

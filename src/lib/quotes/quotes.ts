@@ -300,6 +300,45 @@ export async function listQuotes(
 }
 
 /**
+ * Every Quote on a set of Tender Items, keyed by Item.
+ *
+ * One query for a whole Tender's worth of Items rather than one per Item, and it takes
+ * the ids rather than a Tender because its caller has already read them — the same shape,
+ * and for the same reason, as `listQuotePhotosByQuote`.
+ *
+ * Unranked here for the same reason `listQuotes` is — ordering is `@/lib/comparison`'s
+ * job, and it is the only caller in a position to know that an Item carrying one Quote in
+ * "box of 50" cannot be ranked at all.
+ */
+export async function listQuotesByItem(
+  itemIds: string[],
+  store: SessionCookieStore,
+): Promise<Map<string, Quote[]>> {
+  const byItem = new Map<string, Quote[]>();
+
+  if (itemIds.length === 0) return byItem;
+
+  const { data } = await createSessionClient(store)
+    .from("quotes")
+    .select(
+      `${quoteColumns}, supplier:suppliers(name), ` +
+        "sourcedBy:users!quotes_created_by_user_id_fkey(name)",
+    )
+    .in("tender_item_id", itemIds)
+    .order("created_at")
+    .order("id")
+    .overrideTypes<QuoteDbRow[], { merge: false }>();
+
+  for (const row of data ?? []) {
+    const quote = asQuote(row);
+
+    byItem.set(quote.tenderItemId, [...(byItem.get(quote.tenderItemId) ?? []), quote]);
+  }
+
+  return byItem;
+}
+
+/**
  * What is known about the sourcing of every Item on a Tender, in two queries.
  *
  * Returns an entry only for Items something is known about. An Item absent from the map
