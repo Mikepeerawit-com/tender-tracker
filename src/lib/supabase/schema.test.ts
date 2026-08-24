@@ -420,6 +420,23 @@ describe("tender_items", () => {
     expect(error).not.toBeNull();
   });
 
+  it("has nowhere to store a Margin, on any column", async () => {
+    // Load-bearing absence, and the one a future reader will most want to add back —
+    // usually to make a dashboard query simpler. Margin is selling price less Landed
+    // Cost; a stored copy would be a third number to keep in step with two that move,
+    // and it would go stale silently, on the figure the business is judged by.
+    const { data } = await service
+      .from("tender_items")
+      .insert(item({ landed_cost_per_unit: 620, selling_price_per_unit: 700 }))
+      .select("*")
+      .single();
+
+    // Asserted before the columns are read: an insert that failed would hand back no
+    // row, and a row with no columns has no `margin` in it either.
+    expect(data).not.toBeNull();
+    expect(Object.keys(data!).filter((column) => /margin/.test(column))).toEqual([]);
+  });
+
   it("rejects an Outcome outside the vocabulary", async () => {
     const { error } = await service
       .from("tender_items")

@@ -170,12 +170,19 @@ _Avoid_: cost, cost price, ex-works price
 A Landed Cost still sitting at its pre-filled value, which nobody has yet added shipping,
 duty or handling to. Any Margin derived from one is understated in cost and overstated in
 profit, so it is shown as provisional rather than as a number. Nothing is blocked and
-nobody is nagged — the figure simply does not pretend to be final.
+nobody is nagged — the figure simply does not pretend to be final. Writing the figure by
+hand is what confirms it: touched and vouched-for are one fact, not two (ADR-0014).
 _Avoid_: unedited, draft, estimated, incomplete
 
 **Margin**:
 Selling price minus Landed Cost, on a Tender Item. Always computed, never entered.
 Internal-only.
+
+**Coverage**:
+How many Tender Items carry a selling price, out of all of them. Sits at the head of the
+working sheet's totals bar because the three money figures beside it mean nothing without
+it: a Bid total across two of four Items must not be read as the Tender's.
+_Avoid_: completeness, progress, fill rate
 
 **Bids Out**:
 The money still riding on Bids the client has not ruled on — selling price × quantity

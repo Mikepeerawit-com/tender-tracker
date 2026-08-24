@@ -1,6 +1,7 @@
 import "server-only";
 
 import { currentUser } from "@/lib/auth/session";
+import { prefillLandedCost } from "@/lib/comparison/pricing";
 import { listQuotePhotosByQuote, type QuotePhoto } from "@/lib/images/quote-photos";
 import {
   listItemSourcing,
@@ -60,6 +61,23 @@ export const selectionProblems = ["forbidden", "not_found", "failed"] as const;
 export type SelectionProblem = (typeof selectionProblems)[number];
 
 export type SelectionResult = { ok: true } | { ok: false; reason: SelectionProblem };
+
+/**
+ * Every reason a price can be refused. Short for the same reason the selection's list is:
+ * these are two numbers typed into a row, not a form with a workflow behind it.
+ *
+ * There is no `failed` here, unlike the selection's list: a write that changes no row is
+ * an Item this caller cannot see, which is `not_found` and is the answer to give.
+ */
+export const pricingProblems = [
+  "forbidden",
+  "not_found",
+  "invalid_amount",
+] as const;
+
+export type PricingProblem = (typeof pricingProblems)[number];
+
+export type PricingResult = { ok: true } | { ok: false; reason: PricingProblem };
 
 const itemColumns =
   "id, product_name, description, quantity, unit, selected_quote_id, " +
@@ -128,9 +146,10 @@ export async function getComparisonSheet(
  * their behalf; choosing between Quotes already recorded is nobody's private act. Org
  * membership through RLS is the whole gate, as it is everywhere else a Tender is edited.
  *
- * Nothing is pre-filled here. Landed Cost following the new Selected Quote is #28's, and
- * it has a rule this function is in no position to apply — it must not overwrite a cost a
- * human has already edited.
+ * Selecting also **pre-fills the Landed Cost**, in the same statement — see
+ * `prefillLandedCost` for the rule and for why a hand-edited cost is never overwritten by
+ * one. It is one statement rather than two because a selection the composite foreign key
+ * refuses must not leave a cost behind from the Quote it refused.
  */
 export async function selectQuote(
   { tenderItemId, quoteId }: { tenderItemId: string; quoteId: string },
@@ -143,7 +162,7 @@ export async function selectQuote(
   const supabase = createSessionClient(store);
   const { data: item } = await supabase
     .from("tender_items")
-    .select("selected_quote_id")
+    .select("selected_quote_id, unit, landed_cost_confirmed_at")
     .eq("id", tenderItemId)
     .maybeSingle();
 
@@ -152,9 +171,23 @@ export async function selectQuote(
   if (!item) return { ok: false, reason: "not_found" };
 
   const selection = item.selected_quote_id === quoteId ? null : quoteId;
+  // The frozen THB price of the Quote being selected — never re-marked to today's rate,
+  // so the cost pre-filled here is the one the ranking was drawn from. A Quote on another
+  // Item is readable through RLS and is refused below by the composite foreign key, which
+  // rolls this pre-fill back with the selection that asked for it.
+  const quote = selection === null ? null : await readQuoteForPrefill(selection, store);
+  const prefill = prefillLandedCost(
+    { unit: item.unit, landedCostConfirmedAt: item.landed_cost_confirmed_at },
+    quote,
+  );
+
   const { data, error } = await supabase
     .from("tender_items")
-    .update({ selected_quote_id: selection })
+    .update({
+      selected_quote_id: selection,
+      // Absent, not null: a hand-edited cost is left exactly as it was found.
+      ...(prefill === null ? {} : { landed_cost_per_unit: prefill.landedCostPerUnit }),
+    })
     .eq("id", tenderItemId)
     .select("id")
     .maybeSingle();
@@ -165,6 +198,136 @@ export async function selectQuote(
   if (error !== null) return { ok: false, reason: "not_found" };
 
   return data ? { ok: true } : { ok: false, reason: "failed" };
+}
+
+/**
+ * Write the Landed Cost somebody has typed onto an Item, and confirm it by that act.
+ *
+ * **Hand-edited and Confirmed are one fact** (ADR-0014). Somebody who has typed a Landed
+ * Cost has looked at the supplier's price and said what the goods actually cost us, so
+ * the same call stamps `landed_cost_confirmed_at` — which is what turns a provisional
+ * Margin into a number, and what stops the next Selected Quote overwriting the figure.
+ *
+ * Emptying the field takes the confirmation off with it: there is nothing left to have
+ * confirmed, and a stamp over a null cost would silence the provisional Margin for a
+ * Landed Cost that no longer exists.
+ *
+ * `confirmedAt` is passed in rather than read here — the clock belongs to the request
+ * boundary (ADR-0010).
+ */
+export async function setLandedCost(
+  {
+    tenderItemId,
+    landedCostPerUnit,
+    confirmedAt,
+  }: { tenderItemId: string; landedCostPerUnit: number | null; confirmedAt: Date },
+  store: SessionCookieStore,
+): Promise<PricingResult> {
+  if (!isMoney(landedCostPerUnit)) return { ok: false, reason: "invalid_amount" };
+
+  return writePricing(
+    tenderItemId,
+    {
+      landed_cost_per_unit: landedCostPerUnit,
+      landed_cost_confirmed_at:
+        landedCostPerUnit === null ? null : confirmedAt.toISOString(),
+    },
+    store,
+  );
+}
+
+/**
+ * Write the selling price somebody has typed onto an Item.
+ *
+ * Nothing is confirmed by it and no Margin is stored beside it: the Margin is this figure
+ * less the Landed Cost, computed wherever it is shown.
+ */
+export async function setSellingPrice(
+  {
+    tenderItemId,
+    sellingPricePerUnit,
+  }: { tenderItemId: string; sellingPricePerUnit: number | null },
+  store: SessionCookieStore,
+): Promise<PricingResult> {
+  if (!isMoney(sellingPricePerUnit)) return { ok: false, reason: "invalid_amount" };
+
+  return writePricing(
+    tenderItemId,
+    { selling_price_per_unit: sellingPricePerUnit },
+    store,
+  );
+}
+
+/**
+ * The one write both prices go through: signed in, RLS, and the row was really there.
+ *
+ * There is no Assignee check, for the reason `selectQuote` gives — the price we bid is
+ * not one person's private act, and everyone on the Tender sees cost and Margin alike.
+ */
+async function writePricing(
+  tenderItemId: string,
+  patch: PricingPatch,
+  store: SessionCookieStore,
+): Promise<PricingResult> {
+  const caller = await currentUser(store);
+
+  if (!caller) return { ok: false, reason: "forbidden" };
+
+  const supabase = createSessionClient(store);
+  const { data, error } = await supabase
+    .from("tender_items")
+    .update(patch)
+    .eq("id", tenderItemId)
+    .select("id")
+    .maybeSingle();
+
+  // A CHECK the app did not catch first, which is the schema being the last word on what
+  // a price may be rather than this function being the only word.
+  if (error !== null) return { ok: false, reason: "invalid_amount" };
+
+  return data ? { ok: true } : { ok: false, reason: "not_found" };
+}
+
+/**
+ * An amount in THB, or the field left empty.
+ *
+ * Zero is allowed and is not an oversight: a line bid at nothing is a real way to bid,
+ * and the schema says the same with `>= 0`. The ceiling is `numeric(14,4)`'s — a figure
+ * past it is refused here rather than by a database error somebody has to read.
+ */
+function isMoney(amount: number | null): boolean {
+  return (
+    amount === null ||
+    (Number.isFinite(amount) && amount >= 0 && amount < 10 ** 10)
+  );
+}
+
+/** The three columns a price may touch, named so a fourth cannot arrive by typo. */
+type PricingPatch = {
+  landed_cost_per_unit?: number | null;
+  landed_cost_confirmed_at?: string | null;
+  selling_price_per_unit?: number | null;
+};
+
+/** The Selected Quote's frozen THB price and the unit it was given in. */
+async function readQuoteForPrefill(
+  quoteId: string,
+  store: SessionCookieStore,
+): Promise<{ quotedUnit: string; unitPriceThb: number } | null> {
+  const supabase = createSessionClient(store);
+  const { data } = await supabase
+    .from("quotes")
+    .select("quoted_unit, unit_price_thb")
+    .eq("id", quoteId)
+    .maybeSingle();
+
+  if (!data) return null;
+
+  return {
+    quotedUnit: data.quoted_unit,
+    // `numeric` crosses the wire in a type wider than the column holds.
+    unitPriceThb: Number(data.unit_price_thb),
+  };
 }
 
 type SheetItemDbRow = {

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { defaultLocale, locales } from "@/i18n/config";
-import { selectionProblems } from "@/lib/comparison/sheet";
+import { pricingProblems, selectionProblems } from "@/lib/comparison/sheet";
 import { imageProblems } from "@/lib/images/images";
 import { quoteProblems } from "@/lib/quotes/quotes";
 import { tenderProblems } from "@/lib/tenders/tenders";
@@ -138,6 +138,17 @@ describe.each(locales)("%s refusals", (locale) => {
     // walking away believing the Item is decided.
     const missing = selectionProblems.filter(
       (problem) => !flat.has(`comparison.error.${problem}`),
+    );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("has wording for every reason a price can be refused", () => {
+    // The prices are typed straight into the Item's row, with no page of their own to
+    // land an error on. A refusal with no wording is a figure that silently stays as it
+    // was while somebody watches themselves type a new one.
+    const missing = pricingProblems.filter(
+      (problem) => !flat.has(`comparison.pricing.error.${problem}`),
     );
 
     expect(missing).toEqual([]);

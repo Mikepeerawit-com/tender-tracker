@@ -253,6 +253,25 @@
     },
     "needsDecision": "Needs a decision ↓",
     "provisional": "Provisional",
+    "pricing": {
+      "landedCost": "Landed cost per unit for {item}, in THB",
+      "selling": "Selling price per unit for {item}, in THB",
+      "hint": "Add shipping, duty and handling. Saving confirms the cost.",
+      "save": "Save",
+      "saving": "Saving…",
+      "error": {
+        "forbidden": "You are not signed in.",
+        "not_found": "That item is no longer on this tender.",
+        "invalid_amount": "Enter an amount in THB, or leave it empty.",
+        "failed": "Could not save the figure. Try again."
+      }
+    },
+    "totals": {
+      "coverage": "{priced} of {total, plural, =1 {# item} other {# items}} priced",
+      "bidTotal": "Bid total",
+      "landedCost": "Landed cost",
+      "margin": "Margin"
+    },
     "noQuotes": "Nothing recorded against this item yet.",
     "select": "Select",
     "selected": "✓ Selected",

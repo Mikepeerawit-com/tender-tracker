@@ -9,7 +9,7 @@ import {
 } from "@/lib/supabase/session-client";
 import { addAssignee, createTender, getTender } from "@/lib/tenders/tenders";
 
-import { getComparisonSheet, selectQuote } from "./sheet";
+import { getComparisonSheet, selectQuote, setLandedCost, setSellingPrice } from "./sheet";
 
 /**
  * The comparison working sheet's read and its one write, against the real local Postgres.
@@ -150,7 +150,15 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-  await service.from("tender_items").update({ selected_quote_id: null }).eq("tender_id", tenderId);
+  await service
+    .from("tender_items")
+    .update({
+      selected_quote_id: null,
+      landed_cost_per_unit: null,
+      landed_cost_confirmed_at: null,
+      selling_price_per_unit: null,
+    })
+    .eq("tender_id", tenderId);
   await service.from("quotes").delete().in("tender_item_id", [glovesId, syringesId]);
   await service.from("suppliers").delete().eq("org_id", orgId);
 });
@@ -323,6 +331,209 @@ describe("selecting the winning Quote", () => {
     expect(
       await selectQuote(
         { tenderItemId: crypto.randomUUID(), quoteId: crypto.randomUUID() },
+        store,
+      ),
+    ).toEqual({ ok: false, reason: "not_found" });
+  });
+});
+
+describe("pricing an Item inline", () => {
+  // A literal, not `new Date()`: the clock is resolved at the request boundary and
+  // passed down (ADR-0010), so this is what a confirmation is stamped with here.
+  const confirmedAt = new Date("2026-08-22T09:00:00.000Z");
+
+  /** The gloves Item's own pricing, as the sheet reads it back. */
+  async function pricingOfGloves(store: SessionCookieStore) {
+    const sheet = await getComparisonSheet(tenderId, store);
+
+    return sheet.items[0];
+  }
+
+  it("pre-fills the landed cost from the Quote just selected", async () => {
+    const store = await signedInAs(owner.email);
+    const created = await createQuote(aQuote({ tenderItemId: glovesId }), store);
+
+    if (!created.ok) throw new Error(created.reason);
+
+    await selectQuote({ tenderItemId: glovesId, quoteId: created.quoteId }, store);
+
+    // The supplier quoted in THB, so the frozen rate is 1 and the pre-fill is the
+    // price itself. Nothing is confirmed by a pre-fill: nobody has added freight yet.
+    expect(await pricingOfGloves(store)).toMatchObject({
+      landedCostPerUnit: 620,
+      landedCostConfirmedAt: null,
+    });
+  });
+
+  it("re-prefills when a different Quote wins", async () => {
+    const store = await signedInAs(owner.email);
+    const first = await createQuote(aQuote({ tenderItemId: glovesId }), store);
+    const second = await createQuote(
+      aQuote({ tenderItemId: glovesId, supplierName: suppliers.beta, unitPrice: 595 }),
+      store,
+    );
+
+    if (!first.ok || !second.ok) throw new Error("could not record both Quotes");
+
+    await selectQuote({ tenderItemId: glovesId, quoteId: first.quoteId }, store);
+    await selectQuote({ tenderItemId: glovesId, quoteId: second.quoteId }, store);
+
+    expect((await pricingOfGloves(store)).landedCostPerUnit).toBe(595);
+  });
+
+  it("leaves a hand-edited landed cost alone when a different Quote wins", async () => {
+    // The other direction of the same rule, and the one that matters: the edit carries
+    // the shipping, duty and handling the supplier's price excludes, and it is the more
+    // recent human judgment. Re-prefilling would discard it silently, at the exact
+    // moment somebody is switching between two suppliers.
+    const store = await signedInAs(owner.email);
+    const first = await createQuote(aQuote({ tenderItemId: glovesId }), store);
+    const second = await createQuote(
+      aQuote({ tenderItemId: glovesId, supplierName: suppliers.beta, unitPrice: 595 }),
+      store,
+    );
+
+    if (!first.ok || !second.ok) throw new Error("could not record both Quotes");
+
+    await selectQuote({ tenderItemId: glovesId, quoteId: first.quoteId }, store);
+    await setLandedCost(
+      { tenderItemId: glovesId, landedCostPerUnit: 688, confirmedAt },
+      store,
+    );
+    await selectQuote({ tenderItemId: glovesId, quoteId: second.quoteId }, store);
+
+    expect((await pricingOfGloves(store)).landedCostPerUnit).toBe(688);
+  });
+
+  it("clears an unconfirmed pre-fill when the selection comes back off", async () => {
+    const store = await signedInAs(owner.email);
+    const created = await createQuote(aQuote({ tenderItemId: glovesId }), store);
+
+    if (!created.ok) throw new Error(created.reason);
+
+    await selectQuote({ tenderItemId: glovesId, quoteId: created.quoteId }, store);
+    await selectQuote({ tenderItemId: glovesId, quoteId: created.quoteId }, store);
+
+    expect(await pricingOfGloves(store)).toMatchObject({
+      selectedQuoteId: null,
+      landedCostPerUnit: null,
+    });
+  });
+
+  it("keeps a hand-edited cost even when the selection comes back off", async () => {
+    const store = await signedInAs(owner.email);
+    const created = await createQuote(aQuote({ tenderItemId: glovesId }), store);
+
+    if (!created.ok) throw new Error(created.reason);
+
+    await selectQuote({ tenderItemId: glovesId, quoteId: created.quoteId }, store);
+    await setLandedCost(
+      { tenderItemId: glovesId, landedCostPerUnit: 688, confirmedAt },
+      store,
+    );
+    await selectQuote({ tenderItemId: glovesId, quoteId: created.quoteId }, store);
+
+    expect((await pricingOfGloves(store)).landedCostPerUnit).toBe(688);
+  });
+
+  it("pre-fills nothing from a Quote priced in another unit", async () => {
+    // The sheet refuses to rank this Item at all. A landed cost pre-filled from the
+    // same Quote would be out by whatever the pack size is, and would look ordinary.
+    const store = await signedInAs(owner.email);
+    const created = await createQuote(
+      aQuote({ tenderItemId: glovesId, quotedUnit: "piece", unitPrice: 13 }),
+      store,
+    );
+
+    if (!created.ok) throw new Error(created.reason);
+
+    await selectQuote({ tenderItemId: glovesId, quoteId: created.quoteId }, store);
+
+    expect((await pricingOfGloves(store)).landedCostPerUnit).toBeNull();
+  });
+
+  it("confirms the landed cost by the act of writing one", async () => {
+    // Hand-edited and Confirmed are the same fact (ADR-0014): somebody who has typed a
+    // landed cost has looked at it and said it is the cost, which is what turns a
+    // provisional margin into a number.
+    const store = await signedInAs(owner.email);
+
+    expect(
+      await setLandedCost(
+        { tenderItemId: glovesId, landedCostPerUnit: 688, confirmedAt },
+        store,
+      ),
+    ).toEqual({ ok: true });
+
+    const priced = await pricingOfGloves(store);
+
+    expect(priced.landedCostPerUnit).toBe(688);
+    // The instant the request ran at, not one this module read off the wall clock
+    // (ADR-0010).
+    expect(new Date(priced.landedCostConfirmedAt!).toISOString()).toBe(
+      confirmedAt.toISOString(),
+    );
+  });
+
+  it("takes the confirmation off again when the cost is emptied", async () => {
+    const store = await signedInAs(owner.email);
+
+    await setLandedCost(
+      { tenderItemId: glovesId, landedCostPerUnit: 688, confirmedAt },
+      store,
+    );
+    await setLandedCost(
+      { tenderItemId: glovesId, landedCostPerUnit: null, confirmedAt },
+      store,
+    );
+
+    expect(await pricingOfGloves(store)).toMatchObject({
+      landedCostPerUnit: null,
+      landedCostConfirmedAt: null,
+    });
+  });
+
+  it("records a selling price without confirming anything", async () => {
+    const store = await signedInAs(owner.email);
+
+    expect(
+      await setSellingPrice({ tenderItemId: glovesId, sellingPricePerUnit: 700 }, store),
+    ).toEqual({ ok: true });
+
+    expect(await pricingOfGloves(store)).toMatchObject({
+      sellingPricePerUnit: 700,
+      landedCostConfirmedAt: null,
+    });
+  });
+
+  it("refuses an amount below zero, on either figure", async () => {
+    const store = await signedInAs(owner.email);
+
+    expect(
+      await setLandedCost(
+        { tenderItemId: glovesId, landedCostPerUnit: -1, confirmedAt },
+        store,
+      ),
+    ).toEqual({ ok: false, reason: "invalid_amount" });
+    expect(
+      await setSellingPrice({ tenderItemId: glovesId, sellingPricePerUnit: -1 }, store),
+    ).toEqual({ ok: false, reason: "invalid_amount" });
+  });
+
+  it("accepts a line priced at zero, which is a real way to bid", async () => {
+    const store = await signedInAs(owner.email);
+
+    expect(
+      await setSellingPrice({ tenderItemId: glovesId, sellingPricePerUnit: 0 }, store),
+    ).toEqual({ ok: true });
+  });
+
+  it("refuses an Item that is not there", async () => {
+    const store = await signedInAs(owner.email);
+
+    expect(
+      await setLandedCost(
+        { tenderItemId: crypto.randomUUID(), landedCostPerUnit: 10, confirmedAt },
         store,
       ),
     ).toEqual({ ok: false, reason: "not_found" });

@@ -2,10 +2,12 @@ import Link from "next/link";
 import { getFormatter, getTranslations } from "next-intl/server";
 
 import { ItemDisclosure } from "@/components/comparison/item-disclosure";
+import { ItemPricing } from "@/components/comparison/item-pricing";
 import { SelectQuoteButton } from "@/components/comparison/select-quote-button";
 import { ImageCountBadge } from "@/components/images/image-count-badge";
 import { Button } from "@/components/ui/button";
 import { calendarDate, calendarDateFormat } from "@/lib/calendar-date";
+import { sheetTotals } from "@/lib/comparison/pricing";
 import {
   itemBanners,
   itemsNeedingDecision,
@@ -123,8 +125,81 @@ export async function WorkingSheet({
         </table>
       </div>
 
+      {/* The whole Tender's money, under the rows it is made of. */}
+      <TotalsBar items={items} />
+
       <p className="text-muted-foreground text-xs">{t("derivedNote")}</p>
     </section>
+  );
+}
+
+/**
+ * The totals bar: coverage, Bid total, landed cost, Margin.
+ *
+ * **Every figure is per-unit × quantity.** The rows above hold per-unit prices, which is
+ * what people type and read; a bar that summed those would look like a total and be out
+ * by whatever the quantities are — three orders of magnitude on a Tender for 500 boxes,
+ * and invisible from the bar itself.
+ *
+ * Coverage leads, because the three money figures mean nothing without it: a Bid total
+ * across two of four Items must not be read as the Tender's.
+ *
+ * Server-rendered, so it settles when a figure is saved rather than while it is typed.
+ * The live arithmetic belongs in the row being edited (`ItemPricing`) — that is where
+ * somebody moving a selling price to find a Margin is actually looking.
+ */
+async function TotalsBar({ items }: { items: SheetItem[] }) {
+  const t = await getTranslations("comparison.totals");
+  const tc = await getTranslations("comparison");
+  const format = await getFormatter();
+  const totals = sheetTotals(items);
+
+  const thb = (amount: number) =>
+    format.number(amount, {
+      style: "currency",
+      currency: reportingCurrency,
+      maximumFractionDigits: 0,
+    });
+
+  return (
+    <div className="border-border bg-muted/40 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 rounded-lg border px-4 py-3">
+      <span className="text-sm font-medium">
+        {t("coverage", { priced: totals.pricedCount, total: totals.itemCount })}
+      </span>
+
+      <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2 tabular-nums">
+        <Total label={t("bidTotal")} value={thb(totals.bidTotal)} />
+        <Total label={t("landedCost")} value={thb(totals.landedCostTotal)} />
+        <Total
+          label={t("margin")}
+          value={
+            // One understated cost understates the whole bar. The total is no more final
+            // than the least final figure in it.
+            totals.marginProvisional ? tc("provisional") : thb(totals.marginTotal)
+          }
+          muted={totals.marginProvisional}
+        />
+      </dl>
+    </div>
+  );
+}
+
+function Total({
+  label,
+  value,
+  muted = false,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <dt className="text-muted-foreground text-xs">{label}</dt>
+      <dd className={muted ? "text-muted-foreground text-sm" : "text-sm font-semibold"}>
+        {value}
+      </dd>
+    </div>
   );
 }
 
@@ -136,10 +211,6 @@ async function ItemCells({ tenderId, item }: { tenderId: string; item: SheetItem
   const ts = await getTranslations("tenders.sourcing");
   const format = await getFormatter();
   const selected = item.quotes.find((quote) => quote.id === item.selectedQuoteId);
-  const margin = marginOf(item);
-
-  const thb = (amount: number) =>
-    format.number(amount, { style: "currency", currency: reportingCurrency });
 
   return (
     <>
@@ -193,54 +264,11 @@ async function ItemCells({ tenderId, item }: { tenderId: string; item: SheetItem
         )}
       </td>
 
-      {/* Read-only here. Landed cost pre-filling from the Selected Quote and both figures
-          becoming editable inline is #28, which also owns the totals bar beneath. */}
-      <td className="border-border text-muted-foreground border-t px-2 py-3 text-right align-top tabular-nums">
-        {item.landedCostPerUnit === null ? emDash : thb(item.landedCostPerUnit)}
-      </td>
-      <td className="border-border text-muted-foreground border-t px-2 py-3 text-right align-top tabular-nums">
-        {item.sellingPricePerUnit === null ? emDash : thb(item.sellingPricePerUnit)}
-      </td>
-      <td className="border-border border-t px-2 py-3 text-right align-top tabular-nums">
-        <Margin value={margin?.perUnit ?? null} provisional={margin?.provisional ?? false} />
-      </td>
-      <td className="border-border border-t px-2 py-3 text-right align-top tabular-nums">
-        <Margin value={margin?.onLine ?? null} provisional={margin?.provisional ?? false} />
-      </td>
+      {/* Pricing is inline in the row, not a step of its own: landed cost pre-filled from
+          the Selected Quote and editable over it, selling price beside it, and the Margin
+          between them computing in the browser as the digits are typed. */}
+      <ItemPricing tenderId={tenderId} item={item} />
     </>
-  );
-}
-
-/**
- * Margin, or the honest absence of one.
- *
- * Never stored: it is selling price minus Landed Cost, and a stored copy would be a third
- * number to keep in step with two that already move. A Margin derived from an
- * **Unconfirmed** Landed Cost — one still sitting at its pre-filled value, with nothing
- * added for shipping, duty or handling — is understated in cost and overstated in profit,
- * so it renders as provisional rather than as a number. Nothing is blocked and nobody is
- * nagged; the figure simply stops pretending to be final.
- */
-async function Margin({
-  value,
-  provisional,
-}: {
-  value: number | null;
-  provisional: boolean;
-}) {
-  const t = await getTranslations("comparison");
-  const format = await getFormatter();
-
-  if (value === null) return <span className="text-muted-foreground">{emDash}</span>;
-
-  if (provisional) {
-    return <span className="text-muted-foreground text-xs">{t("provisional")}</span>;
-  }
-
-  return (
-    <span className={value < 0 ? "text-destructive font-medium" : "font-medium"}>
-      {format.number(value, { style: "currency", currency: reportingCurrency })}
-    </span>
   );
 }
 
@@ -610,25 +638,4 @@ async function SourcingChips({ sourcing }: { sourcing: ItemSourcing }) {
   );
 }
 
-/**
- * Margin per unit and on the line, or null when there is nothing honest to show.
- *
- * `landed_cost_confirmed_at` is what makes it a number. Inferring "untouched" by
- * comparing the cost against the frozen Quote price breaks the moment shipping is
- * genuinely zero, so it is not done that way.
- */
-function marginOf(
-  item: SheetItem,
-): { perUnit: number; onLine: number; provisional: boolean } | null {
-  if (item.landedCostPerUnit === null || item.sellingPricePerUnit === null) return null;
 
-  const perUnit = item.sellingPricePerUnit - item.landedCostPerUnit;
-
-  return {
-    perUnit,
-    onLine: perUnit * item.quantity,
-    provisional: item.landedCostConfirmedAt === null,
-  };
-}
-
-const emDash = "—";

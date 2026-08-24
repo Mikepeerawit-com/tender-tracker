@@ -36,14 +36,20 @@ npm run dev
 
 ## Testing
 
-**There is one seam: route handlers and server actions, over a real local Postgres.**
-Tests bring nothing up themselves — run `supabase start` first, and they read the
-stack's URL and keys from `supabase status`. Only two outbound boundaries are ever
-stubbed: the WeCom robot webhook and the Frankfurter rate fetch.
+**The main seam is route handlers and server actions, over a real local Postgres** —
+every `*.test.ts` file. Tests bring nothing up themselves: run `supabase start` first,
+and they read the stack's URL and keys from `supabase status`. Only two outbound
+boundaries are ever stubbed: the WeCom robot webhook and the Frankfurter rate fetch.
 
 The seam is chosen deliberately. Progress, the three overdue conditions and the list
 blocks are *queries*; testing an extracted pure function tests something that is not
 what ships. See "Testing Decisions" in `buildspec_2.md`.
+
+**`*.test.tsx` is the second, much smaller seam: the browser half**, run under jsdom for
+the few behaviours that only exist once a component is interactive — a Margin
+recomputing as digits are typed into the working sheet. It is a separate Vitest project
+because those files cannot resolve packages under the `react-server` condition the
+server seam needs. `vitest run` runs both.
 
 ## Conventions
 

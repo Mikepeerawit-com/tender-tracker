@@ -3,29 +3,50 @@ import { execFileSync } from "node:child_process";
 import { defineConfig } from "vitest/config";
 
 /**
- * The project's only test seam: route handlers and server actions, run against the
- * real local Postgres that `supabase start` brings up. Nothing is mocked but the two
- * outbound boundaries (the WeCom robot webhook, the Frankfurter rate fetch), because
- * the riskiest logic here — derived progress, the overdue conditions, the reminder
- * engine's state across runs — does not survive being lifted out of the database.
+ * Two seams, told apart by the file extension.
+ *
+ * **`.test.ts` — server.** Route handlers and server actions, run against the real local
+ * Postgres that `supabase start` brings up. Nothing is mocked but the two outbound
+ * boundaries (the WeCom robot webhook, the Frankfurter rate fetch), because the riskiest
+ * logic here — derived progress, the overdue conditions, the reminder engine's state
+ * across runs — does not survive being lifted out of the database.
+ *
+ * **`.test.tsx` — the browser half.** The few behaviours that exist only once a component
+ * is interactive: a Margin recomputing as digits are typed into the row, and (in #30) the
+ * working sheet's scrollWidth at 390×844. These cannot resolve packages under
+ * `react-server` — that condition is what makes React's client hooks unavailable — which
+ * is the reason the two are separate projects rather than one with two environments.
  */
 export default defineConfig({
-  resolve: { tsconfigPaths: true },
-  // The seam is server code, so resolve packages the way the server runtime does.
-  // Without `react-server`, `import "server-only"` throws on import and any handler
-  // that reaches a server-only module is untestable.
-  ssr: {
-    resolve: {
-      conditions: ["react-server", "node", "module", "import", "default"],
-    },
-  },
   test: {
-    environment: "node",
-    // `.tsx` is included from the start: the one automated UI assertion the spec
-    // requires (the working sheet's scrollWidth at 390×844) must fail loudly when it
-    // breaks, not be silently unmatched by the glob.
-    include: ["src/**/*.test.{ts,tsx}"],
-    env: localSupabaseEnv(),
+    projects: [
+      {
+        resolve: { tsconfigPaths: true },
+        // The seam is server code, so resolve packages the way the server runtime does.
+        // Without `react-server`, `import "server-only"` throws on import and any handler
+        // that reaches a server-only module is untestable.
+        ssr: {
+          resolve: {
+            conditions: ["react-server", "node", "module", "import", "default"],
+          },
+        },
+        test: {
+          name: "server",
+          environment: "node",
+          include: ["src/**/*.test.ts"],
+          env: localSupabaseEnv(),
+        },
+      },
+      {
+        resolve: { tsconfigPaths: true },
+        test: {
+          name: "browser",
+          environment: "jsdom",
+          include: ["src/**/*.test.tsx"],
+          setupFiles: ["./vitest.setup.dom.ts"],
+        },
+      },
+    ],
   },
 });
 

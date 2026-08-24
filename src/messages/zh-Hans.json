@@ -253,6 +253,25 @@
     },
     "needsDecision": "待定 ↓",
     "provisional": "暂估",
+    "pricing": {
+      "landedCost": "{item} 的单位到岸成本（泰铢）",
+      "selling": "{item} 的单位售价（泰铢）",
+      "hint": "请加上运费、关税与手续费。保存即视为确认该成本。",
+      "save": "保存",
+      "saving": "保存中…",
+      "error": {
+        "forbidden": "你尚未登录。",
+        "not_found": "该产品项已不在这个招标项下。",
+        "invalid_amount": "请填写泰铢金额，或留空。",
+        "failed": "金额保存失败，请重试。"
+      }
+    },
+    "totals": {
+      "coverage": "共 {total} 个产品项，已定价 {priced} 个",
+      "bidTotal": "投标总额",
+      "landedCost": "到岸成本合计",
+      "margin": "毛利合计"
+    },
     "noQuotes": "该产品项下尚未记录任何内容。",
     "select": "选定",
     "selected": "✓ 已选定",

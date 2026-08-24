@@ -252,7 +252,11 @@ export function itemsNeedingDecision(items: ComparedItem[]): number {
  * be the false refusal that teaches people to ignore the true ones. Anything beyond case
  * and surrounding space is left alone: "box of 50" and "box of 100" differ by a character
  * and by a factor of two.
+ *
+ * Exported because the Landed Cost pre-fill in `@/lib/comparison/pricing` refuses on the
+ * same question this ranks on, and two spellings of "the same unit" would eventually
+ * disagree — leaving a cost pre-filled from a Quote the sheet had refused to rank.
  */
-function sameUnit(one: string, other: string): boolean {
+export function sameUnit(one: string, other: string): boolean {
   return one.trim().toLowerCase() === other.trim().toLowerCase();
 }
