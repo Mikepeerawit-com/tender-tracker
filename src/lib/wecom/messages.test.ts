@@ -43,6 +43,22 @@ const fixture = {
     { milestone: "decision_chase", date: "2026-09-20", daysLeft: 5 },
   ],
   mentions: ["somchai", "anong"],
+  // Widened for the Digest (#35): it is the one message whose length grows with the
+  // data, and the one that has to say something about a Tender with no date ahead of it.
+  tenders: [
+    {
+      reference: "1042",
+      client: "Bangkok Hospital",
+      title: "Surgical consumables Q3",
+      next: { milestone: "internal_quote", date: "2026-08-25", daysLeft: 3 },
+    },
+    {
+      reference: "1043",
+      client: "Chiang Mai Clinic",
+      title: "Ward furniture",
+      next: null,
+    },
+  ],
   // Widened for the outcome news (#34): a **colleague's** name, which is the one identity
   // ADR-0012 permits a message to carry. `supplier` below is the one it never may.
   selectedBy: "Nok",
@@ -342,5 +358,109 @@ describe("reminderMessage", () => {
 
   it("writes no @ into the text, which WeCom renders from the mention list", () => {
     expect(message.content).not.toContain("@");
+  });
+});
+
+describe("the daily Digest", () => {
+  const line = (reference: string, daysLeft: number) => ({
+    reference,
+    client: "Bangkok General Hospital",
+    title: "Surgical consumables Q3",
+    next: {
+      milestone: "client_submission" as const,
+      date: "2026-09-01",
+      daysLeft,
+    },
+  });
+
+  it("lists every open Tender and the milestone it is heading for", () => {
+    const digest = builders.digestMessage({
+      tenders: [
+        {
+          reference: "T-1042",
+          client: "Bangkok General Hospital",
+          title: "Surgical consumables Q3",
+          next: { milestone: "internal_quote", date: "2026-08-25", daysLeft: 3 },
+        },
+        {
+          reference: "T-1043",
+          client: "Chiang Mai Clinic",
+          title: "Ward furniture",
+          next: { milestone: "submission_missed", date: "2026-08-20", daysLeft: -5 },
+        },
+      ],
+    });
+
+    expect(digest.content).toContain("T-1042");
+    expect(digest.content).toContain("2026-08-25");
+    expect(digest.content).toContain("T-1043");
+    expect(digest.content).toContain("2026-08-20");
+    expect(digest.content).toContain("共 2 个");
+  });
+
+  it("@s nobody, because a daily mention is how a group learns to mute the robot", () => {
+    // The reminders are the messages that matter, and they arrive through the same
+    // robot. A Digest that pinged people every morning would cost them their audience.
+    expect(builders.digestMessage({ tenders: [line("T-1042", 3)] }).mentions).toBe(
+      undefined,
+    );
+  });
+
+  it("counts no days down on a submission already missed", () => {
+    const digest = builders.digestMessage({
+      tenders: [
+        {
+          reference: "T-1042",
+          client: "Bangkok General Hospital",
+          title: "Surgical consumables Q3",
+          next: { milestone: "submission_missed", date: "2026-08-20", daysLeft: -5 },
+        },
+      ],
+    });
+
+    expect(digest.content).toContain("错过");
+    expect(digest.content).not.toMatch(/还剩|就是今天/);
+  });
+
+  it("says so plainly when a Tender has no date ahead of it", () => {
+    // Submitted, with no chase date set. There is no honest day to name, and a guessed
+    // one would send somebody to the client a week early.
+    const digest = builders.digestMessage({
+      tenders: [
+        {
+          reference: "T-1042",
+          client: "Bangkok General Hospital",
+          title: "Surgical consumables Q3",
+          next: null,
+        },
+      ],
+    });
+
+    expect(digest.content).toContain("等待客户决标");
+    expect(digest.content).not.toContain("null");
+  });
+
+  it("arrives short and says so rather than being refused whole", () => {
+    // WeCom caps a text message at 2048 bytes and refuses anything over it outright, so
+    // an org with a long list would lose the entire morning's Digest rather than the
+    // tail of it. The header still counts them all.
+    const many = Array.from({ length: 60 }, (_value, index) =>
+      line(`T-${1000 + index}`, index),
+    );
+    const digest = builders.digestMessage({ tenders: many });
+
+    expect(new TextEncoder().encode(digest.content).length).toBeLessThanOrEqual(2048);
+    expect(digest.content).toContain("共 60 个");
+    expect(digest.content).toMatch(/其余 \d+ 个未列出/);
+    // The tail is what was dropped: the soonest are listed, which is the half worth
+    // reading.
+    expect(digest.content).toContain("T-1000");
+    expect(digest.content).not.toContain("T-1059");
+  });
+
+  it("names no omission when everything fitted", () => {
+    expect(
+      builders.digestMessage({ tenders: [line("T-1042", 3)] }).content,
+    ).not.toContain("未列出");
   });
 });

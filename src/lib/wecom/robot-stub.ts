@@ -28,19 +28,40 @@ export type RobotStub = RobotBoundary & {
   waited: number[];
 };
 
+const accepted: RobotAnswer = { errcode: 0, errmsg: "ok" };
+
 /**
  * A recording group robot. Answers each send from `answers` in turn, then `errcode 0`
  * for anything beyond them — the common case being a batch that all succeeds.
  */
 export function recordingRobot(...answers: RobotAnswer[]): RobotStub {
+  return recording((_content, call) => answers[call] ?? accepted);
+}
+
+/**
+ * A robot that refuses the messages a predicate picks out, and accepts everything else.
+ *
+ * Answering by *position* is no use to a rule about one particular message failing: the
+ * daily run sweeps every org in the database, so which send lands first depends on what
+ * a neighbouring suite happened to leave behind. Pick the message by what it says.
+ */
+export function refusingRobot(
+  refuses: (content: string) => boolean,
+  answer: RobotAnswer = 500,
+): RobotStub {
+  return recording((content) => (refuses(content) ? answer : accepted));
+}
+
+function recording(answerFor: (content: string, call: number) => RobotAnswer): RobotStub {
   const sent: SentMessage[] = [];
   const waited: number[] = [];
   let call = 0;
 
   const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    const answer = answers[call++] ?? { errcode: 0, errmsg: "ok" };
+    const payload = JSON.parse(String(init?.body)) as SentMessage["payload"];
+    const answer = answerFor(payload.text.content, call++);
 
-    sent.push({ url: String(input), payload: JSON.parse(String(init?.body)) });
+    sent.push({ url: String(input), payload });
 
     return typeof answer === "number"
       ? new Response("upstream said no", { status: answer })

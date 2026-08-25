@@ -146,6 +146,115 @@ function remaining(daysLeft: number): string {
   return daysLeft === 0 ? "(就是今天)" : `(还剩 ${daysLeft} 天)`;
 }
 
+/**
+ * How each Milestone reads in the Digest — a listing, where the reminder lines are a
+ * nudge.
+ *
+ * A second record beside {@link milestoneLines} rather than a reuse of it, because the
+ * two are said for different reasons and it shows in the wording: a reminder ends by
+ * telling somebody to go and do the thing, and a line that did that twelve times over
+ * would be a Digest nobody reads to the bottom of. What they must not do is name the
+ * same Milestone differently, which is why both are `Record<ReminderMilestone, …>` — a
+ * fifth Milestone is a missing key in two places, at compile time.
+ *
+ * `daysLeft` is read by the two that count down, for the same reason it is in the
+ * reminder: "还剩 -1 天" is a rounding bug where a missed submission is a failure.
+ */
+const digestSummaries: Record<
+  ReminderMilestone,
+  (date: string, daysLeft: number) => string
+> = {
+  internal_quote: (date, daysLeft) => `内部报价截止 ${date}${remaining(daysLeft)}`,
+  client_submission: (date, daysLeft) => `客户投标截止 ${date}${remaining(daysLeft)}`,
+  submission_missed: (date) => `⚠️ 已错过客户投标截止 ${date},仍未提交`,
+  decision_chase: (date) => `等待客户决标,预计 ${date}`,
+};
+
+/** A Tender whose Bid is out with no chase date set — open, and dated by nothing. */
+const undated = "已提交,等待客户决标(未设预计决标日期)";
+
+/** One open Tender in the Digest: which it is, and what it is heading for. */
+export type DigestLine = {
+  reference: string;
+  client: string;
+  title: string;
+  /** Null when nothing is dated ahead of it — see `@/lib/digest/digest.ts`. */
+  next: DueMilestone | null;
+};
+
+/**
+ * The **whole** content of a WeCom `text` message, in bytes.
+ *
+ * The documented cap is 2048 UTF-8 bytes, and the Digest is the one message in this app
+ * whose length grows with the data: every other one is about a single Tender. At the
+ * volume this product assumes — ~6–10 open Tenders — a line each is already within
+ * sight of it, and a message that goes over is **refused whole**, so the morning's
+ * Digest would vanish rather than arrive short.
+ *
+ * The budget is set below the cap rather than at it because Chinese characters are
+ * three bytes each and a client name is not length-checked anywhere.
+ */
+const digestBudget = 1_800;
+
+/**
+ * Every open Tender and its next Milestone, in one message a day.
+ *
+ * **Nobody is @-ed.** It goes out every morning whether or not anything has changed, and
+ * a daily mention is how a group learns to mute the robot — which would cost the
+ * reminders, which are the messages that matter. It names Tenders and dates; the person
+ * who has to act on one is named in the app.
+ *
+ * **It truncates rather than overflowing.** Lines are added while they fit
+ * {@link digestBudget}, and whatever did not fit is *counted* in a final line — so a
+ * long list arrives short and says so, instead of being refused whole and arriving not
+ * at all. The count in the header is always the true one.
+ */
+export function digestMessage({ tenders }: { tenders: DigestLine[] }): GroupMessage {
+  const head = `【招标跟踪】今日概览:共 ${tenders.length} 个进行中的招标`;
+  const foot = "详情请进入系统查看。";
+  const omission = (count: number) => `其余 ${count} 个未列出。`;
+
+  // Reserved up front at its longest, so the line that says what was dropped can never
+  // itself be the line that does not fit.
+  const reserved = utf8Bytes(`\n${omission(tenders.length)}`);
+  const lines: string[] = [];
+  let used = utf8Bytes(head) + utf8Bytes(`\n${foot}`);
+
+  for (const [index, tender] of tenders.entries()) {
+    const line = digestLine(tender);
+    const cost = utf8Bytes(`\n${line}`);
+    // Nothing can be omitted after the last one, so it is not made to pay for the notice.
+    const last = index === tenders.length - 1;
+
+    if (used + cost + (last ? 0 : reserved) > digestBudget) break;
+
+    used += cost;
+    lines.push(line);
+  }
+
+  const omitted = tenders.length - lines.length;
+
+  return {
+    content: [
+      head,
+      ...lines,
+      ...(omitted > 0 ? [omission(omitted)] : []),
+      foot,
+    ].join("\n"),
+  };
+}
+
+function digestLine({ reference, client, title, next }: DigestLine): string {
+  const summary =
+    next === null ? undated : digestSummaries[next.milestone](next.date, next.daysLeft);
+
+  return `${reference} · ${client} · ${title}:${summary}`;
+}
+
+function utf8Bytes(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
 /** The two Outcomes the group is told about. `no_bid` and `cancelled` are silent. */
 export type AnnouncedOutcome = "won" | "lost";
 

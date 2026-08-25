@@ -1,6 +1,7 @@
 import "server-only";
 
 import { daysBetween, todayIn } from "@/lib/calendar-date";
+import { digestFor } from "@/lib/digest/digest";
 import { tenderOutcome, type ItemOutcome } from "@/lib/tenders/outcome";
 import { createServiceClient } from "@/lib/supabase/service-client";
 import { webhookFor } from "@/lib/wecom/group-robot";
@@ -17,6 +18,14 @@ import {
 /**
  * The send half of the daily cron: everything owed, collapsed into as few messages as it
  * can honestly be, posted, and only then marked done.
+ *
+ * **The Digest rides in the same batch**, last, and it is why this file is named for the
+ * run rather than for the reminders it is mostly about. It lives under `reminders/`
+ * because the reminder engine below is the bulk of it and the Digest is one appended
+ * message — but the batch is the org's whole morning, because pacing is per batch and a
+ * second call would post outside the budget the reminders were just paced to respect
+ * (ADR-0012). What the Digest *says* is `@/lib/digest/digest.ts`; what it costs the cap
+ * is here.
  *
  * Everything reads through the **service** client. The cron has no session and runs for
  * every org unattended, so RLS is not the boundary here — the `org_id` filter on every
@@ -48,11 +57,18 @@ import {
  */
 
 /** What one run did, in the terms the rules are stated in. */
-export type ReminderRunReport = {
-  /** Orgs with at least one reminder owed. */
+export type DailyPostReport = {
+  /** Orgs with something to post — a reminder owed, a Digest, or both. */
   orgs: number;
-  /** Messages handed to the robot — the figure rule 4 is about. */
+  /**
+   * Messages handed to the robot, Digests included.
+   *
+   * Everything in one org's run is one paced batch, so this is the figure the
+   * 20-per-minute cap is about as well as the one rule 4 is about.
+   */
   messages: number;
+  /** Digests the robot accepted — at most one per org, and none for an org with nothing open. */
+  digests: number;
   /** Rows this run finished with: posted, or suppressed as no longer worth posting. */
   closed: number;
   /** Rows deliberately left for the next run because the send did not succeed. */
@@ -100,37 +116,39 @@ type NotificationRow = {
 };
 
 /**
- * Send every reminder every org owes, as at `at`.
+ * Post everything every org owes this morning, as at `at`.
  *
  * Orgs are handled one at a time rather than in one flat batch, because pacing is per
  * batch (ADR-0012) and a batch that mixed two orgs' messages would be posting to two
  * different webhooks from one paced loop.
  */
-export async function sendDueReminders(
+export async function sendDailyPosts(
   at: Date,
   boundary: RobotBoundary = {},
-): Promise<ReminderRunReport> {
+): Promise<DailyPostReport> {
   const service = createServiceClient();
   const { data: orgs } = await service
     .from("orgs")
     .select("id, timezone")
     .overrideTypes<OrgRow[], { merge: false }>();
 
-  const report: ReminderRunReport = {
+  const report: DailyPostReport = {
     orgs: 0,
     messages: 0,
+    digests: 0,
     closed: 0,
     retrying: 0,
     unconfigured: 0,
   };
 
   for (const org of orgs ?? []) {
-    const orgReport = await sendOrgReminders(org, todayIn(org.timezone, at), at, boundary);
+    const orgReport = await sendOrgPosts(org, todayIn(org.timezone, at), at, boundary);
 
     if (orgReport === null) continue;
 
     report.orgs += 1;
     report.messages += orgReport.messages;
+    report.digests += orgReport.digests;
     report.closed += orgReport.closed;
     report.retrying += orgReport.retrying;
     report.unconfigured += orgReport.unconfigured;
@@ -139,18 +157,101 @@ export async function sendDueReminders(
   return report;
 }
 
-type OrgReport = Omit<ReminderRunReport, "orgs">;
+type OrgReport = Omit<DailyPostReport, "orgs">;
 
-/** One org's run, or null when it owed nothing at all. */
-async function sendOrgReminders(
+/** One org's run, or null when it had nothing to say at all. */
+async function sendOrgPosts(
   org: OrgRow,
   today: string,
   at: Date,
   boundary: RobotBoundary,
 ): Promise<OrgReport | null> {
   const due = await dueReminders(org.id, today);
+  // Owed whether or not a reminder is. "What is going on right now" is asked every
+  // morning, including — especially — the quiet ones no threshold happens to fall on.
+  const digest = await digestFor(org.id, today);
 
-  if (due.length === 0) return null;
+  if (due.length === 0 && digest === null) return null;
+
+  // Every row this run has finished with, reported the same way whether the run finished
+  // with it because the message went out or because there was no longer one to send.
+  // Anything `closeOut` could not write is counted as retrying rather than as closed —
+  // it really will come back tomorrow, and a report that said otherwise would be the one
+  // place in this file that lies about what happened.
+  const report: OrgReport = {
+    messages: 0,
+    digests: 0,
+    closed: 0,
+    retrying: 0,
+    unconfigured: 0,
+  };
+  const { batches, settled } = await reminderBatches(org.id, due, today);
+
+  await settle(settled, at, report);
+
+  // **One paced batch per org, the Digest last.** Not a second call, and this is the
+  // acceptance criterion rather than tidiness: pacing keeps no state across calls
+  // (ADR-0012), so a Digest posted separately would arrive with none of the ~3s
+  // separation the reminders were just paced to respect — on precisely the morning a
+  // catch-up run has spent the whole minute's budget on them.
+  //
+  // Last, because the reminders are the messages somebody has to act on and the Digest
+  // is the context around them.
+  const messages = [
+    ...batches.map((batch) => batch.message),
+    ...(digest === null ? [] : [digest]),
+  ];
+
+  if (messages.length === 0) return report;
+
+  // Resolved after the work above, so an org with a full queue and no robot is reported
+  // as unconfigured rather than as a failed send — only one of those is worth retrying,
+  // and the fix for the other is one screen away.
+  const webhook = await webhookFor(org.id);
+  const owedRows = (owed: TenderBatch[]) =>
+    owed.reduce((total, batch) => total + batch.liveIds.length, 0);
+
+  if (webhook === null) {
+    report.retrying += owedRows(batches);
+    report.unconfigured = 1;
+
+    return report;
+  }
+
+  const outcomes = await sendGroupMessages(webhook, messages, boundary);
+
+  // Rule 5: only what WeCom accepted is finished. Everything else is left exactly as it
+  // was, and rule 1's `<=` query picks it up again tomorrow. The reminders come first in
+  // the batch, so an outcome and a batch share an index.
+  const accepted = batches.filter((_batch, index) => outcomes[index]?.ok);
+
+  await writeNotifications(accepted.flatMap((batch) => batch.notifications));
+  await settle(accepted.flatMap((batch) => batch.liveIds), at, report);
+
+  report.messages = messages.length;
+  // The Digest is the one message with no row to leave unsent. There is nothing to
+  // catch up: it is about today, and tomorrow's is the whole of what it had to say, one
+  // day fresher — so a refusal is counted and nothing is retried.
+  report.digests = digest !== null && outcomes[batches.length]?.ok === true ? 1 : 0;
+  report.retrying += owedRows(batches.filter((batch) => !accepted.includes(batch)));
+
+  return report;
+}
+
+/**
+ * Every owed row for this org, collapsed into one message per Tender — and the rows this
+ * run has finished with without posting anything.
+ *
+ * Separated from the send so that the Digest can share the batch: an org can owe no
+ * reminders at all and still have a Digest to post, and the reads below (`.in()` over an
+ * empty list is rejected outright by PostgREST) have nothing to ask on that morning.
+ */
+async function reminderBatches(
+  orgId: string,
+  due: ReminderRow[],
+  today: string,
+): Promise<{ batches: TenderBatch[]; settled: string[] }> {
+  if (due.length === 0) return { batches: [], settled: [] };
 
   const tenderIds = [...new Set(due.map((row) => row.tender_id))];
   const tenders = await tendersById(tenderIds);
@@ -184,7 +285,7 @@ async function sendOrgReminders(
 
     if (live.length === 0) continue;
 
-    const batch = tenderMessage(org.id, tender, live, today, sourcing, userids);
+    const batch = tenderMessage(orgId, tender, live, today, sourcing, userids);
 
     // Every milestone the rows were owed for turned out to have nothing to say — the
     // only case being an internal deadline whose Assignees have all answered. There is
@@ -197,48 +298,7 @@ async function sendOrgReminders(
     batches.push(batch);
   }
 
-  // Every row this run has finished with, reported the same way whether the run finished
-  // with it because the message went out or because there was no longer one to send.
-  // Anything `closeOut` could not write is counted as retrying rather than as closed —
-  // it really will come back tomorrow, and a report that said otherwise would be the one
-  // place in this file that lies about what happened.
-  const report: OrgReport = { messages: 0, closed: 0, retrying: 0, unconfigured: 0 };
-
-  await settle(settled, at, report);
-
-  if (batches.length === 0) return report;
-
-  // Resolved after the work above, so an org with a full queue and no robot is reported
-  // as unconfigured rather than as a failed send — only one of those is worth retrying,
-  // and the fix for the other is one screen away.
-  const webhook = await webhookFor(org.id);
-  const owedRows = (owed: TenderBatch[]) =>
-    owed.reduce((total, batch) => total + batch.liveIds.length, 0);
-
-  if (webhook === null) {
-    report.retrying += owedRows(batches);
-    report.unconfigured = 1;
-
-    return report;
-  }
-
-  const outcomes = await sendGroupMessages(
-    webhook,
-    batches.map((batch) => batch.message),
-    boundary,
-  );
-
-  // Rule 5: only what WeCom accepted is finished. Everything else is left exactly as it
-  // was, and rule 1's `<=` query picks it up again tomorrow.
-  const accepted = batches.filter((_batch, index) => outcomes[index]?.ok);
-
-  await writeNotifications(accepted.flatMap((batch) => batch.notifications));
-  await settle(accepted.flatMap((batch) => batch.liveIds), at, report);
-
-  report.messages = batches.length;
-  report.retrying += owedRows(batches.filter((batch) => !accepted.includes(batch)));
-
-  return report;
+  return { batches, settled };
 }
 
 /**

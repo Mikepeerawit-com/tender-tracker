@@ -170,8 +170,13 @@ _Avoid_: event, trigger, deadline type
 
 **Digest**:
 The once-daily post to the WeCom group listing every open Tender and its next
-milestone. Answers "what is going on right now"; distinct from a reminder, which fires
-only when a specific deadline approaches.
+Milestone. Answers "what is going on right now"; distinct from a Reminder, which fires
+only when a specific deadline approaches. Open means what the tender list means by it:
+no Outcome recorded yet. It **@s nobody** — a daily mention is how a group learns to mute
+the robot it also hears the Reminders through — and it is **silent on a morning with
+nothing open**, because a daily message with no work in it is the same lesson by a
+slower route. It is stateless: nothing records that one went out, and a Digest missed is
+answered by tomorrow's rather than caught up.
 _Avoid_: summary, daily report, standup
 
 ### Money
