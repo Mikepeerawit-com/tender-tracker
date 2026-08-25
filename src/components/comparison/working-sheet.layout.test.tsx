@@ -125,12 +125,18 @@ function renderSheet() {
 /**
  * Every element whose own content is wider than the box drawn for it.
  *
- * `.sr-only` is excluded, and only it: that utility *is* a one-pixel box with its content
- * clipped out of it, so overflowing is how it works rather than a way it has failed.
+ * Two things are excluded, and only two. `.sr-only` *is* a one-pixel box with its content
+ * clipped out of it, so overflowing is how it works rather than a way it has failed. And
+ * a form control scrolls its own value by design — a price longer than its field is a
+ * text box doing its job, not a page pushed sideways, and how wide the value measures
+ * depends on the font that happened to load. Neither can push the page out: an element
+ * too wide for its parent is caught on the parent, and the page itself is measured
+ * separately by the caller.
  */
 function overflowing(root: HTMLElement): string[] {
   return [...root.querySelectorAll<HTMLElement>("*")]
     .filter((element) => element.closest(".sr-only") === null)
+    .filter((element) => !["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName))
     .filter((element) => element.scrollWidth > element.clientWidth)
     .map(describeElement);
 }
