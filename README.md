@@ -142,8 +142,20 @@ forgotten step, and the app boots fine without it — `/api/health` is what catc
 answering `schema.applied: null` until this has run at all, and `schema.behind` above
 zero until it has run to the end.
 
-Nothing yet *prevents* a merge whose migrations have not been pushed. The probe makes the
-gap visible; it does not make it impossible.
+**Push migrations before merging, not after.** A migration that only adds objects is
+forward-compatible — the deployed build ignores what it does not call — so applying it
+early is safe, while merging first leaves production running against a database it cannot
+read for as long as it takes somebody to notice.
+
+`.github/workflows/deployment-health.yml` is what notices: every finished deployment gets
+asked `/api/health`, and a production one that is not `ok` fails the check with the
+diagnosis in the message. Previews are skipped and say so — they sit behind Deployment
+Protection and answer a redirect to SSO, and asserting on a login page would be worse than
+not asking.
+
+That gate fires *after* the deploy. Nothing yet *prevents* a merge whose migrations have
+not been pushed — that needs production credentials in CI and is a decision on its own, in
+[#44](https://github.com/Mikepeerawit-com/tender-tracker/issues/44).
 
 ```sh
 supabase link --project-ref <project-ref>   # needs the database password

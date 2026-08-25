@@ -1,0 +1,104 @@
+name: Deployment health
+
+# Ask every finished deployment whether its schema is the one it was built against.
+#
+# #40 gave `/api/health` the ability to answer that. This asks it. The fault that ticket
+# was written for ran for three weeks not because the answer was unavailable but because
+# nobody opened the URL — so the probe needs something that opens it without being asked,
+# and a deploy is the moment the answer can change.
+#
+# `deployment_status` is the only trigger that knows both that a deploy happened and what
+# URL it landed on. It costs no credentials: #40 already built the endpoint, and the
+# production hostname is public.
+#
+# This is deliberately the weaker half of #44. It catches a missing `supabase db push`
+# *after* the deploy, not before the merge; the CI check that would enforce the ordering
+# needs production credentials in CI and is a decision that has not been taken.
+
+on:
+  deployment_status:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    # Only that the deploy succeeded — deliberately not also filtering on the environment
+    # name. A filter that stops matching because Vercel renamed "Production" would leave a
+    # workflow that never runs and never says so, which is precisely the shape of failure
+    # #40 exists to refuse. Previews are sorted out below, where the skip is *printed*.
+    if: github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ask the deployment about its schema
+        env:
+          URL: ${{ github.event.deployment_status.environment_url || 'https://tenders.mikepeerawit.com' }}
+        run: |
+          set -uo pipefail
+
+          echo "Probing ${URL}/api/health"
+
+          # Deliberately not `curl --retry`. That retries transient *HTTP* errors, 503
+          # among them — and 503 is this endpoint's considered answer about a real fault,
+          # not a blip. Retrying it appends each body to the last, and every `jq` below
+          # then reads three documents and prints three values into one sentence. Retry
+          # only what is genuinely transient: a connection that never opened.
+          attempt=1
+          while true; do
+            response=$(curl -sS --max-time 30 -w '\n%{http_code}' "${URL}/api/health" 2>&1) && break
+
+            if [ "$attempt" -ge 3 ]; then
+              echo "::error::${URL}/api/health did not answer at all after ${attempt} attempts. The deployment itself is unreachable, which is a different fault from the app reporting its database unreachable. curl said: ${response}"
+              exit 1
+            fi
+
+            attempt=$((attempt + 1))
+            sleep 5
+          done
+
+          code=$(printf '%s' "$response" | tail -n1)
+          body=$(printf '%s' "$response" | sed '$d')
+
+          # Preview deployments sit behind Vercel's Deployment Protection and answer a
+          # redirect to SSO. Asserting on a login page would be worse than not asking, so
+          # say out loud that nothing was checked rather than reporting a quiet pass.
+          if [ "$code" = "302" ] || [ "$code" = "401" ]; then
+            echo "::notice::${URL} is behind Deployment Protection — a preview. Its schema was NOT checked; only production is public enough to ask without a credential."
+            exit 0
+          fi
+
+          echo "$body" | jq . || echo "$body"
+
+          status=$(printf '%s' "$body" | jq -r '.status // "unparseable"')
+
+          if [ "$code" = "200" ] && [ "$status" = "ok" ]; then
+            echo "::notice::${URL} is level with its build."
+            exit 0
+          fi
+
+          # Name the fault rather than the failure. Which of these fired decides who fixes
+          # it and how — see the status table in README.md.
+          applied=$(printf '%s' "$body" | jq -r '.schema.applied // "null"')
+          expected=$(printf '%s' "$body" | jq -r '.schema.expected // "unknown"')
+          behind=$(printf '%s' "$body" | jq -r '.schema.behind // "null"')
+          # `tostring`, not `// "unknown"`: jq's alternative operator treats `false` as
+          # absent, so `.tables.readable // "unknown"` reports "unknown" for exactly the
+          # one value this branch exists to catch.
+          readable=$(printf '%s' "$body" | jq -r '.tables.readable | tostring')
+          database=$(printf '%s' "$body" | jq -r '.database // "unknown"')
+
+          if [ "$status" = "misconfigured" ]; then
+            echo "::error::${URL} has no usable Supabase credentials. See README.md, Deploying step 1 — and remember env vars added after a build need a redeploy."
+          elif [ "$database" = "unreachable" ]; then
+            echo "::error::${URL} cannot reach its database at all. Check the Supabase project is not paused."
+          elif [ "$applied" = "null" ]; then
+            echo "::error::${URL} is deployed against a database no migration ever reached. It expects ${expected}. Run \`supabase db push\` — README.md, Deploying step 2."
+          elif [ "$behind" != "0" ] && [ "$behind" != "null" ]; then
+            echo "::error::${URL} is deployed against a database missing ${behind} of its migration(s) — newest expected ${expected}, newest applied ${applied}. They need not be the newest ones: \`behind\` counts every expected version the database does not hold, including a gap in the middle. Run \`supabase db push\`."
+          elif [ "$readable" = "false" ]; then
+            error=$(printf '%s' "$body" | jq -r '.tables.error // "unknown"')
+            echo "::error::${URL} has its schema and cannot read it (${error}). Its table grants are missing — this needs a migration granting them, as 20260825010000 did."
+          else
+            echo "::error::${URL}/api/health answered ${code} with status '${status}'."
+          fi
+
+          exit 1
