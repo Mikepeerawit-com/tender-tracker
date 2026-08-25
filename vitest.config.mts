@@ -3,6 +3,8 @@ import { execFileSync } from "node:child_process";
 import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
 
+import { migrationsOnDiskEnv } from "./src/lib/schema/migrations-on-disk.mts";
+
 /**
  * Two seams, told apart by the file extension.
  *
@@ -17,6 +19,12 @@ import { defineConfig } from "vitest/config";
  * cannot resolve packages under `react-server` — that condition is what makes React's
  * client hooks unavailable — which is the reason they are a separate project rather than
  * one with two environments.
+ *
+ * **`.exclusive.test.ts` — the server seam again, alone.** A handful of tests can only
+ * prove their point by breaking the shared database — revoking a grant every screen
+ * needs, withholding a migration. Those faults are database-wide, not worker-wide, so
+ * they would fail whichever unrelated suite happened to be mid-query. This project runs
+ * them in a later `groupOrder`, when nothing else is running.
  *
  * **`.layout.test.tsx` — a real browser.** One thing lives here: ADR-0009's failure bar,
  * that the comparison working sheet never scrolls sideways at 390×844. jsdom has no
@@ -41,7 +49,26 @@ export default defineConfig({
           name: "server",
           environment: "node",
           include: ["src/**/*.test.ts"],
+          exclude: ["src/**/*.exclusive.test.ts"],
           env: localSupabaseEnv(),
+        },
+      },
+      {
+        resolve: { tsconfigPaths: true },
+        ssr: {
+          resolve: {
+            conditions: ["react-server", "node", "module", "import", "default"],
+          },
+        },
+        test: {
+          name: "exclusive",
+          environment: "node",
+          include: ["src/**/*.exclusive.test.ts"],
+          env: localSupabaseEnv(),
+          // Everything else has finished by the time this group starts, which is the
+          // only thing that makes revoking a live grant safe.
+          sequence: { groupOrder: 1 },
+          fileParallelism: false,
         },
       },
       {
@@ -85,6 +112,14 @@ function localSupabaseEnv(): Record<string, string> {
     // an untrusted client does, which the service-role key cannot do.
     NEXT_PUBLIC_SUPABASE_ANON_KEY: required(status, "ANON_KEY"),
     SUPABASE_SERVICE_ROLE_KEY: required(status, "SERVICE_ROLE_KEY"),
+    // A superuser connection straight past PostgREST. Nothing in the app has one, and
+    // nothing in the app should: it exists so a test can take a privilege away and put
+    // it back, which is the only way to prove /api/health notices.
+    SUPABASE_DB_URL: required(status, "DB_URL"),
+    // What `next.config.ts` bakes into a real build, supplied here the same way for the
+    // same reason: /api/health compares it against what the database says it holds, and
+    // a suite that left it unset would be testing a probe that expects nothing.
+    EXPECTED_SCHEMA_MIGRATIONS: migrationsOnDiskEnv(),
   };
 }
 

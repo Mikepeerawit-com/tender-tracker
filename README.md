@@ -49,7 +49,16 @@ what ships. See "Testing Decisions" in `buildspec_2.md`.
 the few behaviours that only exist once a component is interactive — a Margin
 recomputing as digits are typed into the working sheet. It is a separate Vitest project
 because those files cannot resolve packages under the `react-server` condition the
-server seam needs. `vitest run` runs both.
+server seam needs.
+
+**`*.exclusive.test.ts` is the server seam again, run alone.** A few tests can only prove
+their point by breaking the shared database — revoking a grant every screen needs,
+withholding a migration — and those faults are database-wide, not worker-wide. Its
+project runs in a later group, when nothing else is in flight. Nothing is destroyed even
+so: withheld rows are moved to a `withheld` schema and put back, and a run killed
+mid-test is repaired by the next one.
+
+`vitest run` runs them all.
 
 ## Conventions
 
@@ -78,15 +87,42 @@ server seam needs. `vitest run` runs both.
 Vercel, with Supabase in Singapore (`ap-southeast-1`). Live at
 <https://tenders.mikepeerawit.com>.
 
-`GET /api/health` returns `{"status":"ok","database":"reachable"}` when the deployment
-can reach Postgres. It is the acceptance check for every step below, and it
-distinguishes its own failure modes — read the body, never just the status code:
+`GET /api/health` is the acceptance check for every step below. It answers three
+questions — can this deployment reach Postgres, is the schema the one this build was
+written against, and can the app still read its own tables — and it names both migration
+versions either way, so a healthy answer is checkable rather than merely reassuring:
 
-| Response | Meaning |
-| --- | --- |
-| `200 {"database":"reachable"}` | Everything is wired up. |
-| `503 {"database":"unreachable"}` | Credentials are fine; `health_check()` is missing, so the migration never reached this database. |
-| `500 {"status":"misconfigured"}` | The deployment has no Supabase credentials at all. |
+```
+200 {"status":"ok","database":"reachable",
+     "schema":{"expected":"20260825020000","applied":"20260825020000","behind":0},
+     "tables":{"probed":"tenders","readable":true},"checkedAt":"…"}
+```
+
+Every fault has a different fix, so read the body — the status code alone cannot tell
+them apart, and four of these five are `503`:
+
+| Response | Meaning | Fix |
+| --- | --- | --- |
+| `500 {"status":"misconfigured"}` | No usable Supabase credentials. | Step 1, then redeploy. |
+| `503 {"database":"unreachable"}` | Neither PostgREST nor the Postgres behind it answers. | Check the project is not paused. |
+| `503 {"schema":{"applied":null}}` | It answers, and `health_probe()` is not there — **no migration ever reached this database.** | Step 2. |
+| `503 {"schema":{"behind":3}}` | Partly migrated: `applied` names the newest version it does hold. | Step 2. |
+| `503 {"tables":{"readable":false,"error":"42501"}}` | The schema is there and the app may not read it — its table grants are missing. | A migration granting them, as `20260825010000` did. |
+
+Note the third and fourth rows are one fault reported two ways, because the probe cannot
+report its own absence: `health_probe()` ships in a migration, so a database that has
+received *nothing* has no way to say what it holds, and `applied: null` is the honest
+answer. `behind` is for a database that has received some of them.
+
+**Until #40 this table promised more than the probe delivered.** `health_check()` is
+defined in the first migration, so `{"database":"reachable"}` only ever meant "migration
+#1 landed" and said nothing about the rest — the hosted database ran three weeks eight
+migrations behind while the probe reported `ok`. Worse, using it to decide reachability
+reported a never-migrated database as `"unreachable"`, sending the reader to a Postgres
+that was fine. `expected` is now baked in from `supabase/migrations/` at build time and
+compared against the whole applied list; reachability means "the database answered,
+whatever it said"; and the probe really reads a row from `tenders` as `authenticated`
+rather than trusting a catalogue. Every fault it missed now has its own row above.
 
 ### 1. Vercel project and Supabase credentials
 
@@ -102,7 +138,12 @@ once, or `/api/health` keeps reporting the state from before they landed.
 ### 2. Apply migrations to the hosted database
 
 Vercel deploys the app; nothing deploys the schema. This is a separate, easily
-forgotten step, and the app boots fine without it — `/api/health` is what catches it.
+forgotten step, and the app boots fine without it — `/api/health` is what catches it,
+answering `schema.applied: null` until this has run at all, and `schema.behind` above
+zero until it has run to the end.
+
+Nothing yet *prevents* a merge whose migrations have not been pushed. The probe makes the
+gap visible; it does not make it impossible.
 
 ```sh
 supabase link --project-ref <project-ref>   # needs the database password
