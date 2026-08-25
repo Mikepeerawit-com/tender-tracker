@@ -7,6 +7,11 @@ import { defaultLocale, locales } from "@/i18n/config";
 import { pricingProblems, selectionProblems } from "@/lib/comparison/sheet";
 import { imageProblems } from "@/lib/images/images";
 import { quoteProblems } from "@/lib/quotes/quotes";
+import {
+  deadlineKinds,
+  tenderProgresses,
+  worklistBlocks,
+} from "@/lib/tenders/progress";
 import { tenderProblems } from "@/lib/tenders/tenders";
 
 /**
@@ -110,8 +115,12 @@ describe.each(others)("%s", (locale) => {
  * — in the one place a user is already stuck. The union is derived from this list so
  * that adding a reason and forgetting its wording is a failing test rather than a
  * screen reading `tenders.error.unassignable`.
+ *
+ * The same argument covers every other union the app renders a key from — the worklist's
+ * blocks, Progress, and which deadline a row is due on. Each is walked rather than
+ * listed, so a value added to one of them cannot ship without a sentence.
  */
-describe.each(locales)("%s refusals", (locale) => {
+describe.each(locales)("%s wording", (locale) => {
   const flat = flatten(messages(locale));
 
   it("has wording for every reason a write can be refused", () => {
@@ -150,6 +159,35 @@ describe.each(locales)("%s refusals", (locale) => {
     const missing = pricingProblems.filter(
       (problem) => !flat.has(`comparison.pricing.error.${problem}`),
     );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("names every block of the worklist, and says what it means", () => {
+    // The list is the app's home, and a block whose title renders as
+    // `tenders.block.sourcing_overdue.title` is a heading nobody can act on. The union
+    // is walked rather than the keys listed, so a sixth block cannot ship unnamed.
+    const missing = worklistBlocks.flatMap((block) =>
+      ["title", "hint"]
+        .map((part) => `tenders.block.${block}.${part}`)
+        .filter((key) => !flat.has(key)),
+    );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("has a word for every Progress a Tender can read as", () => {
+    const missing = tenderProgresses.filter(
+      (progress) => !flat.has(`tenders.progress.${progress}`),
+    );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("says which deadline put a Tender in Coming up", () => {
+    // Either deadline can, and a chip that does not say which is one the reader has to
+    // open the Tender to act on — which is the whole thing the block exists to save.
+    const missing = deadlineKinds.filter((kind) => !flat.has(`tenders.due.${kind}`));
 
     expect(missing).toEqual([]);
   });

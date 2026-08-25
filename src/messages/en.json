@@ -69,8 +69,9 @@
   },
   "tenders": {
     "title": "Tenders",
-    "description": "Everything a client has asked us for, soonest client submission deadline first.",
+    "description": "What needs doing, grouped by what is wrong with each tender.",
     "empty": "No tenders yet. Record the first one and it stops living in an inbox.",
+    "allClear": "Nothing needs doing. Every tender here is either decided or written off.",
     "record": "Record a tender",
     "recordDescription": "What the client asked for, when it has to be back with them, and every product it asks for.",
     "edit": "Edit tender",
@@ -93,6 +94,38 @@
     "expectedDecisionHint": "Optional — clients rarely state one.",
     "notes": "Notes",
     "itemCount": "{count, plural, =1 {# item} other {# items}}",
+    "block": {
+      "submission_missed": {
+        "title": "Submission missed",
+        "hint": "The bid never went out and the client's deadline has passed. It stays here until somebody records an outcome."
+      },
+      "sourcing_overdue": {
+        "title": "Sourcing overdue",
+        "hint": "The internal quote deadline has passed with an item nobody has answered for — neither a quote nor a no supplier found."
+      },
+      "coming_up": {
+        "title": "Coming up",
+        "hint": "A deadline inside the next seven days. The chip on each row says which deadline it is."
+      },
+      "awaiting_decision": {
+        "title": "Awaiting decision",
+        "hint": "The bid is with the client. Nothing has gone wrong — this is where to chase them."
+      },
+      "everything_else": {
+        "title": "Everything else",
+        "hint": "Live tenders with time still on them."
+      }
+    },
+    "progress": {
+      "new": "Not started",
+      "sourcing": "Sourcing",
+      "quoted": "Quoted",
+      "submitted": "Submitted"
+    },
+    "due": {
+      "internal_quote": "Internal quote due {date}",
+      "client_submission": "Client submission due {date}"
+    },
     "item": {
       "plural": "Tender items",
       "hint": "A tender always asks for at least one product, and several is normal.",

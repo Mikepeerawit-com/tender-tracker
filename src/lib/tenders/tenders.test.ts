@@ -741,7 +741,10 @@ describe("listTenders and getTender", () => {
       title: "Surgical consumables Q3",
       clientSubmissionDeadline: "2026-08-28",
       ownerName: owner.email,
-      itemCount: 1,
+      // The Items ride along with their Outcomes: Progress and both overdue conditions
+      // are readings of all of them, and a per-Tender fetch would make the derivation
+      // depend on how many round trips the caller made.
+      items: [{ outcome: null }],
     });
     expect(row?.reference).toMatch(/^T-\d+$/);
   });

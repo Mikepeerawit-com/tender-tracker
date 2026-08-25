@@ -395,6 +395,57 @@ export async function listItemSourcing(
   return sourcing;
 }
 
+/** How one Item's sourcing stands, counted rather than read. */
+export type ItemSourcingCount = { quoteCount: number; noSupplierFoundCount: number };
+
+/**
+ * The same two facts as {@link listItemSourcing}, counted rather than read, across as
+ * many Items as you like rather than one Tender's.
+ *
+ * The worklist asks this of every Item in the org at once, and only ever asks whether a
+ * row *exists*: pulling prices, notes and names back to answer that would be most of the
+ * Quote table for a screen that shows none of it. The refusals are still counted
+ * separately and never folded in with the Quotes — "nobody could supply this" and
+ * "nobody tried" mean opposite things, and Sourcing Overdue is exactly the difference.
+ *
+ * An Item absent from the map is **Not Yet Sourced**, as it is in `listItemSourcing`, and
+ * for the same reason: the absence is the state, not a gap in the answer.
+ */
+export async function countItemSourcing(
+  itemIds: string[],
+  store: SessionCookieStore,
+): Promise<Map<string, ItemSourcingCount>> {
+  const counts = new Map<string, ItemSourcingCount>();
+
+  if (itemIds.length === 0) return counts;
+
+  const supabase = createSessionClient(store);
+  const entry = (itemId: string): ItemSourcingCount => {
+    const existing = counts.get(itemId) ?? { quoteCount: 0, noSupplierFoundCount: 0 };
+
+    counts.set(itemId, existing);
+
+    return existing;
+  };
+
+  // Independent of each other, so they go together rather than one after the other.
+  const [quotes, refusals] = await Promise.all([
+    supabase.from("quotes").select("tender_item_id").in("tender_item_id", itemIds),
+    supabase
+      .from("no_supplier_found")
+      .select("tender_item_id")
+      .in("tender_item_id", itemIds),
+  ]);
+
+  for (const quote of quotes.data ?? []) entry(quote.tender_item_id).quoteCount += 1;
+
+  for (const refusal of refusals.data ?? []) {
+    entry(refusal.tender_item_id).noSupplierFoundCount += 1;
+  }
+
+  return counts;
+}
+
 /**
  * A supplier by name within the org, created if this is the first time anybody rang
  * them.

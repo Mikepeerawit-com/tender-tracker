@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { calendarDate, calendarDateFormat, isCalendarDate } from "./calendar-date";
+import {
+  calendarDate,
+  calendarDateFormat,
+  isCalendarDate,
+  plusDays,
+} from "./calendar-date";
 
 describe("isCalendarDate", () => {
   it("accepts a real day", () => {
@@ -41,5 +46,23 @@ describe("calendarDate", () => {
     // fails here rather than in a reader's evening six weeks from now. A deadline shown
     // a day early is the failure this app exists to prevent, wearing a disguise.
     expect(isoDay("America/Los_Angeles")).toBe("2026-08-19");
+  });
+});
+
+describe("plusDays", () => {
+  it("counts forward in whole days", () => {
+    expect(plusDays("2026-08-20", 7)).toBe("2026-08-27");
+  });
+
+  it("crosses a month, and a year", () => {
+    expect(plusDays("2026-08-28", 7)).toBe("2026-09-04");
+    expect(plusDays("2026-12-29", 7)).toBe("2027-01-05");
+  });
+
+  it("survives a DST change, because it counts in UTC", () => {
+    // 2026-03-08 is when the US springs forward. A rolling window computed by adding
+    // 7 × 24 hours to a *local* midnight lands on the 14th at 23:00 and reads as the
+    // 14th — a window one day short, for one week a year, in one hemisphere.
+    expect(plusDays("2026-03-07", 7)).toBe("2026-03-14");
   });
 });

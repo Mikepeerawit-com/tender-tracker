@@ -57,3 +57,19 @@ export function todayIn(timezone: string, at: Date): string {
     day: "2-digit",
   }).format(at);
 }
+
+/**
+ * The day `days` after a `yyyy-mm-dd` one — the arithmetic a rolling window needs.
+ *
+ * Counted in UTC, like everything else here, so the answer is the same day wherever it
+ * is read. Adding 7 × 24 hours to a *local* midnight is a day short for one week a year
+ * in every hemisphere that changes its clocks, and a rolling seven days that is
+ * sometimes six is exactly the kind of quiet wrongness a deadline cannot afford.
+ */
+export function plusDays(value: string, days: number): string {
+  const shifted = calendarDate(value);
+
+  shifted.setUTCDate(shifted.getUTCDate() + days);
+
+  return shifted.toISOString().slice(0, 10);
+}

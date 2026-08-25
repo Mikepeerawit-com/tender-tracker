@@ -69,8 +69,9 @@
   },
   "tenders": {
     "title": "招标",
-    "description": "客户提出的全部需求，按客户投标截止日期由近及远排列。",
+    "description": "按每份标书卡在哪里分组，列出眼下要做的事。",
     "empty": "暂无招标。录入第一条，它就不再只躺在邮箱里。",
+    "allClear": "眼下没有要处理的。这里的标书要么已有结果，要么已放弃。",
     "record": "录入招标",
     "recordDescription": "客户要什么、什么时候必须回复，以及其中包含的每一项产品。",
     "edit": "编辑招标",
@@ -93,6 +94,38 @@
     "expectedDecisionHint": "选填——客户很少给出明确日期。",
     "notes": "备注",
     "itemCount": "{count, plural, other {# 项明细}}",
+    "block": {
+      "submission_missed": {
+        "title": "已错过提交",
+        "hint": "投标始终没有发出，客户的截止日期已过。在有人记录结果之前，它会一直留在这里。"
+      },
+      "sourcing_overdue": {
+        "title": "询价已逾期",
+        "hint": "内部报价截止日期已过，仍有明细无人答复——既没有报价，也没有记为找不到供应商。"
+      },
+      "coming_up": {
+        "title": "即将到期",
+        "hint": "未来七天内有截止日期。每行上的标签会说明是哪一个。"
+      },
+      "awaiting_decision": {
+        "title": "等待客户决定",
+        "hint": "投标已交到客户手上。这不是出了问题——在这里跟进他们。"
+      },
+      "everything_else": {
+        "title": "其余标书",
+        "hint": "仍在进行、时间还宽裕的标书。"
+      }
+    },
+    "progress": {
+      "new": "尚未开始",
+      "sourcing": "询价中",
+      "quoted": "报价已齐",
+      "submitted": "已提交"
+    },
+    "due": {
+      "internal_quote": "内部报价 {date} 截止",
+      "client_submission": "提交客户 {date} 截止"
+    },
     "item": {
       "plural": "招标明细",
       "hint": "一条招标至少包含一项产品，包含多项也很常见。",

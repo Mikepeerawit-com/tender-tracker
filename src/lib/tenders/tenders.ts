@@ -71,7 +71,17 @@ export type TenderSummary = TenderFields & {
   ownerName: string;
 };
 
-export type TenderListRow = TenderSummary & { itemCount: number };
+/**
+ * An Item as the list read carries it: enough to derive from, and nothing more.
+ *
+ * The Outcome rides along for the same reason it does on {@link TenderItem} — Progress
+ * and both overdue conditions are readings of *all* of a Tender's Items (ADR-0001), so
+ * fetching them per Tender would make the derivation depend on how many round trips the
+ * caller made.
+ */
+export type TenderListItem = { id: string; outcome: ItemOutcome | null };
+
+export type TenderListRow = TenderSummary & { items: TenderListItem[] };
 
 /**
  * An Item as a reader gets it — its fields, and how it ended.
@@ -134,7 +144,7 @@ type TenderDbRow = {
 };
 
 type TenderListDbRow = Omit<TenderDbRow, "items" | "assignees"> & {
-  items: { id: string }[];
+  items: TenderListItem[];
 };
 
 export async function createTender(
@@ -496,21 +506,20 @@ export async function removeAssignee(
  * Every Tender the caller's org has, soonest Client Submission Deadline first.
  *
  * A plain list, and deliberately so: the worklist blocks that decide what a Tender is
- * *doing* need derived Progress, which arrives with the Quotes it is derived from.
+ * *doing* need the Quotes and the No Supplier Found records they are derived from, which
+ * are two more reads. `@/lib/tenders/worklist` is where that assembly lives, over this.
  */
 export async function listTenders(store: SessionCookieStore): Promise<TenderListRow[]> {
   const { data } = await createSessionClient(store)
     .from("tenders")
     .select(
-      `${tenderColumns}, owner:users!tenders_owner_user_id_fkey(name), items:tender_items(id)`,
+      `${tenderColumns}, owner:users!tenders_owner_user_id_fkey(name), ` +
+        `items:tender_items(id, outcome)`,
     )
     .order("client_submission_deadline")
     .overrideTypes<TenderListDbRow[], { merge: false }>();
 
-  return (data ?? []).map((row) => ({
-    ...tenderSummary(row),
-    itemCount: row.items.length,
-  }));
+  return (data ?? []).map((row) => ({ ...tenderSummary(row), items: row.items }));
 }
 
 /** One Tender with its Items and Assignees, or null if the caller cannot see it. */
