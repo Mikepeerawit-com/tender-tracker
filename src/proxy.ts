@@ -14,7 +14,24 @@ import type { SessionCookieStore } from "@/lib/supabase/session-client";
  * (`proxy.ts`, not `middleware.ts` — the middleware filename is deprecated in Next 16.)
  */
 
-const publicPaths = ["/login", "/auth/confirm", "/api/health"];
+/**
+ * The paths that must not be behind the session gate, and why each one is not.
+ *
+ * Three of these are reached by somebody with no session *yet* — a redirected visitor, an
+ * invite link opened before an account exists, an uptime probe that will never hold a
+ * cookie. The fourth is different and is the one that was missing: **Vercel Cron
+ * authenticates with a bearer token, not a cookie.** Redirecting it to `/login` does not
+ * secure anything; it just means the run is answered with a 307 every night and the whole
+ * reminder engine — every escalation, the missed submission, the decision chase — never
+ * fires. It did exactly that until `src/proxy.test.ts` was written.
+ *
+ * Being listed here is not the same as being unprotected. `/api/cron/daily` gates itself
+ * on `CRON_SECRET` and answers a bare 404 to anyone who fails, and `/api/health` is a
+ * liveness probe by design. What this list says is "the session cookie is not the lock on
+ * this door", which for the cron is a statement about *which* lock, not whether there is
+ * one.
+ */
+const publicPaths = ["/login", "/auth/confirm", "/api/health", "/api/cron/daily"];
 
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const response = NextResponse.next({ request });
