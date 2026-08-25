@@ -28,7 +28,8 @@ export const dynamic = "force-dynamic";
  * | `tables.readable: false` | The schema is there and unreadable; check its grants. |
  *
  * `health_check()` is deliberately *not* the reachability oracle any more, and this is
- * the subtlest half of #40. It ships in the first migration, so a database that has
+ * the subtlest half of #40. See docs/adr/0016-a-check-must-be-able-to-fail.md before
+ * wiring it back in — that it is dependency-free is what makes it useless here. It ships in the first migration, so a database that has
  * never been pushed to has no such function — and calling it to decide reachability
  * reported the never-deployed database, the exact fault this ticket is about, as
  * `unreachable`, sending the reader to look at a Postgres that was fine. Reachability is
