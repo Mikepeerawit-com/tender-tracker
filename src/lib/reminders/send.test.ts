@@ -15,12 +15,12 @@ import {
   setItemOutcome,
   updateTender,
 } from "@/lib/tenders/tenders";
-import { recordingRobot, type RobotStub } from "@/lib/wecom/robot-stub";
+import { recordingRobot, refusingRobot, type RobotStub } from "@/lib/wecom/robot-stub";
 import { paceMs } from "@/lib/wecom/robot";
 
 import { runDailyCron } from "@/lib/cron/daily";
 
-import { sendDueReminders } from "./send";
+import { sendDailyPosts } from "./send";
 
 /**
  * The nightly send, run against the real database the way the cron runs it.
@@ -32,7 +32,7 @@ import { sendDueReminders } from "./send";
  * assertions are about the one thing the run has externally: **the messages that would be
  * posted**.
  *
- * **Everything that runs the cron lives in this one file, deliberately.** `sendDueReminders`
+ * **Everything that runs the cron lives in this one file, deliberately.** `sendDailyPosts`
  * sweeps *every* org, the way it does in production, so two test files calling it in
  * parallel would each consume the other\'s pending rows and post the other\'s messages into
  * their own stub. A new caller (#35\'s Digest) belongs here rather than in a file of its
@@ -82,7 +82,10 @@ async function signedInAs(who: { email: string }): Promise<SessionCookieStore> {
   return store;
 }
 
-async function createMember(who: { id: string; email: string; wecom: string }) {
+async function createMember(
+  who: { id: string; email: string; wecom: string },
+  inOrg: string = orgId,
+) {
   const { data, error } = await service.auth.admin.createUser({
     email: who.email,
     password,
@@ -95,7 +98,7 @@ async function createMember(who: { id: string; email: string; wecom: string }) {
 
   const { error: profileError } = await service.from("users").insert({
     id: who.id,
-    org_id: orgId,
+    org_id: inOrg,
     name: who.email,
     email: who.email,
     wecom_userid: who.wecom,
@@ -201,15 +204,57 @@ async function reschedule(
   if (!result.ok) throw new Error(`could not edit the Tender: ${result.reason}`);
 }
 
-/** Only what this suite posted — other suites' orgs share the run. */
-function mine(robot: RobotStub) {
-  return robot.sent.filter((message) => message.payload.text.content.includes(client));
+/**
+ * How many sends the run paced, given that pacing is **per batch** — one batch per org,
+ * and so one per webhook (ADR-0012). A run that posted for two orgs waits between the
+ * messages of each, and not across the join.
+ */
+function pacedGaps(robot: RobotStub): number {
+  return robot.sent.length - new Set(robot.sent.map((message) => message.url)).size;
 }
 
-function contentFor(robot: RobotStub, reference: string): string {
+/** Only what this suite posted — other suites' orgs share the run. */
+function mine(robot: RobotStub, whose: string = client) {
+  return robot.sent.filter((message) => message.payload.text.content.includes(whose));
+}
+
+/** The Digest's own header. Every other message this org posts is about one Tender. */
+const digestHead = "今日概览";
+
+function isDigest(content: string): boolean {
+  return content.includes(digestHead);
+}
+
+/** This org's Digest for the run, or "" when it posted none. */
+function digestOf(robot: RobotStub, whose: string = client): string {
+  const digests = mine(robot, whose).filter((message) =>
+    isDigest(message.payload.text.content),
+  );
+
+  // One a day, or the acceptance criterion is not met. Asserted here rather than in each
+  // test, so every test in the file is watching for a second one.
+  expect(digests.length).toBeLessThanOrEqual(1);
+
+  return digests[0]?.payload.text.content ?? "";
+}
+
+/**
+ * What was said *about* one Tender — the reminder, never the Digest.
+ *
+ * The Digest names every open Tender every morning, which is the point of it. A helper
+ * that did not tell the two apart would report "something was posted about this Tender"
+ * for every Tender in the org, and the rules below are all about the reminder.
+ */
+function reminderFor(
+  robot: RobotStub,
+  reference: string,
+  whose: string = client,
+): string {
   return (
-    mine(robot).find((message) => message.payload.text.content.includes(reference))
-      ?.payload.text.content ?? ""
+    mine(robot, whose)
+      .filter((message) => !isDigest(message.payload.text.content))
+      .find((message) => message.payload.text.content.includes(reference))?.payload.text
+      .content ?? ""
   );
 }
 
@@ -290,17 +335,17 @@ describe("rule 1: catch up, never skip", () => {
     // The 7th: the cron runs, and nothing is due yet.
     const before = recordingRobot();
 
-    await sendDueReminders(new Date("2026-08-06T18:00:00Z"), before);
+    await sendDailyPosts(new Date("2026-08-06T18:00:00Z"), before);
 
-    expect(contentFor(before, reference)).toBe("");
+    expect(reminderFor(before, reference)).toBe("");
 
     // The 8th and the 9th: the cron does not run at all. The 3-days-before nudge comes
     // due on the 8th and nobody is there to send it.
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
-    expect(contentFor(robot, reference)).toContain("2026-08-11");
+    expect(reminderFor(robot, reference)).toContain("2026-08-11");
 
     const internal = (await remindersOn(tender.id)).filter(
       (row) => row.milestone === "internal_quote",
@@ -324,15 +369,15 @@ describe("rule 1: catch up, never skip", () => {
 
     const early = recordingRobot();
 
-    await sendDueReminders(nightBefore, early);
+    await sendDailyPosts(nightBefore, early);
 
-    expect(contentFor(early, reference)).toBe("");
+    expect(reminderFor(early, reference)).toBe("");
 
     const onTheDay = recordingRobot();
 
-    await sendDueReminders(runInstant, onTheDay);
+    await sendDailyPosts(runInstant, onTheDay);
 
-    expect(contentFor(onTheDay, reference)).toContain("2026-08-13");
+    expect(reminderFor(onTheDay, reference)).toContain("2026-08-13");
   });
 
   it("says a deadline is today rather than counting zero days to it", async () => {
@@ -343,9 +388,9 @@ describe("rule 1: catch up, never skip", () => {
     const reference = await referenceOf(tender.id);
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
-    expect(contentFor(robot, reference)).toContain("就是今天");
+    expect(reminderFor(robot, reference)).toContain("就是今天");
   });
 });
 
@@ -360,9 +405,9 @@ describe("rule 2: a caught-up nudge for a milestone that has passed", () => {
     const reference = await referenceOf(tender.id);
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
-    expect(contentFor(robot, reference)).toBe("");
+    expect(reminderFor(robot, reference)).toBe("");
   });
 
   it("settles the row so it is not reconsidered every night forever", async () => {
@@ -371,7 +416,7 @@ describe("rule 2: a caught-up nudge for a milestone that has passed", () => {
       clientSubmissionDeadline: "2026-09-01",
     });
 
-    await sendDueReminders(runInstant, recordingRobot());
+    await sendDailyPosts(runInstant, recordingRobot());
 
     const internal = (await remindersOn(tender.id)).filter(
       (row) => row.milestone === "internal_quote" && row.due_date <= today,
@@ -396,9 +441,9 @@ describe("rule 2: a caught-up nudge for a milestone that has passed", () => {
 
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
-    expect(contentFor(robot, reference)).toBe("");
+    expect(reminderFor(robot, reference)).toBe("");
   });
 });
 
@@ -414,13 +459,19 @@ describe("rule 4: one message per Tender per run", () => {
     const reference = await referenceOf(tender.id);
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
+    // One reminder, however many rows were owed. The Digest names it too, and that is a
+    // different message with a different job.
     expect(
-      mine(robot).filter((message) => message.payload.text.content.includes(reference)),
+      mine(robot).filter(
+        (message) =>
+          !isDigest(message.payload.text.content) &&
+          message.payload.text.content.includes(reference),
+      ),
     ).toHaveLength(1);
 
-    const content = contentFor(robot, reference);
+    const content = reminderFor(robot, reference);
 
     expect(content).toContain("内部报价截止");
     expect(content).toContain("客户投标截止");
@@ -443,16 +494,19 @@ describe("rule 4: one message per Tender per run", () => {
 
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
     for (const tender of tenders) {
-      expect(contentFor(robot, await referenceOf(tender.id))).not.toBe("");
+      expect(reminderFor(robot, await referenceOf(tender.id))).not.toBe("");
     }
 
-    expect(mine(robot)).toHaveLength(10);
-    // ~3s apart is ≈17/min, which keeps a catch-up burst inside the cap by construction.
+    // Ten reminders and the one Digest: the whole set the run would post.
+    expect(mine(robot)).toHaveLength(11);
+    expect(digestOf(robot)).not.toBe("");
+    // ~3s apart is ≈17/min, which keeps a catch-up burst inside the cap by construction —
+    // and the Digest is inside the same paced batch rather than a free twenty-first.
     expect(robot.waited.every((ms) => ms === paceMs)).toBe(true);
-    expect(robot.waited).toHaveLength(robot.sent.length - 1);
+    expect(robot.waited).toHaveLength(pacedGaps(robot));
   });
 });
 
@@ -465,15 +519,21 @@ describe("rule 5: a non-zero errcode is not a send", () => {
     const reference = await referenceOf(tender.id);
 
     // WeCom's throttle response is unmeasured, so every non-zero result is retryable.
-    await sendDueReminders(runInstant, recordingRobot({ errcode: 45009, errmsg: "busy" }));
+    await sendDailyPosts(
+      runInstant,
+      refusingRobot((content) => content.includes(reference), {
+        errcode: 45009,
+        errmsg: "busy",
+      }),
+    );
 
     expect((await remindersOn(tender.id)).every((row) => row.sent === false)).toBe(true);
 
     const retry = recordingRobot();
 
-    await sendDueReminders(runInstant, retry);
+    await sendDailyPosts(runInstant, retry);
 
-    expect(contentFor(retry, reference)).toContain("2026-08-11");
+    expect(reminderFor(retry, reference)).toContain("2026-08-11");
     expect(
       (await remindersOn(tender.id)).filter((row) => row.due_date <= today).every(
         (row) => row.sent,
@@ -488,7 +548,12 @@ describe("rule 5: a non-zero errcode is not a send", () => {
       assignees: [nok],
     });
 
-    await sendDueReminders(runInstant, recordingRobot(500));
+    const reference = await referenceOf(tender.id);
+
+    await sendDailyPosts(
+      runInstant,
+      refusingRobot((content) => content.includes(reference)),
+    );
 
     expect(await notificationsOn(tender.id)).toEqual([]);
   });
@@ -510,7 +575,7 @@ describe("who a reminder @s", () => {
 
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
     const message = mine(robot).find((sent) =>
       sent.payload.text.content.includes(reference),
@@ -536,7 +601,7 @@ describe("who a reminder @s", () => {
 
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
     const message = mine(robot).find((sent) =>
       sent.payload.text.content.includes(reference),
@@ -566,7 +631,7 @@ describe("who a reminder @s", () => {
 
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
     const message = mine(robot).find((sent) =>
       sent.payload.text.content.includes(reference),
@@ -594,7 +659,7 @@ describe("who a reminder @s", () => {
 
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
     expect(
       mine(robot).find((sent) => sent.payload.text.content.includes(reference))?.payload
@@ -614,9 +679,9 @@ describe("who a reminder @s", () => {
 
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
-    expect(contentFor(robot, reference)).toBe("");
+    expect(reminderFor(robot, reference)).toBe("");
   });
 
   it("mentions the Owner for the client submission deadline", async () => {
@@ -629,7 +694,7 @@ describe("who a reminder @s", () => {
     const reference = await referenceOf(tender.id);
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
     const message = mine(robot).find((sent) =>
       sent.payload.text.content.includes(reference),
@@ -651,7 +716,7 @@ describe("the in-app notifications the bell will read", () => {
       assignees: [nok],
     });
 
-    await sendDueReminders(runInstant, recordingRobot());
+    await sendDailyPosts(runInstant, recordingRobot());
 
     const rows = (await notificationsOn(tender.id)).filter(
       (row) => row.type === "reminder:internal_quote",
@@ -681,7 +746,7 @@ describe("the in-app notifications the bell will read", () => {
       await signedInAs(nok),
     );
 
-    await sendDueReminders(runInstant, recordingRobot());
+    await sendDailyPosts(runInstant, recordingRobot());
 
     const rows = (await notificationsOn(tender.id)).filter(
       (row) => row.type === "reminder:internal_quote",
@@ -699,7 +764,7 @@ describe("the in-app notifications the bell will read", () => {
       items: ["Nitrile gloves", "Surgical masks"],
     });
 
-    await sendDueReminders(runInstant, recordingRobot());
+    await sendDailyPosts(runInstant, recordingRobot());
 
     expect(
       (await notificationsOn(tender.id)).filter(
@@ -726,7 +791,7 @@ describe("the missed submission", () => {
     const reference = await referenceOf(tender.id);
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
     const message = mine(robot).find((sent) =>
       sent.payload.text.content.includes(reference),
@@ -745,13 +810,13 @@ describe("the missed submission", () => {
     const tender = await aTender(missed);
     const reference = await referenceOf(tender.id);
 
-    await sendDueReminders(runInstant, recordingRobot());
+    await sendDailyPosts(runInstant, recordingRobot());
 
     const again = recordingRobot();
 
-    await sendDueReminders(new Date("2026-08-10T18:00:00Z"), again);
+    await sendDailyPosts(new Date("2026-08-10T18:00:00Z"), again);
 
-    expect(contentFor(again, reference)).toBe("");
+    expect(reminderFor(again, reference)).toBe("");
   });
 
   it("is the only thing said about a Tender whose deadlines have all gone", async () => {
@@ -760,9 +825,9 @@ describe("the missed submission", () => {
     const tender = await aTender(missed);
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
-    const content = contentFor(robot, await referenceOf(tender.id));
+    const content = reminderFor(robot, await referenceOf(tender.id));
 
     expect(content).toContain("错过");
     expect(content).not.toContain("客户投标截止:");
@@ -779,9 +844,9 @@ describe("the missed submission", () => {
 
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
-    expect(contentFor(robot, await referenceOf(tender.id))).toBe("");
+    expect(reminderFor(robot, await referenceOf(tender.id))).toBe("");
   });
 
   it("says nothing once somebody has recorded an Outcome", async () => {
@@ -796,9 +861,9 @@ describe("the missed submission", () => {
 
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
-    expect(contentFor(robot, await referenceOf(tender.id))).toBe("");
+    expect(reminderFor(robot, await referenceOf(tender.id))).toBe("");
   });
 
   it("posts again when the client extends and the new deadline is missed too", async () => {
@@ -807,7 +872,7 @@ describe("the missed submission", () => {
     const tender = await aTender(missed);
     const reference = await referenceOf(tender.id);
 
-    await sendDueReminders(runInstant, recordingRobot());
+    await sendDailyPosts(runInstant, recordingRobot());
     await reschedule(
       tender.id,
       { internalQuoteDeadline: "2026-08-14", clientSubmissionDeadline: "2026-08-16" },
@@ -817,10 +882,10 @@ describe("the missed submission", () => {
     // 2026-08-17 in Bangkok: the day after the extension, missed again.
     const after = recordingRobot();
 
-    await sendDueReminders(new Date("2026-08-16T18:00:00Z"), after);
+    await sendDailyPosts(new Date("2026-08-16T18:00:00Z"), after);
 
-    expect(contentFor(after, reference)).toContain("错过");
-    expect(contentFor(after, reference)).toContain("2026-08-16");
+    expect(reminderFor(after, reference)).toContain("错过");
+    expect(reminderFor(after, reference)).toContain("2026-08-16");
   });
 });
 
@@ -840,12 +905,12 @@ describe("the decision chase", () => {
 
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
     expect(await remindersOn(tender.id)).not.toContainEqual(
       expect.objectContaining({ milestone: "decision_chase" }),
     );
-    expect(contentFor(robot, await referenceOf(tender.id))).toBe("");
+    expect(reminderFor(robot, await referenceOf(tender.id))).toBe("");
   });
 
   it("reminds the Owner to chase on the day they set", async () => {
@@ -863,7 +928,7 @@ describe("the decision chase", () => {
 
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
     const message = mine(robot).find((sent) =>
       sent.payload.text.content.includes(reference),
@@ -884,9 +949,9 @@ describe("the decision chase", () => {
     });
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
-    const content = contentFor(robot, await referenceOf(tender.id));
+    const content = reminderFor(robot, await referenceOf(tender.id));
 
     expect(content).toContain("错过");
     expect(content).not.toContain("决标");
@@ -903,7 +968,7 @@ describe("the decision chase", () => {
     });
     const reference = await referenceOf(tender.id);
 
-    await sendDueReminders(runInstant, recordingRobot());
+    await sendDailyPosts(runInstant, recordingRobot());
 
     // Neither posted nor closed — it is owed again tomorrow, unchanged.
     expect(
@@ -921,9 +986,9 @@ describe("the decision chase", () => {
 
     const after = recordingRobot();
 
-    await sendDueReminders(new Date("2026-08-10T18:00:00Z"), after);
+    await sendDailyPosts(new Date("2026-08-10T18:00:00Z"), after);
 
-    expect(contentFor(after, reference)).toContain("决标");
+    expect(reminderFor(after, reference)).toContain("决标");
   });
 
   it("stops chasing once the Outcome is in", async () => {
@@ -945,9 +1010,9 @@ describe("the decision chase", () => {
 
     const robot = recordingRobot();
 
-    await sendDueReminders(runInstant, robot);
+    await sendDailyPosts(runInstant, robot);
 
-    expect(contentFor(robot, await referenceOf(tender.id))).toBe("");
+    expect(reminderFor(robot, await referenceOf(tender.id))).toBe("");
   });
 });
 
@@ -999,6 +1064,257 @@ describe("the daily run as a whole", () => {
     });
 
     expect(report.rates).toBeNull();
-    expect(contentFor(robot, await referenceOf(tender.id))).not.toBe("");
+    expect(reminderFor(robot, await referenceOf(tender.id))).not.toBe("");
+  });
+});
+
+/**
+ * The Digest, in an org of its own — the one thing in this file that needs one.
+ *
+ * Every other test here asks what was said about *a Tender*, which a shared org answers
+ * fine. The Digest is a statement about the org's **whole** open set, so it can only be
+ * asserted where nothing else has been recording Tenders all suite: in the org above,
+ * "every open Tender" is by now every fixture every test before it left behind.
+ *
+ * Its deadlines are all far enough out that no reminder is due, so what the run posts
+ * here is the Digest and whatever a test deliberately makes owed.
+ */
+describe("the daily Digest", () => {
+  const digestClient = `Chiang Mai Clinic ${run}`;
+  const digestOwner = {
+    id: "",
+    email: `digest-owner-${run}@example.test`,
+    wecom: `digest-${run}`,
+  };
+
+  let digestOrgId = "";
+
+  async function aQuietTender(shape: {
+    internalQuoteDeadline?: string;
+    clientSubmissionDeadline?: string;
+    expectedDecisionDate?: string | null;
+    title?: string;
+    items?: string[];
+  }): Promise<{ id: string; itemIds: string[]; reference: string }> {
+    const store = await signedInAs(digestOwner);
+    const result = await createTender(
+      {
+        clientName: digestClient,
+        title: shape.title ?? "Surgical consumables",
+        dateReceived: "2026-08-01",
+        internalQuoteDeadline: shape.internalQuoteDeadline ?? "2026-08-25",
+        clientSubmissionDeadline: shape.clientSubmissionDeadline ?? "2026-09-01",
+        expectedDecisionDate: shape.expectedDecisionDate ?? null,
+        ownerUserId: digestOwner.id,
+        notes: null,
+        items: (shape.items ?? ["Nitrile gloves"]).map((productName) => ({
+          productName,
+          description: null,
+          quantity: 500,
+          unit: "box",
+        })),
+      },
+      store,
+    );
+
+    if (!result.ok) throw new Error(`could not create a Tender: ${result.reason}`);
+
+    const { data } = await service
+      .from("tender_items")
+      .select("id")
+      .eq("tender_id", result.tenderId)
+      .order("ordinal");
+
+    return {
+      id: result.tenderId,
+      itemIds: (data ?? []).map((item) => item.id),
+      reference: await referenceOf(result.tenderId),
+    };
+  }
+
+  beforeAll(async () => {
+    const { data: org, error } = await service
+      .from("orgs")
+      .insert({ name: `Digest ${run}` })
+      .select("id")
+      .single();
+
+    if (error) throw error;
+
+    digestOrgId = org.id;
+
+    await createMember(digestOwner, digestOrgId);
+
+    const { error: robotError } = await service.from("group_robots").insert({
+      org_id: digestOrgId,
+      webhook_url: `${webhook}-digest`,
+      updated_by: digestOwner.id,
+    });
+
+    if (robotError) throw robotError;
+  });
+
+  afterAll(async () => {
+    await service.from("group_robots").delete().eq("org_id", digestOrgId);
+    await service.from("notifications").delete().eq("org_id", digestOrgId);
+    await service.from("tenders").delete().eq("org_id", digestOrgId);
+    await service.from("users").delete().eq("org_id", digestOrgId);
+    await service.auth.admin.deleteUser(digestOwner.id);
+    await service.from("orgs").delete().eq("id", digestOrgId);
+  });
+
+  it("posts one message listing every open Tender and the milestone it is heading for", async () => {
+    // The whole point: reminders fire at thresholds, so a Tender three weeks out with
+    // nobody on it is invisible to them. Nothing here is due, and the Digest still goes.
+    const sourcing = await aQuietTender({ title: "Ward furniture" });
+    const awaiting = await aQuietTender({
+      title: "Theatre lighting",
+      expectedDecisionDate: "2026-09-20",
+    });
+    const decided = await aQuietTender({ title: "Bed linen" });
+
+    await recordSubmission(
+      { tenderId: awaiting.id, submittedAt: new Date("2026-08-07T04:00:00Z") },
+      await signedInAs(digestOwner),
+    );
+    // `cancelled` rather than `won`: the two announced outcomes post a message of their
+    // own, and this test is about what the *cron* posts.
+    await setItemOutcome(
+      { itemId: decided.itemIds[0], outcome: "cancelled", decidedAt: runInstant },
+      await signedInAs(digestOwner),
+    );
+
+    const robot = recordingRobot();
+
+    await sendDailyPosts(runInstant, robot);
+
+    const digest = digestOf(robot, digestClient);
+
+    // The set of messages this org's run posts: the Digest, and nothing else, because
+    // nothing was due.
+    expect(mine(robot, digestClient)).toHaveLength(1);
+
+    expect(digest).toContain(sourcing.reference);
+    expect(digest).toContain("2026-08-25");
+    expect(digest).toContain(awaiting.reference);
+    expect(digest).toContain("2026-09-20");
+    // Off the tender list is off the Digest — the same definition, not a second one.
+    expect(digest).not.toContain(decided.reference);
+    expect(digest).toContain("共 2 个");
+  });
+
+  it("calls a submission missed wherever the reminder does, on the same Tender", async () => {
+    // The sharp case, and the one place three definitions of "missed" could have drifted:
+    // a Tender never submitted, past its client deadline, with **one Item decided and one
+    // still open**. It is still open, so the Digest lists it — and what it must not do is
+    // describe it differently from the reminder the same run posts about it. The worklist
+    // files it under "everything else" instead, which is a decision about which pile a row
+    // sits in rather than a claim that the Bid went out.
+    const missed = await aQuietTender({
+      title: "Anaesthesia circuits",
+      internalQuoteDeadline: "2026-08-01",
+      clientSubmissionDeadline: "2026-08-05",
+      items: ["Nitrile gloves", "Surgical masks"],
+    });
+
+    await setItemOutcome(
+      { itemId: missed.itemIds[0], outcome: "cancelled", decidedAt: runInstant },
+      await signedInAs(digestOwner),
+    );
+
+    const robot = recordingRobot();
+
+    await sendDailyPosts(runInstant, robot);
+
+    expect(reminderFor(robot, missed.reference, digestClient)).toContain("错过");
+    expect(digestOf(robot, digestClient)).toContain("已错过客户投标截止 2026-08-05");
+  });
+
+  it("comes after the reminders, in the same paced batch", async () => {
+    // Pacing keeps no state between calls (ADR-0012), so a Digest posted in a second
+    // call would arrive with none of the ~3s separation the reminders were just paced to
+    // respect — on precisely the morning a catch-up run has spent the whole budget.
+    const owed = await aQuietTender({
+      title: "Infusion pumps",
+      internalQuoteDeadline: "2026-08-11",
+    });
+    const robot = recordingRobot();
+
+    await sendDailyPosts(runInstant, robot);
+
+    const posted = mine(robot, digestClient).map(
+      (message) => message.payload.text.content,
+    );
+
+    expect(posted.filter(isDigest)).toHaveLength(1);
+    expect(isDigest(posted[posted.length - 1])).toBe(true);
+    expect(reminderFor(robot, owed.reference, digestClient)).toContain(
+      "内部报价截止",
+    );
+    // Every gap in the run, the Digest's included.
+    expect(robot.waited.every((ms) => ms === paceMs)).toBe(true);
+    expect(robot.waited).toHaveLength(pacedGaps(robot));
+  });
+
+  it("says nothing at all on a morning with nothing open", async () => {
+    // A daily message with no work in it is the group's attention spent on a line with
+    // no fact in it — and the surest way to teach a team to mute the robot they also
+    // hear the reminders through.
+    const { data: org, error } = await service
+      .from("orgs")
+      .insert({ name: `Quiet ${run}` })
+      .select("id")
+      .single();
+
+    if (error) throw error;
+
+    const quietOwner = {
+      id: "",
+      email: `quiet-owner-${run}@example.test`,
+      wecom: `quiet-${run}`,
+    };
+
+    await createMember(quietOwner, org.id);
+    await service.from("group_robots").insert({
+      org_id: org.id,
+      webhook_url: `${webhook}-quiet`,
+      updated_by: quietOwner.id,
+    });
+
+    const robot = recordingRobot();
+
+    await sendDailyPosts(runInstant, robot);
+
+    expect(robot.sent.filter((message) => message.url.endsWith("-quiet"))).toEqual([]);
+
+    await service.from("group_robots").delete().eq("org_id", org.id);
+    await service.from("users").delete().eq("org_id", org.id);
+    await service.auth.admin.deleteUser(quietOwner.id);
+    await service.from("orgs").delete().eq("id", org.id);
+  });
+
+  it("goes out through the cron, and the run reports it", async () => {
+    await aQuietTender({ title: "Sterilisation trays" });
+
+    const robot = recordingRobot();
+    const report = await runDailyCron(runInstant, {
+      rates: unreachableRates(),
+      robot,
+    });
+
+    expect(digestOf(robot, digestClient)).not.toBe("");
+    // Every org with something open, this one included — the figure is the whole run's.
+    expect(report.posts.digests).toBeGreaterThanOrEqual(1);
+  });
+
+  it("names no Tender belonging to another org", async () => {
+    // The `org_id` filter is the boundary here: the cron has no session, so RLS is not.
+    // A Tender listed in the wrong company's group chat is unrecoverable.
+    const robot = recordingRobot();
+
+    await sendDailyPosts(runInstant, robot);
+
+    expect(digestOf(robot, digestClient)).not.toContain(client);
+    expect(digestOf(robot)).not.toContain(digestClient);
   });
 });
