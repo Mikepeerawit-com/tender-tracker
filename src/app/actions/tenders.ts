@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+
+import { runInstantFromHeaders } from "@/lib/run-instant";
 
 import {
   refused,
@@ -15,8 +17,10 @@ import {
   addAssignee,
   addTenderItem,
   createTender,
+  recordSubmission,
   removeAssignee,
   removeTenderItem,
+  setItemOutcome,
   updateTender,
   updateTenderItem,
   type TenderFields,
@@ -136,6 +140,69 @@ export async function removeAssigneeAction(
   const tenderId = text(formData, "tenderId");
   const result = await removeAssignee(
     { tenderId, userId: text(formData, "userId") },
+    await cookies(),
+  );
+
+  return afterTenderWrite(result, tenderId);
+}
+
+/**
+ * The Bid went out.
+ *
+ * The instant is resolved here, at the request boundary, and passed down (ADR-0010) —
+ * `submitted_at` is a fact about when something happened, and a clock read further in
+ * would put the moment out of reach of any test.
+ */
+export async function recordSubmissionAction(
+  _previous: TenderFormState,
+  formData: FormData,
+): Promise<TenderFormState> {
+  const tenderId = text(formData, "tenderId");
+  const result = await recordSubmission(
+    { tenderId, submittedAt: runInstantFromHeaders(await headers()) },
+    await cookies(),
+  );
+
+  return afterTenderWrite(result, tenderId);
+}
+
+/**
+ * It did not, after all.
+ *
+ * The undo is not a nicety: nothing in the data contradicts a submission recorded in
+ * error, and its presence is the only thing standing between a Tender and being reported
+ * as Submission Missed.
+ */
+export async function clearSubmissionAction(
+  _previous: TenderFormState,
+  formData: FormData,
+): Promise<TenderFormState> {
+  const tenderId = text(formData, "tenderId");
+  const result = await recordSubmission({ tenderId, submittedAt: null }, await cookies());
+
+  return afterTenderWrite(result, tenderId);
+}
+
+/**
+ * How one Tender Item ended, as the picker posted it.
+ *
+ * An empty field is "not decided yet" and clears both columns. Anything else goes down
+ * as it arrived and is checked against the four stored values there — including
+ * `partial`, which is a Tender-level display state no row may hold and which only a
+ * hand-posted form could offer.
+ */
+export async function setItemOutcomeAction(
+  _previous: TenderFormState,
+  formData: FormData,
+): Promise<TenderFormState> {
+  const tenderId = text(formData, "tenderId");
+  const posted = text(formData, "outcome");
+  const result = await setItemOutcome(
+    {
+      itemId: text(formData, "itemId"),
+      outcome: posted === "" ? null : posted,
+      decidedAt: runInstantFromHeaders(await headers()),
+    },
     await cookies(),
   );
 

@@ -7,14 +7,17 @@ import {
   type SessionCookieStore,
 } from "@/lib/supabase/session-client";
 
+import { tenderOutcome } from "./outcome";
 import {
   addAssignee,
   addTenderItem,
   createTender,
   getTender,
   listTenders,
+  recordSubmission,
   removeAssignee,
   removeTenderItem,
+  setItemOutcome,
   updateTender,
   updateTenderItem,
 } from "./tenders";
@@ -756,5 +759,192 @@ describe("listTenders and getTender", () => {
 
     expect(await listTenders(memoryCookieStore())).toEqual([]);
     expect(await getTender(tenderId, memoryCookieStore())).toBeNull();
+  });
+});
+
+describe("recording what happened", () => {
+  // Literals, not `new Date()`: the clock is resolved at the request boundary and passed
+  // down (ADR-0010), and these are the two instants the tests below assert were stored.
+  const submittedAt = new Date("2026-08-27T09:15:00.000Z");
+  const decidedAt = new Date("2026-09-10T04:00:00.000Z");
+
+  /** A Tender asking for two products, which is what a split award needs. */
+  async function aSplitTender(): Promise<string> {
+    return aTender({
+      items: [
+        { productName: "Nitrile gloves", description: null, quantity: 500, unit: "box of 50" },
+        { productName: "PICC catheter 4Fr", description: null, quantity: 40, unit: "piece" },
+      ],
+    });
+  }
+
+  async function itemsOf(tenderId: string) {
+    const tender = await getTender(tenderId, await signedInAs(owner.email));
+
+    if (!tender) throw new Error("the Tender went missing");
+
+    return tender.items;
+  }
+
+  it("records that the Bid went out", async () => {
+    const tenderId = await aTender();
+
+    expect(await recordSubmission({ tenderId, submittedAt }, await signedInAs(owner.email))).toEqual(
+      { ok: true },
+    );
+
+    const tender = await getTender(tenderId, await signedInAs(mate.email));
+
+    expect(tender?.submittedAt).not.toBeNull();
+    expect(new Date(tender!.submittedAt!).toISOString()).toBe(submittedAt.toISOString());
+  });
+
+  it("takes the submission back off, because it can be recorded in error", async () => {
+    // The undo matters more here than almost anywhere: `submitted_at` is what tells
+    // "submitted on time" from "never submitted", so a wrong one hides the one failure
+    // the product exists to prevent.
+    const tenderId = await aTender();
+    const store = await signedInAs(owner.email);
+
+    await recordSubmission({ tenderId, submittedAt }, store);
+
+    expect(await recordSubmission({ tenderId, submittedAt: null }, store)).toEqual({ ok: true });
+    expect((await getTender(tenderId, store))?.submittedAt).toBeNull();
+  });
+
+  it("refuses a submission on a Tender the caller cannot see", async () => {
+    const tenderId = await aTender();
+
+    expect(
+      await recordSubmission({ tenderId, submittedAt }, await signedInAs(outsider.email)),
+    ).toEqual({ ok: false, reason: "not_found" });
+
+    expect(await recordSubmission({ tenderId, submittedAt }, memoryCookieStore())).toEqual({
+      ok: false,
+      reason: "forbidden",
+    });
+  });
+
+  it("records an Outcome per Item, with the day it was decided", async () => {
+    const tenderId = await aSplitTender();
+    const store = await signedInAs(owner.email);
+    const [gloves, catheter] = await itemsOf(tenderId);
+
+    expect(
+      await setItemOutcome({ itemId: gloves.id, outcome: "won", decidedAt }, store),
+    ).toEqual({ ok: true });
+    expect(
+      await setItemOutcome({ itemId: catheter.id, outcome: "lost", decidedAt }, store),
+    ).toEqual({ ok: true });
+
+    const items = await itemsOf(tenderId);
+
+    expect(items.map((item) => item.outcome)).toEqual(["won", "lost"]);
+    expect(new Date(items[0].outcomeAt!).toISOString()).toBe(decidedAt.toISOString());
+  });
+
+  it("derives the Tender's Outcome from the Items as stored", async () => {
+    // The three rules are tested as arithmetic next door. What this proves is that the
+    // rows they are read from come back in the shape the rules take — a split award,
+    // through the database and back.
+    const tenderId = await aSplitTender();
+    const store = await signedInAs(owner.email);
+    const [gloves, catheter] = await itemsOf(tenderId);
+
+    expect(tenderOutcome(await itemsOf(tenderId))).toBeNull();
+
+    await setItemOutcome({ itemId: gloves.id, outcome: "won", decidedAt }, store);
+
+    // One Item still undecided, so the Tender is still open. Rule 1.
+    expect(tenderOutcome(await itemsOf(tenderId))).toBeNull();
+
+    await setItemOutcome({ itemId: catheter.id, outcome: "lost", decidedAt }, store);
+
+    expect(tenderOutcome(await itemsOf(tenderId))).toBe("partial");
+  });
+
+  it("does not re-date an Outcome that has not changed", async () => {
+    // `outcome_at` is what "won this month" is counted on, so a save that decides nothing
+    // must not move it. Reachable from the screen: the picker's no-JavaScript Save button
+    // posts whatever is selected, changed or not.
+    const tenderId = await aTender();
+    const store = await signedInAs(owner.email);
+    const [item] = await itemsOf(tenderId);
+
+    await setItemOutcome({ itemId: item.id, outcome: "won", decidedAt }, store);
+
+    const laterStill = new Date("2026-10-01T04:00:00.000Z");
+
+    expect(
+      await setItemOutcome({ itemId: item.id, outcome: "won", decidedAt: laterStill }, store),
+    ).toEqual({ ok: true });
+
+    const [again] = await itemsOf(tenderId);
+
+    expect(new Date(again.outcomeAt!).toISOString()).toBe(decidedAt.toISOString());
+  });
+
+  it("takes an Outcome back off, clearing the date with it", async () => {
+    const tenderId = await aTender();
+    const store = await signedInAs(owner.email);
+    const [item] = await itemsOf(tenderId);
+
+    await setItemOutcome({ itemId: item.id, outcome: "won", decidedAt }, store);
+
+    expect(await setItemOutcome({ itemId: item.id, outcome: null, decidedAt }, store)).toEqual({
+      ok: true,
+    });
+
+    // Both, or the `outcome_dated` CHECK would have refused the write outright.
+    expect(await itemsOf(tenderId)).toMatchObject([{ outcome: null, outcomeAt: null }]);
+  });
+
+  it("never writes `partial` to a row", async () => {
+    // `partial` is a Tender-level display state derived from the Items (ADR-0001). It is
+    // refused here rather than reaching the CHECK that would also refuse it, so the
+    // person posting it gets a sentence instead of a failed save — and the row is
+    // untouched either way.
+    const tenderId = await aSplitTender();
+    const store = await signedInAs(owner.email);
+    const [gloves, catheter] = await itemsOf(tenderId);
+
+    await setItemOutcome({ itemId: gloves.id, outcome: "won", decidedAt }, store);
+    await setItemOutcome({ itemId: catheter.id, outcome: "lost", decidedAt }, store);
+
+    // The Tender reads as `partial`, and no Item may be made to say so.
+    expect(tenderOutcome(await itemsOf(tenderId))).toBe("partial");
+
+    for (const item of [gloves, catheter]) {
+      expect(
+        await setItemOutcome(
+          // Only reachable by hand-posting one: the picker offers the four stored values.
+          { itemId: item.id, outcome: "partial", decidedAt },
+          store,
+        ),
+      ).toEqual({ ok: false, reason: "invalid_outcome" });
+    }
+
+    expect((await itemsOf(tenderId)).map((item) => item.outcome)).toEqual(["won", "lost"]);
+
+    // And nowhere else in the database either, which the CHECK is what guarantees.
+    const { data } = await service.from("tender_items").select("id").eq("outcome", "partial");
+
+    expect(data).toEqual([]);
+  });
+
+  it("refuses an Outcome on an Item the caller cannot see", async () => {
+    const tenderId = await aTender();
+    const [item] = await itemsOf(tenderId);
+
+    expect(
+      await setItemOutcome(
+        { itemId: item.id, outcome: "won", decidedAt },
+        await signedInAs(outsider.email),
+      ),
+    ).toEqual({ ok: false, reason: "not_found" });
+
+    expect(
+      await setItemOutcome({ itemId: item.id, outcome: "won", decidedAt }, memoryCookieStore()),
+    ).toEqual({ ok: false, reason: "forbidden" });
   });
 });

@@ -2,6 +2,7 @@ import "server-only";
 
 import { currentUser } from "@/lib/auth/session";
 import { isCalendarDate } from "@/lib/calendar-date";
+import { isItemOutcome, type ItemOutcome } from "@/lib/tenders/outcome";
 import {
   createSessionClient,
   type SessionCookieStore,
@@ -52,6 +53,7 @@ export const tenderProblems = [
   "no_items",
   "invalid_quantity",
   "last_item",
+  "invalid_outcome",
   "failed",
 ] as const;
 
@@ -71,7 +73,18 @@ export type TenderSummary = TenderFields & {
 
 export type TenderListRow = TenderSummary & { itemCount: number };
 
-export type TenderItem = { id: string } & TenderItemFields;
+/**
+ * An Item as a reader gets it — its fields, and how it ended.
+ *
+ * The Outcome rides along with the Item rather than being fetched where it is shown,
+ * because the Tender-level Outcome is a reading of *all* of them (ADR-0001) and a
+ * per-Item read would make the derivation depend on how many round trips a caller made.
+ */
+export type TenderItem = { id: string } & TenderItemFields & {
+    outcome: ItemOutcome | null;
+    /** When it was decided. Always set with the Outcome and cleared with it. */
+    outcomeAt: string | null;
+  };
 
 export type Tender = TenderSummary & {
   items: TenderItem[];
@@ -82,7 +95,7 @@ const tenderColumns =
   "id, reference, client_name, title, date_received, internal_quote_deadline, " +
   "client_submission_deadline, expected_decision_date, submitted_at, notes, owner_user_id";
 
-const itemColumns = "id, product_name, description, quantity, unit";
+const itemColumns = "id, product_name, description, quantity, unit, outcome, outcome_at";
 
 /**
  * The database shapes the two read queries come back as, written out rather than
@@ -99,6 +112,8 @@ type TenderItemDbRow = {
   description: string | null;
   quantity: number;
   unit: string;
+  outcome: ItemOutcome | null;
+  outcome_at: string | null;
 };
 
 type TenderDbRow = {
@@ -310,6 +325,119 @@ export async function removeTenderItem(
 }
 
 /**
+ * Record that the Bid went out — or take that back.
+ *
+ * `submitted_at` is a **fact, not a plan**, and it is the only thing that distinguishes
+ * "submitted on time" from "never submitted" once the Client Submission Deadline has
+ * passed (ADR-0003). No column says a submission was missed; its absence is what says so,
+ * which is why the undo exists: a submission recorded in error hides the one failure this
+ * product is for, and nothing else in the data would contradict it.
+ *
+ * The instant is passed in rather than read here — the clock belongs to the request
+ * boundary (ADR-0010), so a test can record a Bid as having gone out last Tuesday.
+ *
+ * The Owner is accountable for the Bid going out on time, and is who the reminders reach.
+ * Recording that it *did* go out is not gated on them all the same: under ten trusted
+ * users anyone who can see a Tender may write to it, and the colleague who pressed send
+ * while the Owner was on a plane must be able to say so.
+ */
+export async function recordSubmission(
+  { tenderId, submittedAt }: { tenderId: string; submittedAt: Date | null },
+  store: SessionCookieStore,
+): Promise<TenderResult> {
+  const caller = await currentUser(store);
+
+  if (!caller) return { ok: false, reason: "forbidden" };
+
+  const { data, error } = await createSessionClient(store)
+    .from("tenders")
+    .update({ submitted_at: submittedAt === null ? null : submittedAt.toISOString() })
+    .eq("id", tenderId)
+    .select("id");
+
+  if (error !== null) return { ok: false, reason: "failed" };
+
+  // Another org's Tender and a deleted one are the same answer through RLS, and the same
+  // answer is the right one to give.
+  return data.length === 1 ? { ok: true } : { ok: false, reason: "not_found" };
+}
+
+/**
+ * Record how one Tender Item ended — or take the decision back off it.
+ *
+ * **Per Item, because a client awarding half a Tender to us and half to a competitor is
+ * ordinary** (ADR-0001). What the Tender as a whole came to is derived from these by
+ * `tenderOutcome`, and is stored nowhere.
+ *
+ * **`partial` is refused here.** It is a Tender-level display state that no row may hold,
+ * and the `outcome` CHECK would refuse it too — but a refusal from the database arrives
+ * as a failed save with nothing to say, and this one arrives as a sentence. Anything
+ * outside the four stored values is refused the same way.
+ *
+ * `outcome_at` moves with the Outcome and is cleared with it, which the `outcome_dated`
+ * CHECK requires and which metrics like "won this month" depend on: `updated_at` is not a
+ * decision date. The instant comes from the request boundary (ADR-0010).
+ */
+export async function setItemOutcome(
+  {
+    itemId,
+    outcome,
+    decidedAt,
+  }: {
+    itemId: string;
+    /**
+     * As posted. A `string` rather than an `ItemOutcome`, because what arrives from a
+     * form has not earned the narrower type — and a signature that claimed it had would
+     * make `invalid_outcome` a refusal of something the caller had already promised
+     * could not happen.
+     */
+    outcome: string | null;
+    /** Ignored when the Outcome is being taken back off: there is no decision to date. */
+    decidedAt: Date;
+  },
+  store: SessionCookieStore,
+): Promise<TenderResult> {
+  const caller = await currentUser(store);
+
+  if (!caller) return { ok: false, reason: "forbidden" };
+
+  if (outcome !== null && !isItemOutcome(outcome)) {
+    return { ok: false, reason: "invalid_outcome" };
+  }
+
+  const supabase = createSessionClient(store);
+  const { data: item } = await supabase
+    .from("tender_items")
+    .select("outcome")
+    .eq("id", itemId)
+    .maybeSingle();
+
+  // Another org's Item and a deleted one are the same answer through RLS, and the same
+  // answer is the right one to give.
+  if (!item) return { ok: false, reason: "not_found" };
+
+  // Recording the Outcome an Item already has is not a decision, and must not re-date the
+  // one that was really taken. `outcome_at` is what "won this month" is counted on, so a
+  // save that changed nothing would quietly move a January win into August.
+  if (item.outcome === outcome) return { ok: true };
+
+  const { data, error } = await supabase
+    .from("tender_items")
+    .update({
+      outcome,
+      outcome_at: outcome === null ? null : decidedAt.toISOString(),
+    })
+    .eq("id", itemId)
+    .select("id");
+
+  if (error !== null) return { ok: false, reason: "failed" };
+
+  // Still checked after the write: the read above and this update are two statements, and
+  // the Item can go between them.
+  return data.length === 1 ? { ok: true } : { ok: false, reason: "not_found" };
+}
+
+/**
  * Assignees compete rather than divide (ADR-0004), so adding yourself is not a request
  * anyone has to approve — it is how you enrol in the Tender's reminders before you
  * start ringing suppliers. Adding or removing *somebody else* is the Owner's call.
@@ -416,6 +544,8 @@ export async function getTender(
       // will ever hold. Narrowing here keeps the coercion out of every caller.
       quantity: Number(item.quantity),
       unit: item.unit,
+      outcome: item.outcome,
+      outcomeAt: item.outcome_at,
     })),
     assignees: data.assignees
       .map((row) => row.user)

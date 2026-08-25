@@ -144,6 +144,7 @@
       "no_items": "一条招标至少包含一项产品，请添加明细。",
       "invalid_quantity": "每项明细的数量必须大于零。",
       "last_item": "这是该招标唯一的明细，无法删除。",
+      "invalid_outcome": "那不是可以记录在明细上的结果。",
       "failed": "保存失败，请重试。"
     },
     "sourcing": {
@@ -151,6 +152,39 @@
       "noSupplierFound": "找不到供应商 — {count, plural, other {# 人}}",
       "notYetSourced": "尚未询价",
       "source": "为该产品询价"
+    },
+    "outcome": {
+      "title": "结果",
+      "hint": "实际发生的事：我们的投标是否已送出，以及客户对每个明细的裁决。",
+      "notSubmitted": "投标尚未送出。",
+      "submittedOn": "投标已于 {date} 送出。",
+      "submittedHint": "由人手记录。客户递交截止日过后，这里仍是空的，就表示投标从未送出。",
+      "record": "记录投标已送出",
+      "clear": "其实还没送出",
+      "pick": "{item} 的结果",
+      "undecided": "尚未裁决",
+      "decidedOn": "{date} 裁决",
+      "value": {
+        "won": "赢单",
+        "lost": "丢单",
+        "no_bid": "未投标",
+        "cancelled": "客户已取消",
+        "partial": "部分赢单"
+      },
+      "tenderOutcome": "本次招标：",
+      "noOutcome": "尚无结果。",
+      "noOutcomeNote": "投标尚未送出。",
+      "awaitingDecision": "等待裁决。",
+      "awaitingDecisionNote": "已送出，客户尚未对每个明细作出裁决。值得催一催。",
+      "explain": {
+        "won": "送到客户手上的明细全部赢下。",
+        "lost": "送到客户手上的明细全部丢失。",
+        "no_bid": "这次招标我们没有投标。",
+        "cancelled": "客户取消了全部明细。",
+        "partial": "部分赢单、部分丢单。"
+      },
+      "save": "保存",
+      "saving": "保存中…"
     }
   },
   "quotes": {

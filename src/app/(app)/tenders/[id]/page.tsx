@@ -5,6 +5,7 @@ import { getFormatter, getTranslations } from "next-intl/server";
 
 import { WorkingSheet } from "@/components/comparison/working-sheet";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
+import { OutcomePanel } from "@/components/tenders/outcome-panel";
 import { ImageCountBadge } from "@/components/images/image-count-badge";
 import { Button } from "@/components/ui/button";
 import { currentUser } from "@/lib/auth/session";
@@ -12,6 +13,7 @@ import { calendarDate, calendarDateFormat } from "@/lib/calendar-date";
 import { getComparisonSheet } from "@/lib/comparison/sheet";
 import { listReferenceImages } from "@/lib/images/reference-images";
 import { listMembers } from "@/lib/org/members";
+import { getOrgSettings } from "@/lib/org/org";
 import { getTender } from "@/lib/tenders/tenders";
 
 /**
@@ -41,6 +43,9 @@ export default async function TenderPage({ params }: PageProps<"/tenders/[id]">)
   const day = (value: string) =>
     format.dateTime(calendarDate(value), calendarDateFormat);
   const members = await listMembers(store);
+  // The org's timezone, because `submitted_at` and `outcome_at` are instants and the day
+  // they land on is the day it was in Bangkok — never the day it was on a Vercel box.
+  const { timezone } = await getOrgSettings(store);
   // Signed URLs, minted on this render and good for the hour. They are why this page
   // cannot be cached beyond the request that drew it.
   const referenceImages = await listReferenceImages(tender.id, store);
@@ -106,6 +111,8 @@ export default async function TenderPage({ params }: PageProps<"/tenders/[id]">)
           photos={sheet.photos}
           referenceImages={referenceImages}
         />
+
+        <OutcomePanel tender={tender} timezone={timezone} />
 
         {/* Unassigned images are shown on the Tender rather than held back until somebody
             places them: they are the ones with work outstanding, and the placing itself

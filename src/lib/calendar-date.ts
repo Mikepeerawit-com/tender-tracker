@@ -13,6 +13,18 @@
  */
 export const calendarDateFormat = { timeZone: "UTC", dateStyle: "medium" } as const;
 
+/**
+ * How an *instant* is shown as the day it fell on — `submitted_at`, `outcome_at`.
+ *
+ * Not {@link calendarDateFormat}, which reads `date` columns in UTC so a day cannot
+ * shift. These columns hold moments, and which day a moment lands on is a question only
+ * a timezone can answer: the org's (`orgs.timezone`), never the server's, because Vercel
+ * runs UTC and would date a Bid sent at 9pm in Bangkok to the day before.
+ */
+export function instantDayFormat(timezone: string) {
+  return { timeZone: timezone, dateStyle: "medium" } as const;
+}
+
 export function calendarDate(value: string): Date {
   return new Date(`${value}T00:00:00Z`);
 }

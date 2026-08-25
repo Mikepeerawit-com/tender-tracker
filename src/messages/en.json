@@ -144,6 +144,7 @@
       "no_items": "A tender asks for at least one product. Add an item.",
       "invalid_quantity": "Give each item a quantity greater than zero.",
       "last_item": "This is the tender's only item, so it cannot be removed.",
+      "invalid_outcome": "That is not an outcome that can be recorded against an item.",
       "failed": "That could not be saved. Try again."
     },
     "sourcing": {
@@ -151,6 +152,39 @@
       "noSupplierFound": "No supplier found — {count, plural, =1 {# assignee} other {# assignees}}",
       "notYetSourced": "Not yet sourced",
       "source": "Source this item"
+    },
+    "outcome": {
+      "title": "Outcome",
+      "hint": "What actually happened: that our bid went out, and what the client decided on each item.",
+      "notSubmitted": "The bid has not gone out yet.",
+      "submittedOn": "Bid submitted {date}.",
+      "submittedHint": "Recorded by hand. Once the client submission deadline has passed, nothing recorded here means the bid was never sent.",
+      "record": "Record the bid as sent",
+      "clear": "It has not gone out",
+      "pick": "Outcome for {item}",
+      "undecided": "Not decided yet",
+      "decidedOn": "Decided {date}",
+      "value": {
+        "won": "Won",
+        "lost": "Lost",
+        "no_bid": "Did not bid",
+        "cancelled": "Cancelled by the client",
+        "partial": "Partly won"
+      },
+      "tenderOutcome": "This tender:",
+      "noOutcome": "No outcome yet.",
+      "noOutcomeNote": "The bid has not gone out.",
+      "awaitingDecision": "Awaiting decision.",
+      "awaitingDecisionNote": "Submitted, with the client yet to rule on every item. Worth a chase.",
+      "explain": {
+        "won": "Every item that went to the client was won.",
+        "lost": "Every item that went to the client was lost.",
+        "no_bid": "Nothing on this tender was bid.",
+        "cancelled": "The client pulled every item.",
+        "partial": "Some items won, some lost."
+      },
+      "save": "Save",
+      "saving": "Saving…"
     }
   },
   "quotes": {
