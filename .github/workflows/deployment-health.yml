@@ -1,41 +1,55 @@
 name: Deployment health
 
-# Ask every finished deployment whether its schema is the one it was built against.
+# Ask production whether its schema is the one it was built against.
 #
 # #40 gave `/api/health` the ability to answer that. This asks it. The fault that ticket
 # was written for ran for three weeks not because the answer was unavailable but because
-# nobody opened the URL — so the probe needs something that opens it without being asked,
-# and a deploy is the moment the answer can change.
+# nobody opened the URL — so the probe needs something that opens it without being asked.
 #
-# `deployment_status` is the only trigger that knows both that a deploy happened and what
-# URL it landed on. It costs no credentials: #40 already built the endpoint, and the
-# production hostname is public.
-#
-# This is deliberately the weaker half of #44. It catches a missing `supabase db push`
-# *after* the deploy, not before the merge; the CI check that would enforce the ordering
-# needs production credentials in CI and is a decision that has not been taken.
+# This is option B from #44, and deliberately the weaker half: it catches a missing
+# `supabase db push` after the deploy, not before the merge. What makes it worth having
+# is that it costs no credentials — #40 built the endpoint and the production hostname is
+# public — where the check that would enforce the ordering needs production credentials
+# in CI and is a decision nobody has taken.
 
 on:
   deployment_status:
   workflow_dispatch:
+  # The backstop, and not a nicety. Two things would otherwise leave this workflow unable
+  # to fail: the `environment` filter below silently ceasing to match if Vercel ever
+  # renames "Production", and a database that drifts with no deploy at all — a paused
+  # project, a rotated key, a migration applied by hand. A deploy-triggered check answers
+  # neither. This runs a few minutes after the app's own 01:00 UTC cron, so a failure here
+  # and a failure there point at the same morning.
+  schedule:
+    - cron: "17 2 * * *"
+
+env:
+  # The public production alias, deliberately **not**
+  # `github.event.deployment_status.environment_url`.
+  #
+  # Vercel reports the immutable deployment URL there — `tender-tracker-<hash>.vercel.app`
+  # — even for a production deployment, and every one of those sits behind Deployment
+  # Protection and answers a redirect to SSO. The first version of this workflow probed
+  # it, got the redirect, and reported success having checked nothing: a check that could
+  # not fail, shipped into the ticket about checks that cannot fail. It found itself out
+  # on its first production run.
+  PRODUCTION_URL: https://tenders.mikepeerawit.com
 
 jobs:
   probe:
-    # Only that the deploy succeeded — deliberately not also filtering on the environment
-    # name. A filter that stops matching because Vercel renamed "Production" would leave a
-    # workflow that never runs and never says so, which is precisely the shape of failure
-    # #40 exists to refuse. Previews are sorted out below, where the skip is *printed*.
-    if: github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success'
+    if: >-
+      github.event_name != 'deployment_status' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment_status.environment == 'Production')
     runs-on: ubuntu-latest
 
     steps:
-      - name: Ask the deployment about its schema
-        env:
-          URL: ${{ github.event.deployment_status.environment_url || 'https://tenders.mikepeerawit.com' }}
+      - name: Ask production about its schema
         run: |
           set -uo pipefail
 
-          echo "Probing ${URL}/api/health"
+          echo "Probing ${PRODUCTION_URL}/api/health"
 
           # Deliberately not `curl --retry`. That retries transient *HTTP* errors, 503
           # among them — and 503 is this endpoint's considered answer about a real fault,
@@ -44,10 +58,10 @@ jobs:
           # only what is genuinely transient: a connection that never opened.
           attempt=1
           while true; do
-            response=$(curl -sS --max-time 30 -w '\n%{http_code}' "${URL}/api/health" 2>&1) && break
+            response=$(curl -sS --max-time 30 -w '\n%{http_code}' "${PRODUCTION_URL}/api/health" 2>&1) && break
 
             if [ "$attempt" -ge 3 ]; then
-              echo "::error::${URL}/api/health did not answer at all after ${attempt} attempts. The deployment itself is unreachable, which is a different fault from the app reporting its database unreachable. curl said: ${response}"
+              echo "::error::${PRODUCTION_URL}/api/health did not answer at all after ${attempt} attempts. Production itself is unreachable, which is a different fault from the app reporting its database unreachable. curl said: ${response}"
               exit 1
             fi
 
@@ -58,12 +72,12 @@ jobs:
           code=$(printf '%s' "$response" | tail -n1)
           body=$(printf '%s' "$response" | sed '$d')
 
-          # Preview deployments sit behind Vercel's Deployment Protection and answer a
-          # redirect to SSO. Asserting on a login page would be worse than not asking, so
-          # say out loud that nothing was checked rather than reporting a quiet pass.
+          # There is no skip path. Production is public by design — that is the whole
+          # reason this workflow needs no credential — so a redirect here is a fault in
+          # its own right, not a preview to step around.
           if [ "$code" = "302" ] || [ "$code" = "401" ]; then
-            echo "::notice::${URL} is behind Deployment Protection — a preview. Its schema was NOT checked; only production is public enough to ask without a credential."
-            exit 0
+            echo "::error::${PRODUCTION_URL}/api/health answered ${code} instead of its status. Deployment Protection appears to be switched on for production, which makes the probe uncheckable from here."
+            exit 1
           fi
 
           echo "$body" | jq . || echo "$body"
@@ -71,7 +85,8 @@ jobs:
           status=$(printf '%s' "$body" | jq -r '.status // "unparseable"')
 
           if [ "$code" = "200" ] && [ "$status" = "ok" ]; then
-            echo "::notice::${URL} is level with its build."
+            applied=$(printf '%s' "$body" | jq -r '.schema.applied // "null"')
+            echo "::notice::Production is level with its build, at migration ${applied}."
             exit 0
           fi
 
@@ -87,18 +102,18 @@ jobs:
           database=$(printf '%s' "$body" | jq -r '.database // "unknown"')
 
           if [ "$status" = "misconfigured" ]; then
-            echo "::error::${URL} has no usable Supabase credentials. See README.md, Deploying step 1 — and remember env vars added after a build need a redeploy."
+            echo "::error::Production has no usable Supabase credentials. See README.md, Deploying step 1 — and remember env vars added after a build need a redeploy."
           elif [ "$database" = "unreachable" ]; then
-            echo "::error::${URL} cannot reach its database at all. Check the Supabase project is not paused."
+            echo "::error::Production cannot reach its database at all. Check the Supabase project is not paused."
           elif [ "$applied" = "null" ]; then
-            echo "::error::${URL} is deployed against a database no migration ever reached. It expects ${expected}. Run \`supabase db push\` — README.md, Deploying step 2."
+            echo "::error::Production is deployed against a database no migration ever reached. It expects ${expected}. Run \`supabase db push\` — README.md, Deploying step 2."
           elif [ "$behind" != "0" ] && [ "$behind" != "null" ]; then
-            echo "::error::${URL} is deployed against a database missing ${behind} of its migration(s) — newest expected ${expected}, newest applied ${applied}. They need not be the newest ones: \`behind\` counts every expected version the database does not hold, including a gap in the middle. Run \`supabase db push\`."
+            echo "::error::Production is deployed against a database missing ${behind} of its migration(s) — newest expected ${expected}, newest applied ${applied}. They need not be the newest ones: \`behind\` counts every expected version the database does not hold, including a gap in the middle. Run \`supabase db push\`."
           elif [ "$readable" = "false" ]; then
             error=$(printf '%s' "$body" | jq -r '.tables.error // "unknown"')
-            echo "::error::${URL} has its schema and cannot read it (${error}). Its table grants are missing — this needs a migration granting them, as 20260825010000 did."
+            echo "::error::Production has its schema and cannot read it (${error}). Its table grants are missing — this needs a migration granting them, as 20260825010000 did."
           else
-            echo "::error::${URL}/api/health answered ${code} with status '${status}'."
+            echo "::error::${PRODUCTION_URL}/api/health answered ${code} with status '${status}'."
           fi
 
           exit 1
