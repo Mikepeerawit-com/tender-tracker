@@ -168,6 +168,39 @@ describe("creating a Tender", () => {
       { milestone: "internal_quote", days_before: 0, due_date: "2026-08-25" },
       { milestone: "internal_quote", days_before: 1, due_date: "2026-08-24" },
       { milestone: "internal_quote", days_before: 3, due_date: "2026-08-22" },
+      // The one negative offset: the day *after* the client deadline, because a deadline
+      // has not been missed until it has passed.
+      { milestone: "submission_missed", days_before: -1, due_date: "2026-09-02" },
+    ]);
+  });
+
+  it("writes no decision chase until the Owner names a date", async () => {
+    // Off by default, and off is the absence of a row rather than a row that never
+    // fires: there is no honest day to guess at, because clients rarely state one.
+    expect(
+      (await remindersOn(await aTender())).filter(
+        (row) => row.milestone === "decision_chase",
+      ),
+    ).toEqual([]);
+  });
+
+  it("anchors the decision chase on the Owner's own date", async () => {
+    const rows = await remindersOn(
+      await aTender({ expectedDecisionDate: "2026-09-20" }),
+    );
+
+    expect(
+      rows
+        .filter((row) => row.milestone === "decision_chase")
+        .map(({ days_before, remind_on, due_date }) => ({
+          days_before,
+          remind_on,
+          due_date,
+        })),
+    ).toEqual([
+      // `days_before` null and `remind_on` set is the other half of `anchor_exactly_one`.
+      // A row carrying both would have been refused by the database outright.
+      { days_before: null, remind_on: "2026-09-20", due_date: "2026-09-20" },
     ]);
   });
 
@@ -237,6 +270,8 @@ describe("moving a deadline", () => {
       "2026-08-05",
       "2026-08-07",
       "2026-08-08",
+      // The missed-submission row, one day past the new client deadline.
+      "2026-08-09",
     ]);
     expect(rows.every((row) => row.sent === true)).toBe(true);
     expect(rows.every((row) => row.sent_at !== null)).toBe(true);
@@ -285,12 +320,45 @@ describe("moving a deadline", () => {
 
   it("adds no rows when the deadlines have not changed", async () => {
     // The reschedule states "the schedule is now this" rather than applying a diff, so
-    // an edit that touched only the notes has to leave exactly seven rows behind.
+    // an edit that touched only the notes has to leave exactly eight rows behind.
     const tenderId = await aTender();
 
     await editTender(tenderId, { notes: "Client rang about the gloves." });
 
-    expect(await remindersOn(tenderId)).toHaveLength(7);
+    expect(await remindersOn(tenderId)).toHaveLength(8);
+  });
+
+  it("drops the decision chase when the Owner clears the date", async () => {
+    // Turning the chase off is deleting the row, not leaving one dated in the past — a
+    // stale row would come due on the next run and post a chase nobody asked for.
+    const tenderId = await aTender({ expectedDecisionDate: "2026-09-20" });
+
+    expect(await remindersOn(tenderId)).toHaveLength(9);
+
+    await editTender(tenderId, { expectedDecisionDate: null });
+
+    expect(
+      (await remindersOn(tenderId)).filter((row) => row.milestone === "decision_chase"),
+    ).toEqual([]);
+  });
+
+  it("re-dates the decision chase in place rather than replacing it", async () => {
+    // Matched on the milestone and the offset, never on the date. Pairing on the date
+    // would orphan the row every time the Owner moved it — deleting the one that had
+    // been sent and inserting a fresh unsent one, which is rule 3 inverted.
+    const tenderId = await aTender({ expectedDecisionDate: "2026-08-05" });
+
+    await markSent(tenderId);
+    await editTender(tenderId, { expectedDecisionDate: "2026-09-20" });
+
+    expect(
+      (await remindersOn(tenderId))
+        .filter((row) => row.milestone === "decision_chase")
+        .map(({ remind_on, due_date, sent }) => ({ remind_on, due_date, sent })),
+    ).toEqual([
+      // Re-armed, because a chase dated next month has not happened yet.
+      { remind_on: "2026-09-20", due_date: "2026-09-20", sent: false },
+    ]);
   });
 
   it("repairs a Tender that has lost a reminder row", async () => {
@@ -305,10 +373,10 @@ describe("moving a deadline", () => {
       .eq("milestone", "client_submission")
       .eq("days_before", 0);
 
-    expect(await remindersOn(tenderId)).toHaveLength(6);
+    expect(await remindersOn(tenderId)).toHaveLength(7);
 
     await editTender(tenderId, {});
 
-    expect(await remindersOn(tenderId)).toHaveLength(7);
+    expect(await remindersOn(tenderId)).toHaveLength(8);
   });
 });

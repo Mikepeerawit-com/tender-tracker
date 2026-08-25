@@ -53,18 +53,48 @@ export function testMentionMessage({
   };
 }
 
-/** What the group is told a deadline is called. Hardcoded, like everything else here. */
-const milestoneLabels: Record<ReminderMilestone, string> = {
-  internal_quote: "内部报价截止",
-  client_submission: "客户投标截止",
+/**
+ * The line each milestone contributes to a Tender's message.
+ *
+ * A function per milestone rather than a label plus one shared sentence, because the four
+ * do not say the same kind of thing. Three count down to a date that has not arrived; the
+ * fourth reports a date that went by with nothing sent, and **that one is the loudest
+ * thing this app says** — it is the failure the whole product exists to prevent, and a
+ * line that read "客户投标截止:2026-09-01(还剩 -1 天)" would bury it in the format of a
+ * routine nudge.
+ *
+ * `daysLeft` is therefore taken by the three that count down and ignored by the one that
+ * does not, which is why it is an argument rather than something this record interpolates
+ * for everybody.
+ */
+const milestoneLines: Record<
+  ReminderMilestone,
+  (date: string, daysLeft: number) => string
+> = {
+  internal_quote: (date, daysLeft) => `内部报价截止:${date}${remaining(daysLeft)}`,
+  client_submission: (date, daysLeft) => `客户投标截止:${date}${remaining(daysLeft)}`,
+  submission_missed: (date) =>
+    `⚠️ 投标已错过!客户投标截止日期 ${date} 已过,我方仍未提交。`,
+  decision_chase: (date) => `跟进客户决标:预计决标日期 ${date}。请联系客户询问结果。`,
 };
 
 /** One milestone this Tender is being nudged about, as the message needs it. */
 export type DueMilestone = {
   milestone: ReminderMilestone;
-  /** The deadline itself, `yyyy-mm-dd` — never the day the reminder came due. */
-  deadline: string;
-  /** Days from today to that deadline. `0` is the morning of, and never negative. */
+  /**
+   * The milestone's own date, `yyyy-mm-dd` — never the day the reminder came due.
+   *
+   * `date` rather than `deadline`, because one of the four is not one. The decision chase
+   * carries the day the Owner picked to go and ask the client, which nothing is due on
+   * and which CONTEXT.md is careful to keep out of the word "deadline".
+   */
+  date: string;
+  /**
+   * Days from today to that date. `0` is the morning of.
+   *
+   * Negative on `submission_missed`, which is the only milestone that comes due *after*
+   * the date it is about — and the only one whose line does not read it.
+   */
   daysLeft: number;
 };
 
@@ -81,9 +111,9 @@ export type DueMilestone = {
  * Assignees who have entered no Quotes at all, and the Owner. One message, one @-list.
  * Nobody is mentioned twice for the same Tender in the same run.
  *
- * The deadline is named, not the day the nudge fell due. A caught-up reminder is posted
- * late by definition, and "due 25 Aug" is the fact worth reading; which offset row
- * produced it is this app's bookkeeping.
+ * The milestone's own date is named, not the day the nudge fell due. A caught-up reminder
+ * is posted late by definition, and "due 25 Aug" is the fact worth reading; which offset
+ * row produced it is this app's bookkeeping.
  */
 export function reminderMessage({
   reference,
@@ -101,9 +131,8 @@ export function reminderMessage({
   return {
     content: [
       `【招标跟踪】${reference} · ${client} · ${title}`,
-      ...milestones.map(
-        ({ milestone, deadline, daysLeft }) =>
-          `${milestoneLabels[milestone]}:${deadline}${remaining(daysLeft)}`,
+      ...milestones.map(({ milestone, date, daysLeft }) =>
+        milestoneLines[milestone](date, daysLeft),
       ),
       "请进入系统跟进。",
     ].join("\n"),
@@ -115,4 +144,106 @@ export function reminderMessage({
 
 function remaining(daysLeft: number): string {
   return daysLeft === 0 ? "(就是今天)" : `(还剩 ${daysLeft} 天)`;
+}
+
+/** The two Outcomes the group is told about. `no_bid` and `cancelled` are silent. */
+export type AnnouncedOutcome = "won" | "lost";
+
+/** How the group is told a Tender Item ended. */
+const outcomeVerdicts: Record<AnnouncedOutcome, string> = {
+  won: "中标",
+  lost: "未中标",
+};
+
+/**
+ * The head every outcome message shares: which Item of which Tender, and how it ended.
+ *
+ * Not exported, so `messages.test.ts` does not count it as a builder — and so the two
+ * that are exported cannot drift into naming the same Item differently.
+ */
+function outcomeHead(
+  { reference, client, item }: { reference: string; client: string; item: string },
+  outcome: AnnouncedOutcome,
+): string {
+  return `【招标跟踪】${reference} · ${client} · ${item} — ${outcomeVerdicts[outcome]}`;
+}
+
+/**
+ * The news, for the Assignee whose Quote we actually bid.
+ *
+ * Split from {@link otherQuotesOutcomeMessage} rather than folded into one message with
+ * one @-list, because the two audiences are being told different facts. "Your supplier is
+ * the one we went with" is feedback about their own sourcing; "we went with somebody
+ * else's" is feedback about how theirs compared. A single wording would have to be vague
+ * enough to be true for both, and vague is what makes a notification ignorable.
+ *
+ * Both endings are worth saying to this person. A `lost` here is not their failure — the
+ * client chose elsewhere — but they are the one who will be asked why, and finding out
+ * from the group beats finding out in a meeting.
+ */
+export function selectedQuoteOutcomeMessage({
+  reference,
+  client,
+  item,
+  outcome,
+  mentions,
+}: {
+  reference: string;
+  client: string;
+  item: string;
+  outcome: AnnouncedOutcome;
+  mentions: string[];
+}): GroupMessage {
+  return {
+    content: [
+      outcomeHead({ reference, client, item }, outcome),
+      outcome === "won"
+        ? "你的报价被选用,并且中标了。"
+        : "本次投标采用的是你的报价,客户最终选择了其他供应商。",
+      "详情请进入系统查看。",
+    ].join("\n"),
+    mentions,
+  };
+}
+
+/**
+ * The news, for everybody else who quoted this Item.
+ *
+ * **This message is the entire reason outcome news is not restricted to the Assignee
+ * whose Quote was selected.** Somebody who rang round their suppliers and was not chosen
+ * has no other feedback anywhere in this app on how their supplier compared, and silence
+ * teaches them that sourcing an Item they will not win is wasted effort — which is the
+ * one habit ADR-0004's competing Assignees cannot survive.
+ *
+ * `selectedBy` names a **colleague**, never a supplier. Naming who we bid is what makes
+ * the message actionable — it is who to go and ask — and it is exactly the disclosure
+ * ADR-0012 permits, in the same breath as forbidding the supplier's own name. It is null
+ * when the Item was decided with no Quote ever selected, and the attribution is then
+ * dropped rather than guessed at.
+ */
+export function otherQuotesOutcomeMessage({
+  reference,
+  client,
+  item,
+  outcome,
+  selectedBy,
+  mentions,
+}: {
+  reference: string;
+  client: string;
+  item: string;
+  outcome: AnnouncedOutcome;
+  selectedBy: string | null;
+  mentions: string[];
+}): GroupMessage {
+  return {
+    content: [
+      outcomeHead({ reference, client, item }, outcome),
+      selectedBy === null
+        ? "本次投标未记录选用的报价。"
+        : `本次投标采用的是 ${selectedBy} 的报价。`,
+      "你的报价未被选用。详情请进入系统查看。",
+    ].join("\n"),
+    mentions,
+  };
 }

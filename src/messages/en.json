@@ -91,7 +91,7 @@
     "clientSubmissionHint": "When our bid must reach the client. Missing it kills the tender.",
     "clientSubmissionDue": "Client submission deadline: {date}",
     "expectedDecisionDate": "Expected decision date",
-    "expectedDecisionHint": "Optional — clients rarely state one.",
+    "expectedDecisionHint": "Optional — clients rarely state one. Set it and the owner is reminded to chase the client that day.",
     "notes": "Notes",
     "itemCount": "{count, plural, =1 {# item} other {# items}}",
     "block": {

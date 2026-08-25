@@ -8,7 +8,7 @@ import { reminderMessage, type DueMilestone } from "@/lib/wecom/messages";
 import { sendGroupMessages, type GroupMessage, type RobotBoundary } from "@/lib/wecom/robot";
 
 import {
-  deadlineFor,
+  dateFor,
   reminderMilestones,
   type Deadlines,
   type ReminderMilestone,
@@ -27,14 +27,15 @@ import {
  *
  * 1. **Catch up, never skip** — {@link dueReminders} asks `due_date <= today`. A run
  *    missed for two days sends on the third rather than losing those days for good.
- * 2. **Suppress a caught-up nudge whose milestone has passed** — {@link suppressed}.
- *    "7 days to go" about a deadline that went by yesterday is noise; Submission Missed
- *    covers that case on the worklist, loudly.
+ * 2. **Suppress a nudge that has stopped being worth posting** — {@link suppressed}, which
+ *    asks the Milestone rather than applying one rule to all four (ADR-0015). "7 days to
+ *    go" about a deadline that went by yesterday is noise; the missed submission, which
+ *    comes due *because* that deadline went by, is the opposite.
  * 3. **Recompute on a moved deadline** — not here. It belongs to the write that moves the
  *    deadline (`./reminders.ts`), because a schedule repaired only once a day is a
  *    schedule that is wrong for up to a day.
  * 4. **One message per Tender per run** — {@link tenderMessage} takes every surviving row
- *    for a Tender, across missed days *and* across both milestones. Ten Tenders after a
+ *    for a Tender, across missed days *and* across every milestone. Ten Tenders after a
  *    three-day outage is ~10 messages; a run that looped the rows instead would post ~60
  *    against a cap of 20 a minute.
  * 5. **Never mark `sent` on a non-zero errcode** — {@link settle}. Every failure from
@@ -75,6 +76,7 @@ type TenderRow = {
   title: string;
   internal_quote_deadline: string;
   client_submission_deadline: string;
+  expected_decision_date: string | null;
   submitted_at: string | null;
   owner_user_id: string;
   items: { id: string; outcome: ItemOutcome | null }[];
@@ -169,10 +171,15 @@ async function sendOrgReminders(
       continue;
     }
 
-    const live = rows.filter((row) => !suppressed(row.milestone, tender, today));
+    const verdicts = rows.map((row) => ({ row, verdict: verdictOn(row, tender, today) }));
+    const live = verdicts.filter(({ verdict }) => verdict === "post").map(({ row }) => row);
 
+    // Only the finished ones. A row held back is deliberately neither posted nor closed:
+    // it comes back tomorrow, unchanged, and rule 1's `<=` query is what makes that free.
     settled.push(
-      ...rows.filter((row) => !live.includes(row)).map((row) => row.id),
+      ...verdicts
+        .filter(({ verdict }) => verdict === "settle")
+        .map(({ row }) => row.id),
     );
 
     if (live.length === 0) continue;
@@ -257,30 +264,43 @@ async function dueReminders(orgId: string, today: string): Promise<ReminderRow[]
 }
 
 /**
- * Is there no longer any point posting this milestone? (Rule 2, and its neighbours.)
+ * What this run should do with one owed row. (Rule 2, and its neighbours.)
  *
- * Three ways a nudge stops being worth the group's attention, and each is a fact about
- * the Tender rather than about the reminder row:
+ * Three answers, not two, and the third is the one worth explaining:
  *
- * - **The milestone has gone by.** This is rule 2 proper. A caught-up "7 days to go" for
- *   a deadline that passed yesterday tells nobody anything they can act on, and the
- *   worklist's Submission Missed block says the true thing much more loudly.
- * - **The Bid went out.** A submitted Tender has met its client deadline and spent its
- *   internal one — the same reading `worklistBlock` takes when it refuses to call a
- *   submitted Tender "coming up".
- * - **Somebody has decided every Item.** A Tender won, lost, declined or pulled is off
- *   the worklist entirely, and chasing a deadline on it is chasing finished work.
+ * - **`post`** — say it.
+ * - **`settle`** — there is nothing left to say and there never will be, so mark the row
+ *   done rather than reconsidering it every night for ever.
+ * - **`hold`** — there is nothing to say *today*, and there might be tomorrow. Neither
+ *   posted nor closed; rule 1's `<=` query brings it straight back.
+ *
+ * **`hold` exists for exactly one case, and it closes a silent-failure hole.** A decision
+ * chase on a Tender with no `submitted_at` has nothing to chase — but "nobody recorded the
+ * submission" is a far commoner reason for that than "the Bid never went out", and
+ * settling the row would mean the chase never fires again even once somebody fixes the
+ * record. So it waits. What ends the wait either way is an Outcome, which is also what
+ * takes a Submission Missed Tender off the worklist — the same rule, read the same way.
+ *
+ * **One condition is shared and the rest are the milestone's own.** Every milestone stops
+ * mattering once somebody has decided every Item; that one settles. What silences a
+ * milestone otherwise depends on which is asking, and two of the four invert each other:
+ *
+ * - The two countdowns are dead once their date has gone by (rule 2 proper) or once the
+ *   Bid has gone out.
+ * - **`submission_missed` exists because the date went by**, so the rule 2 test is exactly
+ *   backwards for it. It is silenced by the Bid going out and by nothing else.
+ * - **`decision_chase` is silenced by the Bid *not* having gone out** — and that is the
+ *   silence that is held rather than settled.
  */
-function suppressed(
-  milestone: ReminderMilestone,
-  tender: TenderRow,
-  today: string,
-): boolean {
-  return (
-    deadlineFor(milestone, deadlines(tender)) < today ||
-    tender.submitted_at !== null ||
-    tenderOutcome(tender.items) !== null
-  );
+type Verdict = "post" | "settle" | "hold";
+
+function verdictOn(row: ReminderRow, tender: TenderRow, today: string): Verdict {
+  // Read once here rather than inside four rules, so "decided" cannot come to mean
+  // slightly different things in different branches. A decided Tender is finished work,
+  // and finished work is the one silence nothing can reopen.
+  if (tenderOutcome(tender.items) !== null) return "settle";
+
+  return milestoneRules[row.milestone].verdict(tender, today);
 }
 
 /**
@@ -312,7 +332,13 @@ function tenderMessage(
   const notifications: NotificationRow[] = [];
 
   for (const milestone of owed) {
-    const deadline = deadlineFor(milestone, deadlines(tender));
+    const date = dateFor(milestone, deadlines(tender));
+
+    // Only reachable for a decision chase whose date was cleared between the reschedule
+    // that should have deleted the row and this run. There is nothing to say about a day
+    // nobody is claiming any more, so the row settles rather than posting a blank date.
+    if (date === null) continue;
+
     const { addressable, owing } = milestoneRules[milestone].audience(tender, sourcing);
     const recipients = owing;
 
@@ -323,9 +349,10 @@ function tenderMessage(
 
     milestones.push({
       milestone,
-      deadline,
-      // Never negative: `suppressed` has already dropped anything whose day has gone.
-      daysLeft: daysBetween(today, deadline),
+      date,
+      // Negative on `submission_missed`, whose whole point is a date already behind us —
+      // and which is the one milestone whose line does not read this.
+      daysLeft: daysBetween(today, date),
     });
 
     mentions.push(
@@ -335,7 +362,7 @@ function tenderMessage(
     );
 
     notifications.push(
-      ...notificationsFor(orgId, tender, milestone, deadline, recipients, sourcing),
+      ...notificationsFor(orgId, tender, milestone, date, recipients, sourcing),
     );
   }
 
@@ -372,7 +399,7 @@ function tenderMessage(
  * reaches a colleague whose WeCom identifier nobody has copied across yet; conflating the
  * two would quietly make the in-app half depend on the outbound one.
  *
- * `body` holds the deadline and nothing else, on purpose. Unlike a group message — which
+ * `body` holds the milestone's date and nothing else, on purpose. Unlike a group message — which
  * has no reader whose locale could pick between two versions (ADR-0012) — a notification
  * has exactly one reader, so the sentence belongs in `src/messages/` and is rendered from
  * `type` and this date when the bell is built.
@@ -381,7 +408,7 @@ function notificationsFor(
   orgId: string,
   tender: TenderRow,
   milestone: ReminderMilestone,
-  deadline: string,
+  date: string,
   recipients: string[],
   sourcing: Sourcing,
 ): NotificationRow[] {
@@ -391,7 +418,7 @@ function notificationsFor(
     type: `reminder:${milestone}`,
     tender_id: tender.id,
     tender_item_id: itemId,
-    body: deadline,
+    body: date,
   });
 
   if (milestoneRules[milestone].deepLink === "tender") {
@@ -408,12 +435,13 @@ function notificationsFor(
 }
 
 /**
- * Who a milestone is addressed to, and what a bell row for it can point at.
+ * Everything that differs between one milestone and the next, in one place.
  *
  * One entry per milestone rather than a `milestone === "internal_quote"` test at each of
- * the three places that used to ask. CONTEXT.md states the audience as a property of the
- * Milestone — "which Milestone a Reminder is for decides who it @s" — so it is written
- * here as one, and #34's decision chase is a fourth line rather than three more branches.
+ * the places that ask. CONTEXT.md states the audience as a property of the Milestone —
+ * "which Milestone a Reminder is for decides who it @s" — and the same turns out to be
+ * true of when it goes quiet, so both live here and a fifth milestone is a fifth entry
+ * rather than three more branches spread across the file.
  */
 const milestoneRules: Record<
   ReminderMilestone,
@@ -421,6 +449,8 @@ const milestoneRules: Record<
     audience: (tender: TenderRow, sourcing: Sourcing) => Audience;
     /** What an in-app notification for this milestone deep-links to. */
     deepLink: "tender" | "item";
+    /** What to do with an owed row for this milestone. See {@link verdictOn}. */
+    verdict: (tender: TenderRow, today: string) => Verdict;
   }
 > = {
   internal_quote: {
@@ -433,17 +463,45 @@ const milestoneRules: Record<
       };
     },
     deepLink: "item",
+    verdict: (tender, today) =>
+      tender.internal_quote_deadline < today || tender.submitted_at !== null
+        ? "settle"
+        : "post",
   },
   client_submission: {
     // The Owner is accountable for the Bid going out on time, whoever sourced it, and
     // there is no state in which that stops being true while the deadline is ahead.
-    audience: (tender) => ({
-      addressable: [tender.owner_user_id],
-      owing: [tender.owner_user_id],
-    }),
+    audience: ownerOnly,
     deepLink: "tender",
+    verdict: (tender, today) =>
+      tender.client_submission_deadline < today || tender.submitted_at !== null
+        ? "settle"
+        : "post",
+  },
+  submission_missed: {
+    // The Owner, and only the Owner. The Assignees' work is done or moot by now, and the
+    // one thing this post needs is the person accountable for the client relationship
+    // reading it the morning it happened rather than the week after.
+    audience: ownerOnly,
+    deepLink: "tender",
+    // No date test at all: this row's `due_date` is already the day after the deadline,
+    // so it comes due precisely when the deadline has passed. Adding rule 2's test here
+    // would silence the message on the only day it could ever be sent.
+    verdict: (tender) => (tender.submitted_at === null ? "post" : "settle"),
+  },
+  decision_chase: {
+    // The Owner's own reminder, set by the Owner, about the client relationship the Owner
+    // holds. Nobody else asked for it.
+    audience: ownerOnly,
+    deepLink: "tender",
+    // Held, never settled — the whole reason {@link Verdict} has three values.
+    verdict: (tender) => (tender.submitted_at === null ? "hold" : "post"),
   },
 };
+
+function ownerOnly(tender: TenderRow): Audience {
+  return { addressable: [tender.owner_user_id], owing: [tender.owner_user_id] };
+}
 
 /**
  * Who a milestone *could* address, and who still owes it something.
@@ -478,6 +536,7 @@ function deadlines(tender: TenderRow): Deadlines {
   return {
     internalQuoteDeadline: tender.internal_quote_deadline,
     clientSubmissionDeadline: tender.client_submission_deadline,
+    expectedDecisionDate: tender.expected_decision_date,
   };
 }
 
@@ -524,8 +583,8 @@ async function tendersById(ids: string[]): Promise<Map<string, TenderRow>> {
     .from("tenders")
     .select(
       "id, reference, client_name, title, internal_quote_deadline, " +
-        "client_submission_deadline, submitted_at, owner_user_id, " +
-        "items:tender_items(id, outcome)",
+        "client_submission_deadline, expected_decision_date, submitted_at, " +
+        "owner_user_id, items:tender_items(id, outcome)",
     )
     .in("id", ids)
     .overrideTypes<TenderRow[], { merge: false }>();
