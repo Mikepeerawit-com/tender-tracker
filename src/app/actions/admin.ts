@@ -3,12 +3,17 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
-import { invite, setWecomUserid } from "@/lib/auth/invite";
-import { setGroupRobot } from "@/lib/wecom/group-robot";
-import { sendTestMention } from "@/lib/wecom/test-mention";
+import {
+  invite,
+  setWecomUserid,
+  type InviteStatus,
+  type WecomUserIdStatus,
+} from "@/lib/auth/invite";
+import { setGroupRobot, type GroupRobotSaveStatus } from "@/lib/wecom/group-robot";
+import { sendTestMention, type TestMentionStatus } from "@/lib/wecom/test-mention";
 
 export type InviteState = {
-  status?: "sent" | "not_admin" | "already_invited" | "send_failed" | "incomplete";
+  status?: InviteStatus;
 };
 
 export async function inviteAction(
@@ -29,7 +34,7 @@ export async function inviteAction(
   return { status: "sent" };
 }
 
-export type WecomState = { status?: "saved" | "not_admin" | "not_found" | "taken" };
+export type WecomState = { status?: WecomUserIdStatus };
 
 export async function setWecomUseridAction(
   _previous: WecomState,
@@ -58,7 +63,7 @@ export async function setWecomUseridAction(
  * sentence the admin reads is translated, and this is bracketed after it.
  */
 export type TestMentionState = {
-  status?: "sent" | "not_admin" | "not_found" | "no_userid" | "no_robot" | "send_failed";
+  status?: TestMentionStatus;
   detail?: string;
 };
 
@@ -80,7 +85,7 @@ export async function sendTestMentionAction(
 }
 
 export type GroupRobotState = {
-  status?: "saved" | "cleared" | "not_admin" | "not_a_wecom_webhook" | "save_failed";
+  status?: GroupRobotSaveStatus;
 };
 
 /**

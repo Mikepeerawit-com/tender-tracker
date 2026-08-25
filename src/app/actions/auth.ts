@@ -5,8 +5,8 @@ import { redirect } from "next/navigation";
 
 import { isLocale } from "@/i18n/config";
 import { setLocale } from "@/i18n/locale";
-import { setPassword } from "@/lib/auth/password";
-import { currentUser, signIn, signOut } from "@/lib/auth/session";
+import { setPassword, type SetPasswordError } from "@/lib/auth/password";
+import { currentUser, signIn, signOut, type LoginError } from "@/lib/auth/session";
 import { chooseLocale } from "@/lib/auth/preferences";
 
 /**
@@ -23,7 +23,7 @@ import { chooseLocale } from "@/lib/auth/preferences";
  * response and back into the page.
  */
 export type SignInState = {
-  error?: "invalid" | "disabled" | "incomplete";
+  error?: Exclude<LoginError, "link">;
   email?: string;
 };
 
@@ -60,7 +60,7 @@ export async function signOutAction(): Promise<void> {
   redirect("/login");
 }
 
-export type SetPasswordState = { error?: "too_short" | "mismatch" | "no_session" };
+export type SetPasswordState = { error?: SetPasswordError };
 
 export async function setPasswordAction(
   _previous: SetPasswordState,

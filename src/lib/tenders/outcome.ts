@@ -21,8 +21,17 @@ export const itemOutcomes = ["won", "lost", "no_bid", "cancelled"] as const;
 
 export type ItemOutcome = (typeof itemOutcomes)[number];
 
-/** Everything a Tender may read as, including the one value no row may hold. */
-export type TenderOutcome = ItemOutcome | "partial";
+/**
+ * Everything a Tender may read as, including the one value no row may hold.
+ *
+ * `partial` is why this is a list rather than `ItemOutcome | "partial"`: no Item can hold
+ * it, so a guard built from `itemOutcomes` alone would pass while the mixed result — the
+ * most confusing thing the bar under the Items ever says — rendered as its key.
+ * `messages.test.ts` walks this.
+ */
+export const tenderOutcomes = [...itemOutcomes, "partial"] as const;
+
+export type TenderOutcome = (typeof tenderOutcomes)[number];
 
 /** What the rules need of a Tender Item: its Outcome, or null while it is undecided. */
 export type DecidedItem = { outcome: ItemOutcome | null };

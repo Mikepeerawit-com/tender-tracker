@@ -1,4 +1,21 @@
-import type { MatchType, QuoteProblem } from "./quotes";
+import type { QuoteProblem } from "./quotes";
+
+/**
+ * Whether a Quote answers the Item as asked, or offers something else.
+ *
+ * Lives here rather than in `./quotes` for the same reason the currency list lives
+ * outside it: the radio group on the add-quote form renders these in the browser, and
+ * that module is `server-only`. `./quotes` re-exports it, so the server-side check and
+ * the picker cannot drift apart.
+ *
+ * A list rather than a bare union: these are radio labels, and a radio reading
+ * `quotes.matchType.alternative` is one nobody can choose deliberately — which turns the
+ * single field that warns a reviewer they are being offered a different product into a
+ * guess. `messages.test.ts` walks this.
+ */
+export const matchTypes = ["exact", "alternative"] as const;
+
+export type MatchType = (typeof matchTypes)[number];
 
 /**
  * The add-quote form's half of a submit: what was typed, and what came back.

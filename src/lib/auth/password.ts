@@ -6,6 +6,17 @@ import {
 } from "@/lib/supabase/session-client";
 
 /**
+ * Every way the set-password form can refuse, as a list rather than a bare union.
+ *
+ * Refused at the one moment the account does not fully exist yet: whoever is reading has
+ * no signed-in app to retreat into and no password to get back in with, so a reason that
+ * renders as its own key strands them. `messages.test.ts` walks this.
+ */
+export const setPasswordErrors = ["too_short", "mismatch", "no_session"] as const;
+
+export type SetPasswordError = (typeof setPasswordErrors)[number];
+
+/**
  * Set the signed-in user's password.
  *
  * This is how an invite completes: the invitee arrives at /auth/confirm holding a

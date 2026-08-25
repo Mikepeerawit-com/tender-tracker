@@ -1,12 +1,18 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 import { defaultLocale, locales } from "@/i18n/config";
+import { loginErrors } from "@/lib/auth/session";
+import { setPasswordErrors } from "@/lib/auth/password";
+import { inviteStatuses, wecomUserIdStatuses } from "@/lib/auth/invite";
 import { pricingProblems, selectionProblems } from "@/lib/comparison/sheet";
 import { imageProblems } from "@/lib/images/images";
-import { quoteProblems } from "@/lib/quotes/quotes";
+import { matchTypes, quoteProblems } from "@/lib/quotes/quotes";
+import { tenderOutcomes } from "@/lib/tenders/outcome";
+import { groupRobotStatuses } from "@/lib/wecom/group-robot";
+import { testMentionStatuses } from "@/lib/wecom/test-mention";
 import {
   deadlineKinds,
   tenderProgresses,
@@ -198,5 +204,239 @@ describe.each(locales)("%s wording", (locale) => {
     );
 
     expect(missing).toEqual([]);
+  });
+
+  it("says why somebody was not let in", () => {
+    // The one screen where a raw key cannot be worked around: whoever is reading it is
+    // outside the app, and the sentence explaining why is the only instruction they get.
+    // `link` is in the list and comes from no action — an expired invite link lands on
+    // the login as a flag on the URL, which is exactly the arrival most likely to need
+    // the wording.
+    const missing = loginErrors.filter((error) => !flat.has(`login.error.${error}`));
+
+    expect(missing).toEqual([]);
+  });
+
+  it("says why a password was not accepted", () => {
+    // Refused at the one moment the account does not exist yet. Somebody who cannot read
+    // why has no signed-in app to retreat into and no password to get back in with.
+    const missing = setPasswordErrors.filter(
+      (error) => !flat.has(`setPassword.error.${error}`),
+    );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("reports how every invitation ended", () => {
+    // Success and refusal walk the same list on purpose. An invite whose outcome renders
+    // as a key leaves the Org Admin unable to tell a sent invitation from a silent
+    // failure, and the person waiting for it has no way to ask.
+    const missing = inviteStatuses.filter(
+      (status) => !flat.has(`people.invite.status.${status}`),
+    );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("reports how every WeCom userid save ended", () => {
+    const missing = wecomUserIdStatuses.filter(
+      (status) => !flat.has(`people.wecom.status.${status}`),
+    );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("reports how every test mention ended", () => {
+    // The wording here is load-bearing beyond legibility: `errcode 0` means accepted and
+    // never notified, so this status is the only thing standing between the Org Admin and
+    // believing a mention was delivered. `conventions.test.ts` holds the success string to
+    // its promise; this holds every status to having one at all.
+    const missing = testMentionStatuses.filter(
+      (status) => !flat.has(`people.wecom.test.status.${status}`),
+    );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("reports how every group robot save ended", () => {
+    const missing = groupRobotStatuses.filter(
+      (status) => !flat.has(`groupRobot.status.${status}`),
+    );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("names both ways a Quote can answer the Item", () => {
+    // Exact and Alternative are radio labels, and a radio labelled
+    // `quotes.matchType.alternative` is one nobody can choose deliberately — which turns
+    // the one field that tells a reviewer they are being offered a different product into
+    // a guess.
+    const missing = matchTypes.filter((match) => !flat.has(`quotes.matchType.${match}`));
+
+    expect(missing).toEqual([]);
+  });
+
+  it("names every Outcome a Tender can read as, and explains it", () => {
+    // `partial` is the reason this walks a list of its own rather than reusing the Items'
+    // one: it is the only Outcome no Item can hold, so a union built from `itemOutcomes`
+    // alone would pass while the mixed result — the single most confusing thing the bar
+    // ever says — rendered as its key.
+    const missing = tenderOutcomes.flatMap((outcome) =>
+      ["value", "explain"]
+        .map((part) => `tenders.outcome.${part}.${outcome}`)
+        .filter((key) => !flat.has(key)),
+    );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("offers every locale by name on the first-run choice", () => {
+    // Written in its own language, so this is the one screen whose wording cannot be read
+    // by falling back to the other locale. A third locale added without its own name here
+    // would be an option nobody who needs it can identify.
+    const missing = locales.flatMap((locale) =>
+      [`chooseLanguage.option.${locale}`, `localeSwitcher.${locale}`].filter(
+        (key) => !flat.has(key),
+      ),
+    );
+
+    expect(missing).toEqual([]);
+  });
+});
+
+/**
+ * Every key written as a literal in the source resolves to a message.
+ *
+ * The tests above walk the unions the app builds keys from at runtime. This walks the
+ * other half — the several hundred keys typed out by hand — and it is the half where the
+ * mistake is a typo rather than an omission. `next-intl` renders an unresolved key as
+ * itself and reports nothing: no throw, no console line, no failing render. The screen
+ * simply reads `tenders.sourcing.bidTotl` and every automated test in this repo stays
+ * green, because none of them assert on wording.
+ *
+ * Read out of the source rather than asserted screen by screen, because the point is
+ * coverage: a screen nobody wrote a test for is exactly the screen this is here to catch.
+ */
+describe("keys written into the source", () => {
+  const sourceRoot = join(process.cwd(), "src");
+
+  function sourceFiles(directory: string): string[] {
+    return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+      const path = join(directory, entry.name);
+
+      if (entry.isDirectory()) return sourceFiles(path);
+      if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) return [path];
+
+      return [];
+    });
+  }
+
+  /**
+   * Brace depth at every character, which is what tells a binding from a sibling's.
+   *
+   * Several components here declare `t` more than once — `working-sheet.tsx` binds it to
+   * six namespaces in six components in one file. Taking the nearest declaration above a
+   * call is not enough: the nearest one may belong to a function that has already closed,
+   * which would check most of that file against the wrong namespace and report a wall of
+   * keys that are all perfectly fine.
+   */
+  function depths(source: string): number[] {
+    const depth = new Array<number>(source.length);
+    let level = 0;
+
+    for (let index = 0; index < source.length; index++) {
+      if (source[index] === "}") level--;
+      depth[index] = level;
+      if (source[index] === "{") level++;
+    }
+
+    return depth;
+  }
+
+  type Binding = { name: string; namespace: string; at: number };
+
+  function bindings(source: string): Binding[] {
+    return [
+      ...source.matchAll(
+        /(?:const|let)\s+(\w+)\s*=\s*(?:await\s+)?(?:useTranslations|getTranslations)\(\s*(?:"([^"]*)")?\s*\)/g,
+      ),
+    ].map((match) => ({ name: match[1], namespace: match[2] ?? "", at: match.index }));
+  }
+
+  /**
+   * The namespace a translator *received as a prop* carries, read off its type.
+   *
+   * `tenders/page.tsx` hands `t` down to `TenderRow` rather than binding a second one, so
+   * those calls have no declaration in scope at all. The annotation is what says which
+   * namespace they are in — guessing from the enclosing file would be right today only
+   * because the parent happens to share it.
+   */
+  function annotated(source: string, name: string): string | undefined {
+    return new RegExp(
+      `\\b${name}\\s*:[^;,\\n]*?(?:useTranslations|getTranslations)<"([^"]*)">`,
+    ).exec(source)?.[1];
+  }
+
+  /**
+   * The literal `t("…")` calls in a file, paired with the namespace in force at each.
+   *
+   * `t.has(…)` is deliberately not among the call forms matched: it is next-intl's
+   * existence check, the idiom for a message that is *optional*. Requiring those keys
+   * would invert what the guard around them is for.
+   */
+  function literalKeys(source: string): string[] {
+    const declared = bindings(source);
+    const depth = depths(source);
+    const names = [...new Set(declared.map((binding) => binding.name))];
+
+    return names.flatMap((name) => {
+      const calls = source.matchAll(
+        new RegExp(`\\b${name}(?:\\.rich|\\.markup|\\.raw)?\\(\\s*"([^"]*)"`, "g"),
+      );
+
+      return [...calls].flatMap((call) => {
+        const inScope = declared.filter(
+          (binding) =>
+            binding.name === name &&
+            binding.at < call.index &&
+            // Never dips below the binding's own depth on the way to the call, which is
+            // what rules out a binding whose function has already closed.
+            Math.min(...depth.slice(binding.at, call.index)) >= depth[binding.at],
+        );
+
+        const namespace = inScope.at(-1)?.namespace ?? annotated(source, name);
+
+        // A translator that arrives from somewhere else and says nothing about which
+        // namespace it is in cannot be checked. Skipped rather than guessed at.
+        if (namespace === undefined) return [];
+
+        return [namespace === "" ? call[1] : `${namespace}.${call[1]}`];
+      });
+    });
+  }
+
+  const used = [
+    ...new Set(
+      sourceFiles(sourceRoot).flatMap((path) => literalKeys(readFileSync(path, "utf8"))),
+    ),
+  ].sort();
+
+  it("finds keys to check at all", () => {
+    // The scan is a regex over source, so it fails open: a refactor that renamed the
+    // hooks or changed how they are called would quietly check nothing and pass. The
+    // count only has to be large enough to prove it is still reading the app.
+    expect(used.length).toBeGreaterThan(100);
+  });
+
+  it("reads the keys a translator passed as a prop renders", () => {
+    // The one case with no binding in scope, and the one most easily skipped silently.
+    // Named here so that losing it is a failure rather than a quieter suite.
+    expect(used).toContain("tenders.ownedBy");
+  });
+
+  it.each(locales)("resolves every one of them in %s", (locale) => {
+    const flat = flatten(messages(locale));
+
+    expect(used.filter((key) => !flat.has(key))).toEqual([]);
   });
 });
