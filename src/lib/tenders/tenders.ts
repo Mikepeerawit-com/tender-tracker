@@ -4,11 +4,15 @@ import { currentUser } from "@/lib/auth/session";
 import { isCalendarDate, todayIn } from "@/lib/calendar-date";
 import { getOrgSettings } from "@/lib/org/org";
 import { rescheduleReminders, scheduleReminders } from "@/lib/reminders/reminders";
-import { isItemOutcome, type ItemOutcome } from "@/lib/tenders/outcome";
+import type { Deadlines } from "@/lib/reminders/schedule";
 import {
   createSessionClient,
   type SessionCookieStore,
 } from "@/lib/supabase/session-client";
+import { isItemOutcome, type ItemOutcome } from "@/lib/tenders/outcome";
+import type { RobotBoundary } from "@/lib/wecom/robot";
+
+import { announceOutcome } from "./outcome-news";
 
 /**
  * Recording a Tender, its Items, and who is working it.
@@ -196,7 +200,7 @@ export async function createTender(
     {
       tenderId: data.id,
       orgId: caller.orgId,
-      deadlines: input,
+      deadlines: deadlinesOf(input),
     },
     supabase,
   );
@@ -266,7 +270,7 @@ export async function updateTender(
   // and a comparison against the old row is one more thing to get wrong on the one path
   // whose failure is silent by construction.
   const rescheduled = await rescheduleReminders(
-    { tenderId, orgId: data[0].org_id, deadlines: input },
+    { tenderId, orgId: data[0].org_id, deadlines: deadlinesOf(input) },
     todayIn(timezone, at),
     supabase,
   );
@@ -452,6 +456,8 @@ export async function setItemOutcome(
     decidedAt: Date;
   },
   store: SessionCookieStore,
+  /** The group robot, injected so a test can stand at it (ADR-0012). */
+  robot: RobotBoundary = {},
 ): Promise<TenderResult> {
   const caller = await currentUser(store);
 
@@ -490,7 +496,17 @@ export async function setItemOutcome(
 
   // Still checked after the write: the read above and this update are two statements, and
   // the Item can go between them.
-  return data.length === 1 ? { ok: true } : { ok: false, reason: "not_found" };
+  if (data.length !== 1) return { ok: false, reason: "not_found" };
+
+  // Only `won` and `lost` are news, and only once: the equality check above has already
+  // turned re-recording the same Outcome into a no-op, so this cannot post twice for one
+  // decision. The announcement is best effort and never fails the write — see
+  // `./outcome-news.ts` for why that is the opposite call from the reminder schedule.
+  if (outcome === "won" || outcome === "lost") {
+    await announceOutcome({ itemId, outcome }, robot);
+  }
+
+  return { ok: true };
 }
 
 /**
@@ -713,6 +729,22 @@ async function assignableProblem(
     .maybeSingle();
 
   return data ? null : "unassignable";
+}
+
+/**
+ * The dates the schedule is built from, with the optional one normalised.
+ *
+ * An expected decision date that arrives blank is the Owner *not* asking to be chased,
+ * and `""` is not that — it is a date the schedule would try to count from. The same
+ * `blankToNull` the row write uses, so what is stored and what is scheduled can never
+ * disagree about whether the chase is on.
+ */
+function deadlinesOf(input: TenderFields): Deadlines {
+  return {
+    internalQuoteDeadline: input.internalQuoteDeadline,
+    clientSubmissionDeadline: input.clientSubmissionDeadline,
+    expectedDecisionDate: blankToNull(input.expectedDecisionDate),
+  };
 }
 
 function fieldProblem(input: TenderFields): TenderProblem | null {

@@ -91,7 +91,7 @@
     "clientSubmissionHint": "我们的投标必须在此之前送达客户。逾期即失去这次招标。",
     "clientSubmissionDue": "客户投标截止日期：{date}",
     "expectedDecisionDate": "预计决标日期",
-    "expectedDecisionHint": "选填——客户很少给出明确日期。",
+    "expectedDecisionHint": "选填——客户很少给出明确日期。填写后，当天会提醒负责人跟进客户。",
     "notes": "备注",
     "itemCount": "{count, plural, other {# 项明细}}",
     "block": {

@@ -38,6 +38,14 @@ type Supabase = ReturnType<typeof createSessionClient>;
 type ExistingReminder = {
   id: string;
   milestone: ReminderMilestone;
+  /**
+   * The anchor, and the only half of it the reconcile matches on.
+   *
+   * `remind_on` is deliberately not read back. It is the decision chase's *date*, and the
+   * whole point of that row is that the date moves — matching on it would orphan the row
+   * every time the Owner changed it. So a planned row is paired to a stored one by
+   * milestone and offset, and `remind_on` is then written from the plan.
+   */
   days_before: number | null;
   due_date: string;
   sent: boolean;
@@ -92,7 +100,7 @@ export async function rescheduleReminders(
   const existing = data ?? [];
   const matched = new Set<string>();
   const inserts: PlannedReminder[] = [];
-  const updates: { id: string; dueDate: string; unsend: boolean }[] = [];
+  const updates: { id: string; planned: PlannedReminder; unsend: boolean }[] = [];
 
   for (const planned of plannedReminders(deadlines)) {
     // First match only. A duplicate pair cannot arise through the app, and if one ever
@@ -101,6 +109,7 @@ export async function rescheduleReminders(
       (candidate) =>
         !matched.has(candidate.id) &&
         candidate.milestone === planned.milestone &&
+        // The offset, never the date — see the note on `ExistingReminder.days_before`.
         candidate.days_before === planned.daysBefore,
     );
 
@@ -118,7 +127,7 @@ export async function rescheduleReminders(
 
     updates.push({
       id: row.id,
-      dueDate: planned.dueDate,
+      planned,
       unsend: row.sent && rearms(planned.dueDate, today),
     });
   }
@@ -134,11 +143,15 @@ export async function rescheduleReminders(
     orphans.length === 0
       ? ok()
       : supabase.from("reminders").delete().in("id", orphans),
-    ...updates.map(({ id, dueDate, unsend }) =>
+    ...updates.map(({ id, planned, unsend }) =>
       supabase
         .from("reminders")
         .update({
-          due_date: dueDate,
+          due_date: planned.dueDate,
+          // The anchor moves with the date on the decision chase, whose `remind_on` *is*
+          // the day it fires. Written on every update rather than only that one, because
+          // an offset row's `remind_on` is null and re-writing null is a no-op.
+          remind_on: planned.remindOn,
           // Left alone unless the move really un-sends it: writing `sent: false` on a
           // row that is staying sent would clear `sent_at` with it and lose the only
           // record of when anybody was told.
@@ -152,9 +165,11 @@ export async function rescheduleReminders(
 }
 
 /**
- * The `days_before` anchor, spelled out. `remind_on` stays null, which is what the
- * `anchor_exactly_one` CHECK requires and what tells these rows apart from the decision
- * chase's, whose date the Owner sets absolutely.
+ * The anchor, spelled out both ways round.
+ *
+ * `plannedReminders` has already set exactly one of the two — an offset row's `remindOn`
+ * is null and the decision chase's `daysBefore` is — so both are written verbatim and the
+ * `anchor_exactly_one` CHECK is satisfied by construction rather than by a branch here.
  */
 function reminderRow(row: PlannedReminder, tenderId: string, orgId: string) {
   return {
@@ -162,7 +177,7 @@ function reminderRow(row: PlannedReminder, tenderId: string, orgId: string) {
     tender_id: tenderId,
     milestone: row.milestone,
     days_before: row.daysBefore,
-    remind_on: null,
+    remind_on: row.remindOn,
     due_date: row.dueDate,
   };
 }

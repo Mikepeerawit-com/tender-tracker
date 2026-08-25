@@ -35,10 +35,17 @@ const fixture = {
   // Widened for the reminder batch (#33): one message carries every milestone a Tender
   // owes in this run, and the union of everybody they point at.
   milestones: [
-    { milestone: "internal_quote", deadline: "2026-08-25", daysLeft: 3 },
-    { milestone: "client_submission", deadline: "2026-09-01", daysLeft: 0 },
+    { milestone: "internal_quote", date: "2026-08-25", daysLeft: 3 },
+    { milestone: "client_submission", date: "2026-09-01", daysLeft: 0 },
+    // The one milestone that comes due *after* the date it names, and so the only one
+    // with a negative count. A line that read "还剩 -1 天" would pass every rule below.
+    { milestone: "submission_missed", date: "2026-09-01", daysLeft: -1 },
+    { milestone: "decision_chase", date: "2026-09-20", daysLeft: 5 },
   ],
   mentions: ["somchai", "anong"],
+  // Widened for the outcome news (#34): a **colleague's** name, which is the one identity
+  // ADR-0012 permits a message to carry. `supplier` below is the one it never may.
+  selectedBy: "Nok",
   // None of these may ever leave the app.
   supplier: "SENTINEL-SUPPLIER-ACME",
   price: "SENTINEL-PRICE",
@@ -176,14 +183,117 @@ describe("testMentionMessage", () => {
   });
 });
 
+describe("the missed submission, which is the loudest thing the robot says", () => {
+  const missed = builders.reminderMessage({
+    reference: "T-1042",
+    client: "Bangkok General Hospital",
+    title: "Surgical consumables Q3",
+    milestones: [
+      { milestone: "submission_missed", date: "2026-09-01", daysLeft: -1 },
+    ],
+    mentions: ["somchai"],
+  });
+
+  it("says the deadline passed with nothing submitted", () => {
+    expect(missed.content).toContain("2026-09-01");
+    expect(missed.content).toContain("错过");
+  });
+
+  it("counts no days down, because the date it names is behind us", () => {
+    // The generic countdown would render "(还剩 -1 天)" here, which reads as a rounding
+    // bug rather than as the failure this whole product exists to prevent.
+    expect(missed.content).not.toMatch(/还剩|就是今天/);
+  });
+});
+
+describe("the decision chase", () => {
+  it("asks the Owner to go and ask the client", () => {
+    const chase = builders.reminderMessage({
+      reference: "T-1042",
+      client: "Bangkok General Hospital",
+      title: "Surgical consumables Q3",
+      milestones: [
+        { milestone: "decision_chase", date: "2026-09-20", daysLeft: 0 },
+      ],
+      mentions: ["somchai"],
+    });
+
+    expect(chase.content).toContain("2026-09-20");
+    expect(chase.content).toContain("决标");
+  });
+});
+
+describe("the outcome news", () => {
+  const head = {
+    reference: "T-1042",
+    client: "Bangkok General Hospital",
+    item: "PICC catheter 4Fr",
+    mentions: ["somchai"],
+  };
+
+  it("tells the Assignee we bid that it was their quote", () => {
+    const won = builders.selectedQuoteOutcomeMessage({ ...head, outcome: "won" });
+
+    expect(won.content).toContain("中标");
+    expect(won.content).toContain("你的报价");
+  });
+
+  it("words a loss differently from a win for the same person", () => {
+    // Both are worth saying to whoever we bid, and they are not the same news.
+    const won = builders.selectedQuoteOutcomeMessage({ ...head, outcome: "won" });
+    const lost = builders.selectedQuoteOutcomeMessage({ ...head, outcome: "lost" });
+
+    expect(lost.content).not.toBe(won.content);
+    expect(lost.content).toContain("未中标");
+  });
+
+  it("tells everybody else whose quote we went with instead", () => {
+    // The whole reason the news is not restricted to the winner: this is the only
+    // feedback a non-selected Assignee gets on how their supplier compared.
+    const others = builders.otherQuotesOutcomeMessage({
+      ...head,
+      outcome: "won",
+      selectedBy: "Nok",
+      mentions: ["anong"],
+    });
+
+    expect(others.content).toContain("Nok");
+    expect(others.content).toContain("未被选用");
+  });
+
+  it("differs from what the selected Assignee is told", () => {
+    expect(
+      builders.otherQuotesOutcomeMessage({ ...head, outcome: "won", selectedBy: "Nok" })
+        .content,
+    ).not.toBe(builders.selectedQuoteOutcomeMessage({ ...head, outcome: "won" }).content);
+  });
+
+  it("names nobody when no Quote was ever selected, rather than guessing", () => {
+    const unattributed = builders.otherQuotesOutcomeMessage({
+      ...head,
+      outcome: "lost",
+      selectedBy: null,
+    });
+
+    expect(unattributed.content).not.toContain("null");
+    expect(unattributed.content).toContain("未记录");
+  });
+
+  it("writes no @ into the text, which WeCom renders from the mention list", () => {
+    expect(
+      builders.selectedQuoteOutcomeMessage({ ...head, outcome: "won" }).content,
+    ).not.toContain("@");
+  });
+});
+
 describe("reminderMessage", () => {
   const message = builders.reminderMessage({
     reference: "T-1042",
     client: "Bangkok General Hospital",
     title: "Surgical consumables Q3",
     milestones: [
-      { milestone: "internal_quote", deadline: "2026-08-25", daysLeft: 3 },
-      { milestone: "client_submission", deadline: "2026-09-01", daysLeft: 0 },
+      { milestone: "internal_quote", date: "2026-08-25", daysLeft: 3 },
+      { milestone: "client_submission", date: "2026-09-01", daysLeft: 0 },
     ],
     mentions: ["somchai", "anong"],
   });
@@ -203,7 +313,7 @@ describe("reminderMessage", () => {
       client: "Bangkok General Hospital",
       title: "Surgical consumables Q3",
       milestones: [
-        { milestone: "client_submission", deadline: "2026-09-01", daysLeft: 7 },
+        { milestone: "client_submission", date: "2026-09-01", daysLeft: 7 },
       ],
       mentions: [],
     });
@@ -217,7 +327,7 @@ describe("reminderMessage", () => {
       client: "Bangkok General Hospital",
       title: "Surgical consumables Q3",
       milestones: [
-        { milestone: "internal_quote", deadline: "2026-08-25", daysLeft: 0 },
+        { milestone: "internal_quote", date: "2026-08-25", daysLeft: 0 },
       ],
       mentions: [],
     });

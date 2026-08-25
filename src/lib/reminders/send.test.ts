@@ -8,7 +8,13 @@ import {
   memoryCookieStore,
   type SessionCookieStore,
 } from "@/lib/supabase/session-client";
-import { addAssignee, createTender, recordSubmission } from "@/lib/tenders/tenders";
+import {
+  addAssignee,
+  createTender,
+  recordSubmission,
+  setItemOutcome,
+  updateTender,
+} from "@/lib/tenders/tenders";
 import { recordingRobot, type RobotStub } from "@/lib/wecom/robot-stub";
 import { paceMs } from "@/lib/wecom/robot";
 
@@ -101,9 +107,24 @@ async function createMember(who: { id: string; email: string; wecom: string }) {
 type TenderShape = {
   internalQuoteDeadline?: string;
   clientSubmissionDeadline?: string;
+  expectedDecisionDate?: string | null;
   items?: string[];
   assignees?: { id: string }[];
 };
+
+/** The Tender's own fields, as both the create and the edit below need them. */
+function fieldsFor(shape: TenderShape) {
+  return {
+    clientName: client,
+    title: "Surgical consumables",
+    dateReceived: "2026-08-01",
+    internalQuoteDeadline: shape.internalQuoteDeadline ?? "2026-08-25",
+    clientSubmissionDeadline: shape.clientSubmissionDeadline ?? "2026-09-01",
+    expectedDecisionDate: shape.expectedDecisionDate ?? null,
+    ownerUserId: owner.id,
+    notes: null,
+  };
+}
 
 /** A Tender with its reminders already scheduled, and its Items back in order. */
 async function aTender(shape: TenderShape = {}): Promise<{
@@ -113,14 +134,7 @@ async function aTender(shape: TenderShape = {}): Promise<{
   const store = await signedInAs(owner);
   const result = await createTender(
     {
-      clientName: client,
-      title: "Surgical consumables",
-      dateReceived: "2026-08-01",
-      internalQuoteDeadline: shape.internalQuoteDeadline ?? "2026-08-25",
-      clientSubmissionDeadline: shape.clientSubmissionDeadline ?? "2026-09-01",
-      expectedDecisionDate: null,
-      ownerUserId: owner.id,
-      notes: null,
+      ...fieldsFor(shape),
       items: (shape.items ?? ["Nitrile gloves"]).map((productName) => ({
         productName,
         description: null,
@@ -170,6 +184,21 @@ async function quoteOn(itemId: string, who: { email: string }): Promise<void> {
   );
 
   if (!result.ok) throw new Error(`could not quote: ${result.reason}`);
+}
+
+/** Move a Tender's dates, the way the edit screen does — reschedule included. */
+async function reschedule(
+  tenderId: string,
+  shape: TenderShape,
+  at: Date,
+): Promise<void> {
+  const result = await updateTender(
+    { tenderId, ...fieldsFor(shape) },
+    at,
+    await signedInAs(owner),
+  );
+
+  if (!result.ok) throw new Error(`could not edit the Tender: ${result.reason}`);
 }
 
 /** Only what this suite posted — other suites' orgs share the run. */
@@ -684,6 +713,241 @@ describe("the in-app notifications the bell will read", () => {
         body: "2026-08-13",
       },
     ]);
+  });
+});
+
+describe("the missed submission", () => {
+  // The failure this whole product exists to prevent. Everything here is about it being
+  // said once, loudly, on the morning it happens — and not on any other morning.
+  const missed = { internalQuoteDeadline: "2026-08-09", clientSubmissionDeadline: "2026-08-09" };
+
+  it("posts when the client deadline goes by with nothing submitted", async () => {
+    const tender = await aTender(missed);
+    const reference = await referenceOf(tender.id);
+    const robot = recordingRobot();
+
+    await sendDueReminders(runInstant, robot);
+
+    const message = mine(robot).find((sent) =>
+      sent.payload.text.content.includes(reference),
+    );
+
+    expect(message?.payload.text.content).toContain("错过");
+    expect(message?.payload.text.content).toContain("2026-08-09");
+    // The Owner is accountable for the Bid going out, whoever sourced it.
+    expect(message?.payload.text.mentioned_list).toEqual([owner.wecom]);
+  });
+
+  it("says it once rather than every morning afterwards", async () => {
+    // `sent` is the dedupe, which is the whole reason this is a reminder row and not a
+    // sweep over Tenders. A group told daily that it missed something last Tuesday
+    // learns to scroll past the one message that mattered.
+    const tender = await aTender(missed);
+    const reference = await referenceOf(tender.id);
+
+    await sendDueReminders(runInstant, recordingRobot());
+
+    const again = recordingRobot();
+
+    await sendDueReminders(new Date("2026-08-10T18:00:00Z"), again);
+
+    expect(contentFor(again, reference)).toBe("");
+  });
+
+  it("is the only thing said about a Tender whose deadlines have all gone", async () => {
+    // Rule 2 is inverted for this one milestone and unchanged for the others: a
+    // countdown to a date that went by is noise, and the miss is the news.
+    const tender = await aTender(missed);
+    const robot = recordingRobot();
+
+    await sendDueReminders(runInstant, robot);
+
+    const content = contentFor(robot, await referenceOf(tender.id));
+
+    expect(content).toContain("错过");
+    expect(content).not.toContain("客户投标截止:");
+    expect(content).not.toContain("内部报价截止");
+  });
+
+  it("says nothing about a Tender whose Bid went out in time", async () => {
+    const tender = await aTender(missed);
+
+    await recordSubmission(
+      { tenderId: tender.id, submittedAt: new Date("2026-08-08T04:00:00Z") },
+      await signedInAs(owner),
+    );
+
+    const robot = recordingRobot();
+
+    await sendDueReminders(runInstant, robot);
+
+    expect(contentFor(robot, await referenceOf(tender.id))).toBe("");
+  });
+
+  it("says nothing once somebody has recorded an Outcome", async () => {
+    // A Tender written off is off the worklist entirely, and shouting about a deadline
+    // on it is shouting about finished work.
+    const tender = await aTender(missed);
+
+    await setItemOutcome(
+      { itemId: tender.itemIds[0], outcome: "cancelled", decidedAt: runInstant },
+      await signedInAs(owner),
+    );
+
+    const robot = recordingRobot();
+
+    await sendDueReminders(runInstant, robot);
+
+    expect(contentFor(robot, await referenceOf(tender.id))).toBe("");
+  });
+
+  it("posts again when the client extends and the new deadline is missed too", async () => {
+    // Rule 3 applied to the loudest message there is. A client who grants an extension
+    // resets the whole schedule, and a Tender missed twice was missed twice.
+    const tender = await aTender(missed);
+    const reference = await referenceOf(tender.id);
+
+    await sendDueReminders(runInstant, recordingRobot());
+    await reschedule(
+      tender.id,
+      { internalQuoteDeadline: "2026-08-14", clientSubmissionDeadline: "2026-08-16" },
+      runInstant,
+    );
+
+    // 2026-08-17 in Bangkok: the day after the extension, missed again.
+    const after = recordingRobot();
+
+    await sendDueReminders(new Date("2026-08-16T18:00:00Z"), after);
+
+    expect(contentFor(after, reference)).toContain("错过");
+    expect(contentFor(after, reference)).toContain("2026-08-16");
+  });
+});
+
+describe("the decision chase", () => {
+  it("is off entirely until the Owner names a date", async () => {
+    // Not a row that never fires — no row at all. Clients rarely state a decision date,
+    // so there is nothing honest to default it to.
+    const tender = await aTender({
+      internalQuoteDeadline: "2026-08-05",
+      clientSubmissionDeadline: "2026-08-08",
+    });
+
+    await recordSubmission(
+      { tenderId: tender.id, submittedAt: new Date("2026-08-07T04:00:00Z") },
+      await signedInAs(owner),
+    );
+
+    const robot = recordingRobot();
+
+    await sendDueReminders(runInstant, robot);
+
+    expect(await remindersOn(tender.id)).not.toContainEqual(
+      expect.objectContaining({ milestone: "decision_chase" }),
+    );
+    expect(contentFor(robot, await referenceOf(tender.id))).toBe("");
+  });
+
+  it("reminds the Owner to chase on the day they set", async () => {
+    const tender = await aTender({
+      internalQuoteDeadline: "2026-08-05",
+      clientSubmissionDeadline: "2026-08-08",
+      expectedDecisionDate: today,
+    });
+    const reference = await referenceOf(tender.id);
+
+    await recordSubmission(
+      { tenderId: tender.id, submittedAt: new Date("2026-08-07T04:00:00Z") },
+      await signedInAs(owner),
+    );
+
+    const robot = recordingRobot();
+
+    await sendDueReminders(runInstant, robot);
+
+    const message = mine(robot).find((sent) =>
+      sent.payload.text.content.includes(reference),
+    );
+
+    expect(message?.payload.text.content).toContain("决标");
+    expect(message?.payload.text.content).toContain(today);
+    expect(message?.payload.text.mentioned_list).toEqual([owner.wecom]);
+  });
+
+  it("chases nothing on a Tender whose Bid never went out", async () => {
+    // There is no decision coming on something nobody submitted, and the group has
+    // already been told the louder thing about it.
+    const tender = await aTender({
+      internalQuoteDeadline: "2026-08-09",
+      clientSubmissionDeadline: "2026-08-09",
+      expectedDecisionDate: today,
+    });
+    const robot = recordingRobot();
+
+    await sendDueReminders(runInstant, robot);
+
+    const content = contentFor(robot, await referenceOf(tender.id));
+
+    expect(content).toContain("错过");
+    expect(content).not.toContain("决标");
+  });
+
+  it("waits rather than giving up when the submission was never recorded", async () => {
+    // The hole this closes: "nobody recorded the submission" is a commoner reason for a
+    // null `submitted_at` than "the Bid never went out", and settling the row would mean
+    // the chase never fired again once somebody fixed the record. It holds instead.
+    const tender = await aTender({
+      internalQuoteDeadline: "2026-08-05",
+      clientSubmissionDeadline: "2026-08-08",
+      expectedDecisionDate: today,
+    });
+    const reference = await referenceOf(tender.id);
+
+    await sendDueReminders(runInstant, recordingRobot());
+
+    // Neither posted nor closed — it is owed again tomorrow, unchanged.
+    expect(
+      (await remindersOn(tender.id)).filter(
+        (row) => row.milestone === "decision_chase",
+      ),
+    ).toEqual([
+      expect.objectContaining({ milestone: "decision_chase", sent: false }),
+    ]);
+
+    await recordSubmission(
+      { tenderId: tender.id, submittedAt: new Date("2026-08-07T04:00:00Z") },
+      await signedInAs(owner),
+    );
+
+    const after = recordingRobot();
+
+    await sendDueReminders(new Date("2026-08-10T18:00:00Z"), after);
+
+    expect(contentFor(after, reference)).toContain("决标");
+  });
+
+  it("stops chasing once the Outcome is in", async () => {
+    const tender = await aTender({
+      internalQuoteDeadline: "2026-08-05",
+      clientSubmissionDeadline: "2026-08-08",
+      expectedDecisionDate: today,
+    });
+
+    await recordSubmission(
+      { tenderId: tender.id, submittedAt: new Date("2026-08-07T04:00:00Z") },
+      await signedInAs(owner),
+    );
+    await setItemOutcome(
+      { itemId: tender.itemIds[0], outcome: "lost", decidedAt: runInstant },
+      await signedInAs(owner),
+      recordingRobot(),
+    );
+
+    const robot = recordingRobot();
+
+    await sendDueReminders(runInstant, robot);
+
+    expect(contentFor(robot, await referenceOf(tender.id))).toBe("");
   });
 });
 

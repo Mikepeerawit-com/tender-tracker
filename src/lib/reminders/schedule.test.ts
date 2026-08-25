@@ -19,14 +19,18 @@ import {
 const deadlines = {
   internalQuoteDeadline: "2026-08-25",
   clientSubmissionDeadline: "2026-09-01",
+  expectedDecisionDate: null,
 };
 
 describe("the schedule a Tender is created with", () => {
-  it("covers both milestones and nothing else", () => {
+  it("covers the three milestones that need no decision date", () => {
     const milestones = new Set(plannedReminders(deadlines).map((row) => row.milestone));
 
-    // `decision_chase` anchors on an absolute date the Owner sets and is off by default.
-    expect([...milestones].sort()).toEqual([...reminderMilestones].sort());
+    // `decision_chase` anchors on an absolute date the Owner sets and is off until they
+    // set one, which is why it is missing from a Tender that has none.
+    expect([...milestones].sort()).toEqual(
+      [...reminderMilestones].filter((milestone) => milestone !== "decision_chase").sort(),
+    );
   });
 
   it("escalates the client submission at 7, 3 and 1 days, plus the morning of", () => {
@@ -55,6 +59,7 @@ describe("the schedule a Tender is created with", () => {
       plannedReminders({
         internalQuoteDeadline: "2026-03-02",
         clientSubmissionDeadline: "2026-03-05",
+        expectedDecisionDate: null,
       }).find((row) => row.milestone === "internal_quote" && row.daysBefore === 3)
         ?.dueDate,
     ).toBe("2026-02-27");
@@ -66,9 +71,69 @@ describe("the schedule a Tender is created with", () => {
     const rows = plannedReminders({
       internalQuoteDeadline: "2026-08-11",
       clientSubmissionDeadline: "2026-08-12",
+      expectedDecisionDate: null,
     });
 
     expect(rows.filter((row) => row.dueDate < "2026-08-10")).not.toEqual([]);
+  });
+});
+
+describe("the missed submission", () => {
+  it("comes due the day after the client deadline, not on it", () => {
+    // The cron fires at 08:00 Bangkok. At 08:00 on the deadline itself the Bid can still
+    // go out, and a post announcing a miss to the whole group while somebody is still
+    // working on it is the loudest possible way to be wrong.
+    const rows = plannedReminders(deadlines);
+    const missed = rows.filter((row) => row.milestone === "submission_missed");
+
+    expect(missed.map((row) => row.dueDate)).toEqual(["2026-09-02"]);
+  });
+
+  it("counts from the client deadline and never from the internal one", () => {
+    expect(
+      plannedReminders({
+        internalQuoteDeadline: "2026-08-25",
+        clientSubmissionDeadline: "2026-08-31",
+        expectedDecisionDate: null,
+      }).find((row) => row.milestone === "submission_missed")?.dueDate,
+    ).toBe("2026-09-01");
+  });
+});
+
+describe("the decision chase", () => {
+  it("is off until the Owner names a date", () => {
+    expect(
+      plannedReminders(deadlines).filter((row) => row.milestone === "decision_chase"),
+    ).toEqual([]);
+  });
+
+  it("fires on that date, anchored absolutely rather than by an offset", () => {
+    // Clients rarely say when they will decide, so there is nothing to count back from.
+    // `remind_on` set and `days_before` null is what the anchor_exactly_one CHECK reads.
+    const chase = plannedReminders({
+      ...deadlines,
+      expectedDecisionDate: "2026-09-20",
+    }).filter((row) => row.milestone === "decision_chase");
+
+    expect(chase).toEqual([
+      {
+        milestone: "decision_chase",
+        daysBefore: null,
+        remindOn: "2026-09-20",
+        dueDate: "2026-09-20",
+      },
+    ]);
+  });
+
+  it("leaves every other row anchored by offset", () => {
+    // The two shapes must not blur: an offset row with a `remind_on` would fail the CHECK
+    // the moment it was written, and a chase with a `days_before` would be counted back
+    // from a deadline nobody stated.
+    expect(
+      plannedReminders({ ...deadlines, expectedDecisionDate: "2026-09-20" })
+        .filter((row) => row.milestone !== "decision_chase")
+        .every((row) => row.remindOn === null && row.daysBefore !== null),
+    ).toBe(true);
   });
 });
 

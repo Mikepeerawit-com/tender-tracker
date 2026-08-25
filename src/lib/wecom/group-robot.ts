@@ -154,10 +154,18 @@ export async function groupRobotStatus(
 }
 
 /**
- * The org's webhook, or null if it has no Group Robot yet.
+ * The org's webhook, or null if it has no usable Group Robot.
  *
  * Takes an org id rather than a session because the daily cron has no session — it runs
  * for every org, unattended. The only callers are send paths.
+ *
+ * **A blank row is reported as no robot rather than passed on.** `normaliseWebhook`
+ * stops one being written through the app, but this is the read every send path stands
+ * on and `sendGroupMessages` *throws* on a blank URL — so a single malformed row would
+ * take down the whole nightly run for every other org in the cron, and would throw out
+ * of the outcome news, which is documented as never failing the write it rides on.
+ * Reporting it as unconfigured lands it in the one bucket that already means "an Org
+ * Admin has a screen to fix this on".
  */
 export async function webhookFor(orgId: string): Promise<string | null> {
   const { data } = await createServiceClient()
@@ -166,5 +174,5 @@ export async function webhookFor(orgId: string): Promise<string | null> {
     .eq("org_id", orgId)
     .maybeSingle();
 
-  return data?.webhook_url ?? null;
+  return (data?.webhook_url ?? "").trim() || null;
 }

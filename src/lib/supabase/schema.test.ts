@@ -508,10 +508,20 @@ describe("reminders", () => {
     expect(error?.message).toContain("anchor_exactly_one");
   });
 
-  it("rejects a milestone outside the three that exist", async () => {
+  it("counts the missed submission forward from the deadline it names", async () => {
+    // The one negative offset in the schedule: `due_date` is the day *after* the client
+    // deadline, because a deadline has not been missed until it has passed.
     const { error } = await service
       .from("reminders")
-      .insert(reminder({ milestone: "submission_missed", days_before: 0 }));
+      .insert(reminder({ milestone: "submission_missed", days_before: -1 }));
+
+    expect(error).toBeNull();
+  });
+
+  it("rejects a milestone outside the four that exist", async () => {
+    const { error } = await service
+      .from("reminders")
+      .insert(reminder({ milestone: "sourcing_overdue", days_before: 0 }));
 
     expect(error).not.toBeNull();
   });

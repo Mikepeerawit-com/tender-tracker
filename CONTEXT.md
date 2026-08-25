@@ -116,12 +116,33 @@ _Avoid_: late, overdue
 **Submission Missed**:
 The Client Submission Deadline has passed with nothing submitted. Derived, never
 stored. The Tender is dead — this is the failure the product exists to prevent.
+
+The *state* is derived on every read, and the *announcement* is a Reminder like any
+other: one row, dated the day after the deadline, because a deadline has not been missed
+until it has passed. That is what makes it said once rather than every morning after,
+and what makes a client's extension re-arm it (ADR-0015).
 _Avoid_: expired, lapsed, overdue
 
 **Awaiting Decision**:
 Submitted, with Outcomes still unrecorded. Not a failure — the normal resting state of
 a live Tender, and a prompt to chase the client.
 _Avoid_: pending, open, in progress
+
+**Decision Chase**:
+The Owner's own reminder to go and ask the client how it went, on a day they name
+outright. Off unless set, because clients rarely state when they will decide and there is
+no honest day to guess. The only Milestone with no offset, and the only one silenced by a
+Tender *not* having been submitted — there is no decision coming on a Bid that never went.
+_Avoid_: follow-up, chase-up reminder, decision reminder
+
+**Outcome News**:
+The group post that follows an Item being recorded `won` or `lost`. It reaches **every
+Assignee who quoted that Item**, not only the one whose Quote we bid, and says a different
+thing to each: the losers' only feedback anywhere in this app on how their supplier
+compared comes from this message. `no_bid` and `cancelled` are silent — neither is a
+verdict on anybody's sourcing. The one message that fires on a write rather than on the
+cron (ADR-0015).
+_Avoid_: outcome notification, result announcement, win notification
 
 **Group Robot**:
 The WeCom webhook every notification leaves through — one URL, posting into one group
@@ -138,10 +159,13 @@ thresholds only; the Digest is what answers "what is going on right now".
 _Avoid_: notification, alert, nag, ping
 
 **Milestone**:
-The dated thing a Reminder is counted back from: the Internal Quote Deadline, the Client
-Submission Deadline, or the Owner's own decision-chase date. Which Milestone a Reminder
-is for decides who it @s — the Internal Quote Deadline reaches only Assignees who have
-entered no Quotes at all, the Client Submission Deadline reaches the Owner.
+The dated thing a Reminder is counted from. Four of them: the Internal Quote Deadline,
+the Client Submission Deadline, the Submission Missed announcement, and the Owner's own
+decision-chase date. Which Milestone a Reminder is for decides three things — who it @s,
+what its line says, and what makes it stop being worth posting. The Internal Quote
+Deadline reaches only Assignees who have entered no Quotes at all; the other three reach
+the Owner. Three count *back* from a date the Tender already holds; the decision chase has
+no offset at all and fires on the absolute day the Owner set.
 _Avoid_: event, trigger, deadline type
 
 **Digest**:
