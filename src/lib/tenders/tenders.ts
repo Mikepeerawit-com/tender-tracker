@@ -1,7 +1,9 @@
 import "server-only";
 
 import { currentUser } from "@/lib/auth/session";
-import { isCalendarDate } from "@/lib/calendar-date";
+import { isCalendarDate, todayIn } from "@/lib/calendar-date";
+import { getOrgSettings } from "@/lib/org/org";
+import { rescheduleReminders, scheduleReminders } from "@/lib/reminders/reminders";
 import { isItemOutcome, type ItemOutcome } from "@/lib/tenders/outcome";
 import {
   createSessionClient,
@@ -187,11 +189,38 @@ export async function createTender(
     return { ok: false, reason: "failed" };
   }
 
+  // A Tender nobody will be reminded about is the failure this product exists to
+  // prevent, and it is indistinguishable from a healthy one until the morning it is
+  // too late — so it is rolled back here exactly like a Tender with no Items.
+  const scheduled = await scheduleReminders(
+    {
+      tenderId: data.id,
+      orgId: caller.orgId,
+      deadlines: input,
+    },
+    supabase,
+  );
+
+  if (!scheduled) {
+    await supabase.from("tenders").delete().eq("id", data.id);
+
+    return { ok: false, reason: "failed" };
+  }
+
   return { ok: true, tenderId: data.id, reference: data.reference };
 }
 
+/**
+ * Edit a Tender — and, when a deadline moves, re-date every reminder counted back from it.
+ *
+ * The instant is a parameter because the reschedule needs to know what day it is in the
+ * org's timezone to decide whether a nudge already marked sent has become one that has
+ * not happened yet (ADR-0005 rule 3, ADR-0010). A deadline pushed back that left its
+ * reminders marked done takes a Tender quiet at exactly the point it has the most runway.
+ */
 export async function updateTender(
   { tenderId, ...input }: TenderFields & { tenderId: string },
+  at: Date,
   store: SessionCookieStore,
 ): Promise<TenderResult> {
   const caller = await currentUser(store);
@@ -224,13 +253,30 @@ export async function updateTender(
     .from("tenders")
     .update(tenderRow(input))
     .eq("id", tenderId)
-    .select("id");
+    .select("id, org_id");
 
   if (error !== null) return { ok: false, reason: "failed" };
 
   // Still checked after the write: the read above and this update are two statements,
   // and the Tender can go between them.
-  return data.length === 1 ? { ok: true } : { ok: false, reason: "not_found" };
+  if (data.length !== 1) return { ok: false, reason: "not_found" };
+
+  const { timezone } = await getOrgSettings(store);
+  // Unconditional rather than only when a deadline changed: the reconcile is idempotent,
+  // and a comparison against the old row is one more thing to get wrong on the one path
+  // whose failure is silent by construction.
+  const rescheduled = await rescheduleReminders(
+    { tenderId, orgId: data[0].org_id, deadlines: input },
+    todayIn(timezone, at),
+    supabase,
+  );
+
+  // Reported rather than swallowed, even though the edit itself has already been written.
+  // Saying "saved" here would leave the Tender quieter than its dates say, with nothing
+  // on any screen contradicting it — the silent failure ADR-0005 exists to remove. The
+  // reconcile states the whole schedule rather than a diff, so the retry this sends the
+  // user back for is safe and lands them in the right place.
+  return rescheduled ? { ok: true } : { ok: false, reason: "failed" };
 }
 
 export async function addTenderItem(

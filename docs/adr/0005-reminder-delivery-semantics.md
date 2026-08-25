@@ -17,3 +17,46 @@
 - **Never mark a reminder `sent` on a non-zero errcode.** The throttle response is unmeasured, so treat any non-zero result as retryable and leave the row unsent — the catch-up rule above then recovers it on the next run for free.
 - **`errcode 0` means accepted, never notified.** Ticket 14 confirmed this holds for *both* mention routes: a nonexistent userid and an empty string are each accepted silently and notify nobody. No "notification delivered" indicator may be built on it; each user's mention identifier is verified once by a human confirming receipt.
 - **Mentions target `mentioned_list` (userid), not `mentioned_mobile_list`.** Both bind, but a mis-formatted mobile fails *systematically* — the natural Thai local format binds for nobody — while a typo'd userid drops one person. The userid comes from the console (Contacts → member → Account), so this needs no IP-gated API and does not depend on WeCom QR login shipping. See [ticket 14](https://github.com/Mikepeerawit-com/tender-tracker/issues/15).
+
+## Settled while building #33
+
+Three readings the rules above leave open, decided here and pinned by tests in
+`src/lib/reminders/send.test.ts`.
+
+- **A milestone that has been *met* is suppressed like one that has passed.** Rule 2 is
+  written about the deadline going by, but a Tender whose Bid has gone out has met its
+  client deadline and spent its internal one — the same reading `worklistBlock` takes when
+  it refuses to call a submitted Tender "coming up" — and one whose Items have all been
+  decided is off the worklist entirely. Nagging either is chasing finished work. Suppressed
+  rows are marked `sent`, not left pending: they are settled, and a deadline that later
+  moves re-arms them through rule 3 anyway.
+- **An internal-quote nudge with nobody to @ is not posted; one with nobody *assigned*
+  is.** Those are opposite facts. Every Assignee having answered means the work is done and
+  the group needs no message. A Tender with no Assignees at all means nobody is sourcing
+  it, which is the news — so it posts, unmentioned.
+- **"Assignees who have entered no quotes at all" means no *answer* at all, No Supplier
+  Found included.** buildspec_2 words the filter in terms of Quotes, and CONTEXT.md words
+  No Supplier Found as the record that "silences the sourcing nag for them". Reading the
+  first literally would ping the one person on the Tender who rang round every Item and
+  reported back — which is precisely the behaviour the filter exists to prevent. So an
+  Assignee is @-ed while they have entered no Quote **and** at least one Item they have not
+  recorded No Supplier Found on. This is still not the worklist's Sourcing Overdue rule:
+  that one asks whether *anybody* has answered for an Item.
+- **A Disabled colleague is never @-ed.** They read nothing and can act on none of it, so
+  the mention would put a name in the company group that answers to nobody.
+- **In-app rows are per Item only where the Milestone is.** The client submission deadline
+  is about the Tender — there is no Item it could deep-link to, and a row per Item would be
+  one sentence repeated five times. The internal quote deadline is about Items somebody
+  still has to price, so it writes one row per Item that Assignee has not answered for,
+  which is what stops the collapse to one WeCom message collapsing the deep links with it.
+- **`notifications.body` holds the milestone's date, not a sentence.** ADR-0012 puts the
+  robot's text outside `next-intl` because a group message has no reader whose locale could
+  select between two versions. A notification row has exactly one reader (`user_id`), so
+  that argument does not carry: the wording belongs in `src/messages/` and is rendered from
+  `type`, the row's ids and this date when the bell is built. A Chinese sentence stored here
+  would be the one string in the app that an `en` user could never escape.
+
+**Still open:** the `internal_quote` offsets (3 and 1 days before, plus morning-of) are
+buildspec_2's assumption A2, not a settled decision — only the `client_submission`
+escalation was. They are `reminderOffsets` in `src/lib/reminders/schedule.ts`, one line to
+change once the Owner confirms.

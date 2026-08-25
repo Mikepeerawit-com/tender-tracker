@@ -27,6 +27,13 @@ const password = "correct-horse-battery-staple";
 // A literal, not `new Date()`: the clock is resolved at the request boundary and passed
 // down (ADR-0010), and nothing here turns on when the disabling happened.
 const disabledAt = "2026-08-01T00:00:00Z";
+
+/**
+ * The instant an edit is made at, for the same reason. It decides only whether a
+ * reminder re-dated by a moved deadline counts as un-sent; `reminders.test.ts` is where
+ * that turns on the day, and nothing in this file does.
+ */
+const runInstant = new Date("2026-08-10T02:00:00Z");
 const run = crypto.randomUUID().slice(0, 8);
 
 const service = createServiceClient();
@@ -288,6 +295,7 @@ describe("updateTender", () => {
         ownerUserId: mate.id,
         notes: "Handed over.",
       },
+      runInstant,
       await signedInAs(owner.email),
     );
 
@@ -324,6 +332,7 @@ describe("updateTender", () => {
         ownerUserId: mate.id,
         notes: null,
       },
+      runInstant,
       store,
     );
 
@@ -352,6 +361,7 @@ describe("updateTender", () => {
         ownerUserId: mate.id,
         notes: null,
       },
+      runInstant,
       store,
     );
 
@@ -375,6 +385,7 @@ describe("updateTender", () => {
         ownerUserId: outsider.id,
         notes: null,
       },
+      runInstant,
       await signedInAs(outsider.email),
     );
 

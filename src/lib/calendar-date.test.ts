@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   calendarDate,
   calendarDateFormat,
+  daysBetween,
   isCalendarDate,
   plusDays,
 } from "./calendar-date";
@@ -64,5 +65,25 @@ describe("plusDays", () => {
     // 7 × 24 hours to a *local* midnight lands on the 14th at 23:00 and reads as the
     // 14th — a window one day short, for one week a year, in one hemisphere.
     expect(plusDays("2026-03-07", 7)).toBe("2026-03-14");
+  });
+});
+
+describe("daysBetween", () => {
+  it("counts forward to a later day", () => {
+    expect(daysBetween("2026-08-25", "2026-09-01")).toBe(7);
+  });
+
+  it("is zero on the day itself", () => {
+    expect(daysBetween("2026-08-25", "2026-08-25")).toBe(0);
+  });
+
+  it("goes negative for a day already behind", () => {
+    expect(daysBetween("2026-08-25", "2026-08-24")).toBe(-1);
+  });
+
+  it("counts a week across a clock change as seven days", () => {
+    // Europe puts its clocks back on 25 October 2026. Seven 24-hour steps from a local
+    // midnight is six days and twenty-three hours, and rounds to the wrong day.
+    expect(daysBetween("2026-10-22", "2026-10-29")).toBe(7);
   });
 });

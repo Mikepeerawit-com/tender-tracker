@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { ReminderMilestone } from "@/lib/reminders/schedule";
+
 import type { GroupMessage } from "./robot";
 
 /**
@@ -49,4 +51,68 @@ export function testMentionMessage({
     content: "【招标跟踪】测试通知:如果这条消息 @ 到了你,请回复确认。",
     mentions: [wecomUserid],
   };
+}
+
+/** What the group is told a deadline is called. Hardcoded, like everything else here. */
+const milestoneLabels: Record<ReminderMilestone, string> = {
+  internal_quote: "内部报价截止",
+  client_submission: "客户投标截止",
+};
+
+/** One milestone this Tender is being nudged about, as the message needs it. */
+export type DueMilestone = {
+  milestone: ReminderMilestone;
+  /** The deadline itself, `yyyy-mm-dd` — never the day the reminder came due. */
+  deadline: string;
+  /** Days from today to that deadline. `0` is the morning of, and never negative. */
+  daysLeft: number;
+};
+
+/**
+ * One Tender's reminders for one cron run — **every** milestone it owes, in one message.
+ *
+ * The collapsing is the point rather than tidiness (ADR-0005, rule 4). Ten open Tenders
+ * after a three-day outage is about ten messages if a run batches per Tender, and up to
+ * sixty if it loops the pending rows instead — and the webhook is capped at twenty a
+ * minute. The rule has to hold across missed days *and* across both milestones, which is
+ * why this takes a list and not a milestone.
+ *
+ * `mentions` is likewise the union of everybody the surviving milestones point at: the
+ * Assignees who have entered no Quotes at all, and the Owner. One message, one @-list.
+ * Nobody is mentioned twice for the same Tender in the same run.
+ *
+ * The deadline is named, not the day the nudge fell due. A caught-up reminder is posted
+ * late by definition, and "due 25 Aug" is the fact worth reading; which offset row
+ * produced it is this app's bookkeeping.
+ */
+export function reminderMessage({
+  reference,
+  client,
+  title,
+  milestones,
+  mentions,
+}: {
+  reference: string;
+  client: string;
+  title: string;
+  milestones: DueMilestone[];
+  mentions: string[];
+}): GroupMessage {
+  return {
+    content: [
+      `【招标跟踪】${reference} · ${client} · ${title}`,
+      ...milestones.map(
+        ({ milestone, deadline, daysLeft }) =>
+          `${milestoneLabels[milestone]}:${deadline}${remaining(daysLeft)}`,
+      ),
+      "请进入系统跟进。",
+    ].join("\n"),
+    // The `@` is not written into the text — WeCom renders it from `mentioned_list`, and
+    // writing it by hand would show each name twice.
+    mentions,
+  };
+}
+
+function remaining(daysLeft: number): string {
+  return daysLeft === 0 ? "(就是今天)" : `(还剩 ${daysLeft} 天)`;
 }

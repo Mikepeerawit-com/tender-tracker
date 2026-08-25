@@ -71,6 +71,9 @@ export async function updateTenderAction(
   const tenderId = text(formData, "tenderId");
   const result = await updateTender(
     { tenderId, ...tenderFields(formData) },
+    // A deadline moved here re-dates every reminder counted back from it, and whether a
+    // nudge already marked sent is un-sent by the move is a question about today.
+    runInstantFromHeaders(await headers()),
     await cookies(),
   );
 

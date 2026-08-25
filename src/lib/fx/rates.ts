@@ -1,6 +1,10 @@
 import "server-only";
 
-import { isConvertibleCurrency, reportingCurrency } from "@/lib/fx/currencies";
+import {
+  convertibleCurrencies,
+  isConvertibleCurrency,
+  reportingCurrency,
+} from "@/lib/fx/currencies";
 import { createServiceClient } from "@/lib/supabase/service-client";
 import type { createSessionClient } from "@/lib/supabase/session-client";
 
@@ -99,6 +103,81 @@ export async function freezeRate(
   const known = await lastKnown(currency, supabase);
 
   return known === null ? null : withBuffer(known.rate, known.asOf, bufferPct, true);
+}
+
+/**
+ * What the daily fetch managed. Null when Frankfurter could not be reached at all.
+ *
+ * A null is not a failure the cron reports upwards. The whole point of freezing a rate on
+ * the Quote is that no later screen depends on this table being fresh, so a rate service
+ * that is down leaves yesterday's rates in place and the run goes on to send the
+ * reminders — which is the half of the night's work that people actually notice missing.
+ */
+export type DailyRateFetch = { asOf: string; stored: number };
+
+/**
+ * Fetch every convertible currency's rate against THB and keep them. Run once a day by
+ * the cron, before anything is sent.
+ *
+ * **One request, not thirty.** ECB publishes everything against the euro and Frankfurter
+ * cross-computes on demand, so asking for the euro table and dividing gives exactly what
+ * asking `base=JPY&symbols=THB` twenty-nine times would give, from a single round trip.
+ *
+ * The response carries its own `date` and that is what is stored: ECB publishes on
+ * business days, so a Sunday run is keeping Friday's rates and must say so rather than
+ * dating them today. `ignoreDuplicates` for the same reason {@link freezeRate} uses it —
+ * a published reference rate is not revised, so a row that is already there is already
+ * right, and the Quote that fetched it first is entitled to have won.
+ */
+export async function fetchDailyRates(
+  boundary: FxBoundary = {},
+): Promise<DailyRateFetch | null> {
+  const get = boundary.fetch ?? globalThis.fetch;
+
+  let body: { date?: unknown; rates?: Record<string, unknown> };
+
+  try {
+    const response = await get(`${frankfurter}/latest`, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+
+    if (!response.ok) return null;
+
+    body = (await response.json()) as { date?: unknown; rates?: Record<string, unknown> };
+  } catch {
+    return null;
+  }
+
+  const asOf = body.date;
+  const perEur = body.rates ?? {};
+  const thbPerEur = perEur[reportingCurrency];
+
+  if (typeof asOf !== "string") return null;
+  if (typeof thbPerEur !== "number" || !Number.isFinite(thbPerEur) || thbPerEur <= 0) {
+    return null;
+  }
+
+  const rows = convertibleCurrencies
+    // THB is in the ECB list on its own terms, and a THB Quote is never converted. A
+    // row saying one Baht is one Baht would be true and would be read by nothing.
+    .filter((currency) => currency !== reportingCurrency)
+    .map((currency) => {
+      // The euro is the base, so it does not appear in its own table.
+      const rate = currency === "EUR" ? 1 : perEur[currency];
+
+      if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0) return null;
+
+      return { currency, as_of: asOf, rate_to_thb: round(thbPerEur / rate) };
+    })
+    .filter((row) => row !== null);
+
+  if (rows.length === 0) return null;
+
+  const { error } = await createServiceClient()
+    .from("fx_rates")
+    .upsert(rows, { onConflict: "currency,as_of", ignoreDuplicates: true });
+
+  return error === null ? { asOf, stored: rows.length } : null;
 }
 
 /** One rate as ECB published it. */

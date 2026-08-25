@@ -130,6 +130,20 @@ integration in v1. What it says is deliberately narrow: never a price, a Margin 
 supplier's name (ADR-0012).
 _Avoid_: bot, webhook, notifier, WeCom integration
 
+**Reminder**:
+A nudge into the WeCom group that a Tender's deadline is coming. One stored row per
+Milestone per offset, carrying the day it comes due — so a run the cron missed catches
+up rather than skipping, and moving the deadline re-dates the whole set. Fires at
+thresholds only; the Digest is what answers "what is going on right now".
+_Avoid_: notification, alert, nag, ping
+
+**Milestone**:
+The dated thing a Reminder is counted back from: the Internal Quote Deadline, the Client
+Submission Deadline, or the Owner's own decision-chase date. Which Milestone a Reminder
+is for decides who it @s — the Internal Quote Deadline reaches only Assignees who have
+entered no Quotes at all, the Client Submission Deadline reaches the Owner.
+_Avoid_: event, trigger, deadline type
+
 **Digest**:
 The once-daily post to the WeCom group listing every open Tender and its next
 milestone. Answers "what is going on right now"; distinct from a reminder, which fires

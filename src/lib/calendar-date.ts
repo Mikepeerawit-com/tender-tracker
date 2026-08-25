@@ -73,3 +73,16 @@ export function plusDays(value: string, days: number): string {
 
   return shifted.toISOString().slice(0, 10);
 }
+
+/**
+ * How many days from one `yyyy-mm-dd` day to another. Negative when `to` is behind.
+ *
+ * Counted in UTC for the same reason {@link plusDays} adds in UTC: 24-hour arithmetic
+ * over a *local* midnight is off by one for the week either side of a clock change, and
+ * a reminder that says "还剩 2 天" about tomorrow is worse than one that says nothing.
+ */
+export function daysBetween(from: string, to: string): number {
+  const day = 24 * 60 * 60 * 1000;
+
+  return Math.round((calendarDate(to).getTime() - calendarDate(from).getTime()) / day);
+}

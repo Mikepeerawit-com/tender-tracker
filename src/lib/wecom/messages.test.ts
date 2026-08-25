@@ -28,9 +28,17 @@ const fixture = {
   reference: "1042",
   client: "Bangkok Hospital",
   item: "PICC catheter 4Fr",
+  title: "Surgical consumables Q3",
   outcome: "won",
   quantity: 12,
   daysLeft: 3,
+  // Widened for the reminder batch (#33): one message carries every milestone a Tender
+  // owes in this run, and the union of everybody they point at.
+  milestones: [
+    { milestone: "internal_quote", deadline: "2026-08-25", daysLeft: 3 },
+    { milestone: "client_submission", deadline: "2026-09-01", daysLeft: 0 },
+  ],
+  mentions: ["somchai", "anong"],
   // None of these may ever leave the app.
   supplier: "SENTINEL-SUPPLIER-ACME",
   price: "SENTINEL-PRICE",
@@ -120,10 +128,9 @@ describe("the messages the group robot posts", () => {
 /**
  * Proof that the rules above bite.
  *
- * Today `./messages` exports one builder returning a constant string, which touches
- * none of the fixture's sentinels — so every rule above passes without being asked
- * anything hard. That makes them true but not yet load-bearing, and a guard nobody has
- * watched fail is a guard nobody should trust.
+ * The builders `./messages` exports touch none of the fixture's sentinels, so every rule
+ * above passes without being asked anything hard. That makes them true but not yet
+ * load-bearing, and a guard nobody has watched fail is a guard nobody should trust.
  *
  * This is the message a tired person would write for the outcome news (#34): the
  * client's own words, the supplier who won it, the number the boss asked about, bolded
@@ -166,5 +173,64 @@ describe("testMentionMessage", () => {
     expect(builders.testMentionMessage({ wecomUserid: "anong" }).content).toContain(
       "确认",
     );
+  });
+});
+
+describe("reminderMessage", () => {
+  const message = builders.reminderMessage({
+    reference: "T-1042",
+    client: "Bangkok General Hospital",
+    title: "Surgical consumables Q3",
+    milestones: [
+      { milestone: "internal_quote", deadline: "2026-08-25", daysLeft: 3 },
+      { milestone: "client_submission", deadline: "2026-09-01", daysLeft: 0 },
+    ],
+    mentions: ["somchai", "anong"],
+  });
+
+  it("carries every milestone the Tender owes in one message", () => {
+    // Rule 4: a run that posts one message per pending reminder row turns a three-day
+    // backlog into sixty messages against a twenty-a-minute cap.
+    expect(message.content).toContain("2026-08-25");
+    expect(message.content).toContain("2026-09-01");
+  });
+
+  it("names the deadline, not the day the nudge fell due", () => {
+    // A caught-up reminder is late by definition. Which offset row produced it is
+    // bookkeeping; the date the client is expecting something is the fact worth reading.
+    const late = builders.reminderMessage({
+      reference: "T-1042",
+      client: "Bangkok General Hospital",
+      title: "Surgical consumables Q3",
+      milestones: [
+        { milestone: "client_submission", deadline: "2026-09-01", daysLeft: 7 },
+      ],
+      mentions: [],
+    });
+
+    expect(late.content).toContain("2026-09-01");
+  });
+
+  it("says a deadline is today rather than counting zero days to it", () => {
+    const today = builders.reminderMessage({
+      reference: "T-1042",
+      client: "Bangkok General Hospital",
+      title: "Surgical consumables Q3",
+      milestones: [
+        { milestone: "internal_quote", deadline: "2026-08-25", daysLeft: 0 },
+      ],
+      mentions: [],
+    });
+
+    expect(today.content).toContain("今天");
+    expect(today.content).not.toContain("0 天");
+  });
+
+  it("@s everybody the milestones point at, once each", () => {
+    expect(message.mentions).toEqual(["somchai", "anong"]);
+  });
+
+  it("writes no @ into the text, which WeCom renders from the mention list", () => {
+    expect(message.content).not.toContain("@");
   });
 });

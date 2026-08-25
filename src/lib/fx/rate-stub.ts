@@ -45,6 +45,28 @@ export function respondingRates(
   return { asked, fetch: fetch as typeof globalThis.fetch };
 }
 
+/**
+ * A Frankfurter serving the euro table the daily fetch asks for.
+ *
+ * Rates are **per euro**, the way ECB publishes and the way `/latest` answers, so a test
+ * states what it means and the division back to THB stays the code's problem. THB has to
+ * be among them or there is nothing to convert *to*.
+ */
+export function respondingLatestRates(
+  perEur: Record<string, number>,
+  asOf = "2026-08-07",
+): RateStub {
+  const asked: string[] = [];
+
+  const fetch = async (input: RequestInfo | URL) => {
+    asked.push(String(input));
+
+    return Response.json({ amount: 1, base: "EUR", date: asOf, rates: perEur });
+  };
+
+  return { asked, fetch: fetch as typeof globalThis.fetch };
+}
+
 /** A Frankfurter that cannot be reached at all — the transport itself fails. */
 export function unreachableRates(message = "ECONNRESET"): FxBoundary {
   return {
