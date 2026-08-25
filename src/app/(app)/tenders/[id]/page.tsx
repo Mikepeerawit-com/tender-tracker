@@ -21,9 +21,10 @@ import { getTender } from "@/lib/tenders/tenders";
  *
  * The Tender's own facts sit above it and everything that decides anything sits in the
  * sheet — one row per Tender Item, undecided Items open, every competing Quote ranked
- * cheapest-first in THB underneath. The layout is wide on purpose: six money columns and,
- * under an open Item, eight more. Below 768px the quote table reflows into stacked cards
- * (ADR-0009, #30); nothing else about the screen changes.
+ * cheapest-first in THB underneath. The layout is wide on purpose and it is one design at
+ * every width: the Item's blocks wrap into a column where there is no room for a row, and
+ * below 768px the quote table reflows into stacked cards (ADR-0009, #30). Nothing else
+ * about the screen changes, and nothing on it scrolls sideways.
  */
 export default async function TenderPage({ params }: PageProps<"/tenders/[id]">) {
   const { id } = await params;

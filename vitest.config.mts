@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 
+import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
 
 /**
@@ -12,10 +13,16 @@ import { defineConfig } from "vitest/config";
  * across runs — does not survive being lifted out of the database.
  *
  * **`.test.tsx` — the browser half.** The few behaviours that exist only once a component
- * is interactive: a Margin recomputing as digits are typed into the row, and (in #30) the
- * working sheet's scrollWidth at 390×844. These cannot resolve packages under
- * `react-server` — that condition is what makes React's client hooks unavailable — which
- * is the reason the two are separate projects rather than one with two environments.
+ * is interactive, such as a Margin recomputing as digits are typed into the row. These
+ * cannot resolve packages under `react-server` — that condition is what makes React's
+ * client hooks unavailable — which is the reason they are a separate project rather than
+ * one with two environments.
+ *
+ * **`.layout.test.tsx` — a real browser.** One thing lives here: ADR-0009's failure bar,
+ * that the comparison working sheet never scrolls sideways at 390×844. jsdom has no
+ * layout engine and reports every `scrollWidth` as `0`, so that assertion passes there on
+ * a sheet overflowing by a mile. It runs in headless Chromium instead, which is why this
+ * project alone needs `npx playwright install chromium`.
  */
 export default defineConfig({
   test: {
@@ -43,7 +50,26 @@ export default defineConfig({
           name: "browser",
           environment: "jsdom",
           include: ["src/**/*.test.tsx"],
+          exclude: ["src/**/*.layout.test.tsx"],
           setupFiles: ["./vitest.setup.dom.ts"],
+        },
+      },
+      {
+        resolve: { tsconfigPaths: true },
+        test: {
+          name: "layout",
+          include: ["src/**/*.layout.test.tsx"],
+          setupFiles: ["./vitest.setup.layout.ts"],
+          browser: {
+            enabled: true,
+            provider: playwright(),
+            headless: true,
+            // 390x844 — an iPhone 14/15 in CSS pixels, which is the width ADR-0009's
+            // failure bar is stated at.
+            instances: [
+              { browser: "chromium", viewport: { width: 390, height: 844 } },
+            ],
+          },
         },
       },
     ],

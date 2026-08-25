@@ -51,19 +51,13 @@ function anItem(overrides: Partial<SheetItem> = {}): SheetItem {
 function renderRow(item: SheetItem) {
   return render(
     <NextIntlClientProvider locale="en" messages={messages}>
-      <table>
-        <tbody>
-          <tr>
-            <ItemPricing tenderId="a-tender" item={item} />
-          </tr>
-        </tbody>
-      </table>
+      <ItemPricing tenderId="a-tender" item={item} />
     </NextIntlClientProvider>,
   );
 }
 
-const landedCostField = () => screen.getByLabelText(/landed cost per unit/i);
-const sellingField = () => screen.getByLabelText(/selling price per unit/i);
+const landedCostField = () => screen.getByLabelText(/landed cost \/ unit for/i);
+const sellingField = () => screen.getByLabelText(/selling \/ unit for/i);
 
 describe("pricing inline in the Item's row", () => {
   // The stubs are shared, so what one test saved must not read as another test's write.
@@ -129,16 +123,10 @@ describe("pricing inline in the Item's row", () => {
 
     rerender(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <table>
-          <tbody>
-            <tr>
-              <ItemPricing
-                tenderId="a-tender"
-                item={anItem({ landedCostPerUnit: 595, landedCostConfirmedAt: null })}
-              />
-            </tr>
-          </tbody>
-        </table>
+        <ItemPricing
+          tenderId="a-tender"
+          item={anItem({ landedCostPerUnit: 595, landedCostConfirmedAt: null })}
+        />
       </NextIntlClientProvider>,
     );
 
@@ -170,8 +158,9 @@ describe("pricing inline in the Item's row", () => {
   });
 
   it("says what the landed cost field is for without taking a line of the row", async () => {
-    // The money columns have no width to spare, so the explanation rides on the field
-    // the way the quote table's frozen rate does — on hover, and in the accessible name.
+    // The caption above the field has room for its name and nothing else, so the
+    // explanation rides on the field the way the quote table's frozen rate does — on
+    // hover, and in the accessible name.
     renderRow(anItem());
 
     expect(landedCostField()).toHaveProperty(

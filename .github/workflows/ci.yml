@@ -29,6 +29,11 @@ jobs:
 
       - run: supabase start
 
+      # One test needs a real browser: the working sheet's no-horizontal-overflow bar at
+      # 390x844, which jsdom cannot measure. The headless shell is enough and is a third
+      # of the download.
+      - run: npx playwright install --with-deps --only-shell chromium
+
       - run: npm run typecheck
 
       - run: npm run lint

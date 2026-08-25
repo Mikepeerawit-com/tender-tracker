@@ -266,8 +266,7 @@
       "allDecided": "每个产品项都已选定报价。",
       "allDecidedRest": "可以着手编制投标了。"
     },
-    "column": {
-      "item": "产品项",
+    "label": {
       "selectedQuote": "已选定报价",
       "landedCost": "到岸成本 / 单位",
       "selling": "售价 / 单位",
@@ -288,8 +287,8 @@
     "needsDecision": "待定 ↓",
     "provisional": "暂估",
     "pricing": {
-      "landedCost": "{item} 的单位到岸成本（泰铢）",
-      "selling": "{item} 的单位售价（泰铢）",
+      "landedCost": "到岸成本 / 单位 — {item}（泰铢）",
+      "selling": "售价 / 单位 — {item}（泰铢）",
       "hint": "请加上运费、关税与手续费。保存即视为确认该成本。",
       "save": "保存",
       "saving": "保存中…",

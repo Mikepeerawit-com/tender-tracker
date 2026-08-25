@@ -31,3 +31,20 @@ This is accepted rather than solved. Three alternatives were built and set aside
 - **The reflow is the general answer, not a working-sheet special case.** The comparison sheet is the densest screen in v1 by a wide margin; if reflow carries it, login, the tender list, add/edit tender and add-quote need no separate phone design. Add-quote still gets `accept="image/*" capture` on the Quote Photo input — a camera affordance, not a layout.
 - **Judge at 390px on a real phone, not a narrowed desktop window.** Tap targets are floored at 44px, which is a constraint a resized browser will not surface.
 - **Nothing in the schema moves.** This is a rendering decision end to end.
+
+## Amendment, 25 August 2026 — what building it settled ([#30](https://github.com/Mikepeerawit-com/tender-tracker/issues/30))
+
+The decision above holds unchanged. Three things it left implicit turned out to be forced once the 390px bar was actually measured, and they change what a reader should expect to find on the desktop screen.
+
+**The Item rows are no longer a table.** The ADR says the Item rows are "written once and is not breakpoint-aware" and, in the same breath, that no part of the page may scroll sideways at 390px. A `table-fixed` row of six columns — twisty, Item, Selected Quote, landed cost, selling, two Margins — cannot be both: its columns sum to more than a phone is wide, and a table whose fixed columns overrun their container overflows it. So the Item rows became a **wrapping flex line**: three blocks with matched flex bases, side by side at a desk and stacked on a phone, with no `md:` on them anywhere. The columns still line up across Items at desktop, because every row has the same bases.
+
+**The header strip went with it**, and each block now carries its own caption — which is why `comparison.column.*` was renamed `comparison.label.*` and `column.item` deleted. `buildspec_2`'s screen-5 line, "Columns: Item · Selected Quote · Landed cost/unit · Selling/unit · Margin/unit · Margin on line", describes what those blocks hold, not a header row that still exists.
+
+**Margin below the fields is the rule at every width**, not the phone's version of it. The ADR asks for it on a phone; keeping the desktop arrangement as well would have been the second layout the whole decision exists to avoid.
+
+Two smaller things, recorded so they are not read as drift:
+
+- **The sourced-by avatar renders at both widths.** The ADR specifies it for the card. Written once means the desktop column gets it too — a change to ticket 09's screen, and a small one.
+- **The quote table's columns are percentages, not pixels.** Fixed pixel widths overflowed at 768px, which is the failure bar at the narrow end of the desktop range rather than on a phone. Cells also carry `break-words`, because the widths a formatted total needs move with the locale.
+
+The failure bar is now pinned by `working-sheet.layout.test.tsx`, in headless Chromium at 390×844 and again at 768/1024/1280. The 44px tap-target floor is deliberately **not** in it, for the reason the Consequences above give.

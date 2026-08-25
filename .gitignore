@@ -28,6 +28,9 @@ supabase/.temp/
 
 # testing
 coverage/
+# what vitest saves when a browser assertion fails, next to the test that failed
+__screenshots__/
+.vitest-attachments/
 
 # typescript
 *.tsbuildinfo

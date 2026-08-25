@@ -1,11 +1,13 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { getFormatter, getTranslations } from "next-intl/server";
+import { useFormatter, useTranslations } from "next-intl";
 
 import { ItemDisclosure } from "@/components/comparison/item-disclosure";
 import { ItemPricing } from "@/components/comparison/item-pricing";
 import { SelectQuoteButton } from "@/components/comparison/select-quote-button";
 import { ImageCountBadge } from "@/components/images/image-count-badge";
 import { Button } from "@/components/ui/button";
+import { InitialsAvatar } from "@/components/ui/initials-avatar";
 import { calendarDate, calendarDateFormat } from "@/lib/calendar-date";
 import { sheetTotals } from "@/lib/comparison/pricing";
 import {
@@ -17,37 +19,53 @@ import {
   type RankedQuote,
 } from "@/lib/comparison/ranking";
 import type { SheetItem } from "@/lib/comparison/sheet";
+// From the currency list rather than from `@/lib/quotes/quotes`, which re-exports it:
+// the sheet is rendered on the server in the app and in a real browser by its layout
+// test, and that module is `server-only`.
+import { reportingCurrency } from "@/lib/fx/currencies";
 import type { ReferenceImage } from "@/lib/images/reference-images";
 import type { QuotePhoto } from "@/lib/images/quote-photos";
-import { reportingCurrency, type ItemSourcing, type Quote } from "@/lib/quotes/quotes";
+import type { ItemSourcing, Quote } from "@/lib/quotes/quotes";
 
 /**
- * The comparison working sheet — the densest screen in v1, at desktop width.
+ * The comparison working sheet — the densest screen in v1, at every width there is.
  *
  * The whole Tender on one page: one row per Tender Item and, under the ones still needing
  * a decision, every competing Quote ranked cheapest-first in THB so eight prices can be
- * read down a column of numbers instead of compared by eye. Cards were built and measured
- * against this and lost decisively here, collapsing at around four of the eight competing
- * Quotes ADR-0004's compete-not-divide model makes normal; below 768px the density
- * argument runs the other way and the quote table reflows into those same cards
- * (ADR-0009, #30). One responsive design and one component tree — this is its table
- * branch, not a desktop layout with a phone twin waiting to be written beside it.
+ * read down a column of numbers instead of compared by eye.
  *
- * Two rules run through everything below.
+ * **One responsive design, not two layouts** (ADR-0009). There is a single component tree
+ * here and a single set of behaviours, and exactly one breakpoint in it: at 768px the
+ * quote list inside an expanded Item turns from that dense table into one stacked card
+ * per Quote. That rule is `QuoteTable`, `QuoteRow` and `Cell`, and it is every `md:` on
+ * this screen. Everything else — the Item rows, the banners, the pricing fields, the
+ * totals bar — is written once and wraps, so it holds at 390px and at 1280px without
+ * knowing which one it is in.
+ *
+ * **The failure bar is no horizontal overflow anywhere**, and it is cleared by
+ * construction rather than by a guard: nothing here scrolls sideways, and there is no
+ * `overflow-x` in the app to make a too-wide table look as though it fits. That is the
+ * one outcome the design rules out, and `working-sheet.layout.test.tsx` measures it at
+ * 390×844 on eight competing Quotes.
+ *
+ * Two more rules run through everything below.
  *
  * **Openness is derived, not remembered.** Nothing stores which Items were expanded. An
  * Item with no Selected Quote opens; a decided one folds; the header says how many are
  * left, so the page opens showing exactly the work outstanding.
  *
- * **Being loudly unhelpful beats being quietly wrong.** The banners stack above the quote
- * table and never sit on rows, and the first of them refuses to rank the Item at all. A
- * sheet that silently divided "box of 50" by fifty to get a comparable price would not
- * look broken — it would look authoritative, and send somebody to the wrong supplier.
+ * **Being loudly unhelpful beats being quietly wrong.** The banners stack above the
+ * quotes and never sit on a row or a card, and the first of them refuses to rank the Item
+ * at all. A sheet that silently divided "box of 50" by fifty to get a comparable price
+ * would not look broken — it would look authoritative, and send somebody to the wrong
+ * supplier.
+ *
+ * Rendered on the server, which is why it is sync rather than `async`: `useTranslations`
+ * and `useFormatter` work in a Server Component, and keeping the tree synchronous is what
+ * lets the layout test mount the real thing in a real browser instead of a copy of its
+ * markup.
  */
-/** The twisty, plus Item · Selected Quote · landed cost · selling · margin · margin on line. */
-const sheetColumns = 7;
-
-export async function WorkingSheet({
+export function WorkingSheet({
   tenderId,
   items,
   photos,
@@ -59,7 +77,7 @@ export async function WorkingSheet({
   photos: Map<string, QuotePhoto[]>;
   referenceImages: ReferenceImage[];
 }) {
-  const t = await getTranslations("comparison");
+  const t = useTranslations("comparison");
   const undecided = itemsNeedingDecision(items);
 
   return (
@@ -77,53 +95,32 @@ export async function WorkingSheet({
         </span>
       </div>
 
-      <div className="border-border rounded-lg border">
-        <table className="w-full table-fixed text-sm">
-          <thead>
-            <tr className="text-muted-foreground text-left text-xs">
-              <th className="w-10 px-2 py-2" />
-              <th className="px-2 py-2 font-medium">{t("column.item")}</th>
-              <th className="px-2 py-2 font-medium">{t("column.selectedQuote")}</th>
-              <th className="w-32 px-2 py-2 text-right font-medium">
-                {t("column.landedCost")}
-              </th>
-              <th className="w-28 px-2 py-2 text-right font-medium">
-                {t("column.selling")}
-              </th>
-              <th className="w-28 px-2 py-2 text-right font-medium">
-                {t("column.marginPerUnit")}
-              </th>
-              <th className="w-32 px-2 py-2 text-right font-medium">
-                {t("column.marginOnLine")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <ItemDisclosure
-                key={item.id}
-                itemId={item.id}
-                // Recomputed here on every render, never read back from anywhere.
-                derivedOpen={needsDecision(item)}
-                openLabel={t("twisty.open", { item: item.productName })}
-                foldLabel={t("twisty.fold", { item: item.productName })}
-                columns={sheetColumns}
-                summary={<ItemCells tenderId={tenderId} item={item} />}
-                panel={
-                  <ItemPanel
-                    tenderId={tenderId}
-                    item={item}
-                    photos={photos}
-                    referenceImages={referenceImages.filter(
-                      (image) => image.tenderItemId === item.id,
-                    )}
-                  />
-                }
+      {/* A list, not a table: the Item's blocks wrap into a column where there is no room
+          for a row, which is what makes this half of the screen the same design at 390px
+          and at 1280px rather than two of them. */}
+      <ul className="border-border divide-border divide-y rounded-lg border text-sm">
+        {items.map((item) => (
+          <ItemDisclosure
+            key={item.id}
+            itemId={item.id}
+            // Recomputed here on every render, never read back from anywhere.
+            derivedOpen={needsDecision(item)}
+            openLabel={t("twisty.open", { item: item.productName })}
+            foldLabel={t("twisty.fold", { item: item.productName })}
+            summary={<ItemSummary tenderId={tenderId} item={item} />}
+            panel={
+              <ItemPanel
+                tenderId={tenderId}
+                item={item}
+                photos={photos}
+                referenceImages={referenceImages.filter(
+                  (image) => image.tenderItemId === item.id,
+                )}
               />
-            ))}
-          </tbody>
-        </table>
-      </div>
+            }
+          />
+        ))}
+      </ul>
 
       {/* The whole Tender's money, under the rows it is made of. */}
       <TotalsBar items={items} />
@@ -148,10 +145,10 @@ export async function WorkingSheet({
  * The live arithmetic belongs in the row being edited (`ItemPricing`) — that is where
  * somebody moving a selling price to find a Margin is actually looking.
  */
-async function TotalsBar({ items }: { items: SheetItem[] }) {
-  const t = await getTranslations("comparison.totals");
-  const tc = await getTranslations("comparison");
-  const format = await getFormatter();
+function TotalsBar({ items }: { items: SheetItem[] }) {
+  const t = useTranslations("comparison.totals");
+  const tc = useTranslations("comparison");
+  const format = useFormatter();
   const totals = sheetTotals(items);
 
   const thb = (amount: number) =>
@@ -203,48 +200,57 @@ function Total({
   );
 }
 
-async function ItemCells({ tenderId, item }: { tenderId: string; item: SheetItem }) {
-  const t = await getTranslations("comparison");
-  const tq = await getTranslations("quotes");
+/**
+ * The Item itself, what is Selected on it, and its pricing — three blocks on one wrapping
+ * line.
+ *
+ * The flex bases are what used to be column widths, and they do the same job: with room
+ * for all three the blocks line up across every Item exactly as a table's columns did,
+ * and without it they stack in the order somebody reads them — what the Item is, what we
+ * have chosen, what we are charging.
+ */
+function ItemSummary({ tenderId, item }: { tenderId: string; item: SheetItem }) {
+  const t = useTranslations("comparison");
+  const tq = useTranslations("quotes");
   // The Tender's own sourcing vocabulary, not the sheet's: these three states are facts
   // about an Item and are named the same wherever an Item is shown.
-  const ts = await getTranslations("tenders.sourcing");
-  const format = await getFormatter();
+  const ts = useTranslations("tenders.sourcing");
+  const format = useFormatter();
   const selected = item.quotes.find((quote) => quote.id === item.selectedQuoteId);
 
   return (
     <>
-      <td className="border-border border-t px-2 py-3 align-top">
-        <div className="flex flex-col items-start gap-1.5">
-          <span className="text-foreground font-medium">{item.productName}</span>
-          <span className="text-muted-foreground text-xs">
-            {t("item.quantified", {
-              quantity: item.quantity,
-              unit: item.unit,
-              quotes: item.quotes.length,
-            })}
-          </span>
+      <div className="flex min-w-0 flex-[2_1_16rem] flex-col items-start gap-1.5">
+        <span className="text-foreground font-medium">{item.productName}</span>
+        <span className="text-muted-foreground text-xs">
+          {t("item.quantified", {
+            quantity: item.quantity,
+            unit: item.unit,
+            quotes: item.quotes.length,
+          })}
+        </span>
 
-          {/* The three sourcing states. The difference between the last two decides
-              whether it is worth waiting before bidding: an Item nobody has touched
-              means different work from one somebody has already given up on. */}
-          <SourcingChips sourcing={item.sourcing} />
+        {/* The three sourcing states. The difference between the last two decides
+            whether it is worth waiting before bidding: an Item nobody has touched
+            means different work from one somebody has already given up on. */}
+        <SourcingChips sourcing={item.sourcing} />
 
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-11 px-2"
-            nativeButton={false}
-            render={<Link href={`/tenders/${tenderId}/items/${item.id}/quote`} />}
-          >
-            {ts("source")}
-          </Button>
-        </div>
-      </td>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-11 px-2"
+          nativeButton={false}
+          render={<Link href={`/tenders/${tenderId}/items/${item.id}/quote`} />}
+        >
+          {ts("source")}
+        </Button>
+      </div>
 
-      <td className="border-border border-t px-2 py-3 align-top">
+      <div className="flex min-w-0 flex-[1_1_11rem] flex-col gap-0.5">
+        <span className="text-muted-foreground text-xs">{t("label.selectedQuote")}</span>
+
         {selected ? (
-          <div className="flex flex-col gap-0.5">
+          <>
             <span className="text-foreground font-medium">{selected.supplierName}</span>
             <span className="text-muted-foreground text-xs">
               {format.number(selected.unitPrice, {
@@ -256,24 +262,24 @@ async function ItemCells({ tenderId, item }: { tenderId: string; item: SheetItem
             <span className="text-muted-foreground text-xs">
               {tq("sourcedBy", { name: selected.sourcedByName })}
             </span>
-          </div>
+          </>
         ) : (
-          <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+          <span className="font-medium text-amber-700 dark:text-amber-400">
             {t("needsDecision")}
           </span>
         )}
-      </td>
+      </div>
 
       {/* Pricing is inline in the row, not a step of its own: landed cost pre-filled from
           the Selected Quote and editable over it, selling price beside it, and the Margin
-          between them computing in the browser as the digits are typed. */}
+          under both, computing in the browser as the digits are typed. */}
       <ItemPricing tenderId={tenderId} item={item} />
     </>
   );
 }
 
 /** Everything under the twisty: the client's pictures, the banners, then the ranked Quotes. */
-async function ItemPanel({
+function ItemPanel({
   tenderId,
   item,
   photos,
@@ -284,17 +290,17 @@ async function ItemPanel({
   photos: Map<string, QuotePhoto[]>;
   referenceImages: ReferenceImage[];
 }) {
-  const t = await getTranslations("comparison");
+  const t = useTranslations("comparison");
   const ranked = rankQuotes(item, item.quotes);
   const banners = itemBanners(item, item.quotes);
 
   return (
     <div className="flex flex-col gap-3">
       {/* What the *client* sent, at the top of the panel and so within a glance of the
-          Quote Photos column it exists to be compared against — which on an Alternative is
-          often the only way to judge how far the substitute really is. A count opening a
+          Quote Photos it exists to be compared against — which on an Alternative is often
+          the only way to judge how far the substitute really is. A count opening a
           lightbox, never thumbnails: strips were measured eating the horizontal room the
-          money columns need. */}
+          money needs, and there is least of it on a phone. */}
       {referenceImages.length > 0 ? (
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground text-xs">
@@ -310,8 +316,9 @@ async function ItemPanel({
         </div>
       ) : null}
 
-      {/* Item-level, stacked, and never on a row. Two of the three are statements about
-          the ranking, which is a property of the Item and not of any one supplier. */}
+      {/* Item-level, stacked, and never on a row or a card. Two of the three are
+          statements about the ranking, which is a property of the Item and not of any one
+          supplier — so the reflow moves them not at all. */}
       {banners.map((banner, index) => (
         <Banner key={`${banner.kind}-${index}`} banner={banner} item={item} />
       ))}
@@ -319,18 +326,35 @@ async function ItemPanel({
       {ranked.length === 0 ? (
         <p className="text-muted-foreground text-sm">{t("noQuotes")}</p>
       ) : (
-        <QuoteTable
-          tenderId={tenderId}
-          item={item}
-          ranked={ranked}
-          photos={photos}
-        />
+        <QuoteTable tenderId={tenderId} item={item} ranked={ranked} photos={photos} />
       )}
     </div>
   );
 }
 
-async function QuoteTable({
+/**
+ * The competing Quotes — **the one thing on this screen that knows what width it is on**.
+ *
+ * At 768px and above this is the dense table ticket 09 settled on: eight ranked prices
+ * read down a column of numbers, with rank 1 and rank 8 on screen together. Below it, the
+ * very same cells become one stacked card per Quote, still ranked cheapest-first, with
+ * the rank carried by a numbered pill instead of a column.
+ *
+ * It is one markup tree either way, and that is the point of ADR-0009: the cells are the
+ * same cells, and the breakpoint moves them rather than choosing between two components.
+ * A phone-only interaction — a drawer, a drill-down, a swipe deck — would be a second
+ * thing to build, change and keep correct in two locales, and three of them were built
+ * and set aside to avoid exactly that.
+ *
+ * **The accepted cost, stated so nobody re-fixes it:** below 768px rank 1 and rank 8 are
+ * never on screen together, because about four cards fit a phone. That is the trade the
+ * ADR makes, not a defect.
+ *
+ * The column widths are percentages rather than fixed pixels because a fixed-layout table
+ * whose columns add up to more than its container overflows it — the failure bar, at the
+ * narrow end of the desktop range instead of on a phone.
+ */
+function QuoteTable({
   tenderId,
   item,
   ranked,
@@ -341,30 +365,30 @@ async function QuoteTable({
   ranked: RankedQuote<Quote>[];
   photos: Map<string, QuotePhoto[]>;
 }) {
-  const t = await getTranslations("comparison");
+  const t = useTranslations("comparison");
 
   return (
-    <div className="border-border bg-background overflow-hidden rounded-lg border">
-      <table className="w-full table-fixed text-sm">
-        <thead>
+    <div className="border-border bg-background rounded-lg border max-md:border-0 max-md:bg-transparent">
+      <table className="w-full table-fixed text-sm max-md:block">
+        <thead className="max-md:hidden">
           <tr className="text-muted-foreground border-border border-b text-left text-xs">
-            <th className="w-8 px-2 py-2 font-medium">{t("quote.rank")}</th>
-            <th className="px-2 py-2 font-medium">{t("quote.supplier")}</th>
+            <th className="w-[6%] px-2 py-2 font-medium">{t("quote.rank")}</th>
+            <th className="w-[15%] px-2 py-2 font-medium">{t("quote.supplier")}</th>
             {/* Never dropped. With the same supplier legitimately quoted twice it is the
                 only thing distinguishing two otherwise identical rows (ADR-0004). */}
-            <th className="w-36 px-2 py-2 font-medium">{t("quote.sourcedBy")}</th>
-            <th className="w-48 px-2 py-2 font-medium">{t("quote.quotedProduct")}</th>
-            <th className="w-40 px-2 py-2 text-right font-medium">
+            <th className="w-[11%] px-2 py-2 font-medium">{t("quote.sourcedBy")}</th>
+            <th className="w-[14%] px-2 py-2 font-medium">{t("quote.quotedProduct")}</th>
+            <th className="w-[15%] px-2 py-2 text-right font-medium">
               {t("quote.unitPrice")}
             </th>
-            <th className="w-36 px-2 py-2 text-right font-medium">
+            <th className="w-[14%] px-2 py-2 text-right font-medium">
               {t("quote.lineTotal", { quantity: item.quantity, unit: item.unit })}
             </th>
-            <th className="w-20 px-2 py-2 font-medium">{t("quote.photos")}</th>
-            <th className="w-28 px-2 py-2" />
+            <th className="w-[12%] px-2 py-2 font-medium">{t("quote.photos")}</th>
+            <th className="w-[13%] px-2 py-2" />
           </tr>
         </thead>
-        <tbody>
+        <tbody className="max-md:flex max-md:flex-col max-md:gap-2">
           {ranked.map((row) => (
             <QuoteRow
               key={row.quote.id}
@@ -380,7 +404,22 @@ async function QuoteTable({
   );
 }
 
-async function QuoteRow({
+/**
+ * One Quote: a row at a desk, a card on a phone, and the same cells in the same order
+ * both ways.
+ *
+ * Below the breakpoint the row becomes a two-column grid — the rank pill in the first
+ * column, every other cell stacked down the second — so the reflow is a handful of
+ * placement rules rather than a second component.
+ *
+ * The heading row is not on screen to say what each cell is, so the cells say it
+ * themselves, and in two different ways on purpose. A supplier name, a price and an
+ * avatar are self-evident to anybody looking at the card and need the heading only for a
+ * screen reader, so those labels are `sr-only` (`CardLabel`). The line total is not: a
+ * second money figure under the first, with no column above it, is the one cell a sighted
+ * reader would misread — so that label is on the card in ink.
+ */
+function QuoteRow({
   tenderId,
   item,
   row,
@@ -391,9 +430,9 @@ async function QuoteRow({
   row: RankedQuote<Quote>;
   photos: QuotePhoto[];
 }) {
-  const t = await getTranslations("comparison");
-  const tq = await getTranslations("quotes");
-  const format = await getFormatter();
+  const t = useTranslations("comparison");
+  const tq = useTranslations("quotes");
+  const format = useFormatter();
   const { quote } = row;
   const isSelected = item.selectedQuoteId === quote.id;
   const isAlternative = quote.matchType === "alternative";
@@ -411,25 +450,37 @@ async function QuoteRow({
     <tr
       className={[
         "border-border border-t align-top",
+        // Below the breakpoint the row is a card: a bordered box with the rank pill down
+        // its left-hand side and everything else stacked beside it.
+        "max-md:border-border max-md:grid max-md:grid-cols-[1.75rem_minmax(0,1fr)] max-md:gap-x-3 max-md:rounded-lg max-md:border max-md:p-3",
         // Amber, because this row is not a price for what was asked for.
-        isAlternative ? "bg-amber-500/5" : "",
-        isSelected ? "bg-primary/5" : "",
+        isAlternative ? "bg-amber-500/5 max-md:border-amber-500/50" : "",
+        isSelected ? "bg-primary/5 max-md:border-primary/60" : "",
       ].join(" ")}
     >
-      <td className="text-muted-foreground px-2 py-3 tabular-nums">
+      <td className="text-muted-foreground px-2 py-3 tabular-nums max-md:col-start-1 max-md:row-start-1 max-md:p-0">
+        <CardLabel>{t("quote.rank")}</CardLabel>
         {/* No number at all on an Item something refuses to rank — not a greyed one, not
             a dash pretending to be one. */}
-        {row.rank ?? "·"}
+        <span className="max-md:bg-muted max-md:inline-grid max-md:size-7 max-md:place-items-center max-md:rounded-full max-md:text-xs max-md:font-semibold">
+          {row.rank ?? "·"}
+        </span>
       </td>
 
-      <td className="px-2 py-3 font-medium">{quote.supplierName}</td>
+      <Cell className="font-medium">{quote.supplierName}</Cell>
 
-      <td className="text-muted-foreground px-2 py-3 text-xs">{quote.sourcedByName}</td>
+      <Cell className="text-muted-foreground text-xs">
+        <CardLabel>{t("quote.sourcedBy")}</CardLabel>
+        <span className="inline-flex items-center gap-1.5">
+          <InitialsAvatar name={quote.sourcedByName} />
+          {quote.sourcedByName}
+        </span>
+      </Cell>
 
-      <td className="px-2 py-3">
+      <Cell>
         {isAlternative ? (
-          <div className="flex flex-col gap-1">
-            <span className="w-fit rounded bg-amber-500/20 px-1.5 py-0.5 text-[0.7rem] font-medium tracking-wide uppercase">
+          <div className="flex flex-col gap-1 max-md:rounded-lg max-md:border max-md:border-amber-500/40 max-md:bg-amber-500/10 max-md:p-2">
+            <span className="w-fit max-w-full rounded bg-amber-500/20 px-1.5 py-0.5 text-[0.7rem] font-medium tracking-wide uppercase">
               {tq("matchType.alternative")}
             </span>
             <span className="font-medium">{quote.alternativeProductName}</span>
@@ -440,13 +491,15 @@ async function QuoteRow({
         ) : (
           <span className="text-muted-foreground text-xs">{t("quote.asRequested")}</span>
         )}
-      </td>
+      </Cell>
 
-      <td className="px-2 py-3 text-right tabular-nums">
-        <div className="flex flex-col items-end gap-0.5">
+      <Cell className="text-right tabular-nums max-md:text-left">
+        <div className="flex flex-col items-end gap-0.5 max-md:items-start">
+          <CardLabel>{t("quote.unitPrice")}</CardLabel>
+
           {/* The supplier's own amount is the real one and is primary and bold. The THB
               figure beneath it is ours, derived, and says so with an `≈`. */}
-          <span className="font-semibold">
+          <span className="font-semibold max-md:text-base">
             {format.number(quote.unitPrice, {
               style: "currency",
               currency: quote.currency,
@@ -477,14 +530,17 @@ async function QuoteRow({
           {/* "lowest", never "cheapest": the row is highlighted, not stamped. Absent
               entirely from an Item that cannot be ranked. */}
           {row.isLowest ? (
-            <span className="w-fit rounded bg-emerald-500/20 px-1.5 py-0.5 text-[0.7rem] font-medium">
+            <span className="w-fit max-w-full rounded bg-emerald-500/20 px-1.5 py-0.5 text-[0.7rem] font-medium">
               {t("quote.lowest")}
             </span>
           ) : null}
         </div>
-      </td>
+      </Cell>
 
-      <td className="px-2 py-3 text-right tabular-nums">
+      <Cell className="text-right tabular-nums max-md:text-left">
+        <span className="text-muted-foreground text-xs md:hidden">
+          {t("quote.lineTotal", { quantity: item.quantity, unit: item.unit })}{" "}
+        </span>
         {row.lineTotalThb === null ? (
           // The Quote is priced in a unit the Item is not counted in. A total here would
           // be out by whatever the pack size is.
@@ -498,9 +554,9 @@ async function QuoteRow({
             })}
           </span>
         )}
-      </td>
+      </Cell>
 
-      <td className="px-2 py-3">
+      <Cell>
         {/* A count opening a lightbox, never thumbnails. On an Alternative the photo is
             often the only way to judge how far the substitute really is. */}
         <ImageCountBadge
@@ -510,23 +566,67 @@ async function QuoteRow({
           })}
           images={photos}
         />
-      </td>
+      </Cell>
 
-      <td className="px-2 py-3">
+      <Cell className="max-md:pt-2">
         <SelectQuoteButton
           tenderId={tenderId}
           tenderItemId={item.id}
           quoteId={quote.id}
           isSelected={isSelected}
         />
-      </td>
+      </Cell>
     </tr>
   );
 }
 
-async function Banner({ banner, item }: { banner: ItemBanner; item: SheetItem }) {
-  const t = await getTranslations("comparison.banner");
-  const format = await getFormatter();
+/**
+ * A cell of the quote table, and most of the reflow in one place — the rank is the one
+ * cell that is not this, because it is the pill in the card's *first* column and is
+ * placed by hand.
+ *
+ * At a desk it is a table cell with the table's padding. Below 768px it is a block in the
+ * card's second column, with the padding taken off — the card's own padding is what
+ * separates it from the border, and a cell keeping its `px-2` would indent every line of
+ * the card by an amount only the table needed.
+ *
+ * `break-words` is the failure bar held structurally rather than by column arithmetic. A
+ * product code, a supplier name or a formatted total that is one long token wider than
+ * its column pushes the table out past the page, and the columns it has to fit inside
+ * change with the locale. Breaking the word is ugly in a way somebody can see and fix;
+ * overflowing the page is the outcome ADR-0009 rules out.
+ */
+function Cell({
+  className = "",
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <td
+      className={`px-2 py-3 break-words max-md:col-start-2 max-md:px-0 max-md:py-1 ${className}`}
+    >
+      {children}
+    </td>
+  );
+}
+
+/**
+ * A column heading, for the width at which there are no columns.
+ *
+ * Present only below the breakpoint, and only to a screen reader: at a desk the `<thead>`
+ * above is saying the same words, and a card reader looking at "Nok W." beside an avatar
+ * does not need to be told it is who sourced it. The trailing space is load-bearing —
+ * without it the heading and the value are read as one run-on word.
+ */
+function CardLabel({ children }: { children: string }) {
+  return <span className="sr-only md:hidden">{children} </span>;
+}
+
+function Banner({ banner, item }: { banner: ItemBanner; item: SheetItem }) {
+  const t = useTranslations("comparison.banner");
+  const format = useFormatter();
 
   if (banner.kind === "unit_mismatch") {
     return (
@@ -610,13 +710,13 @@ function Notice({
  * sourcing record rather than stored: an Item with a Quote and an Item somebody has given
  * up on have both been answered, and only the untouched one is overdue.
  */
-async function SourcingChips({ sourcing }: { sourcing: ItemSourcing }) {
-  const t = await getTranslations("tenders.sourcing");
+function SourcingChips({ sourcing }: { sourcing: ItemSourcing }) {
+  const t = useTranslations("tenders.sourcing");
   const refusals = sourcing.noSupplierFound.length;
 
   if (sourcing.quoteCount === 0 && refusals === 0) {
     return (
-      <span className="bg-muted text-muted-foreground w-fit rounded px-2 py-0.5 text-xs">
+      <span className="bg-muted text-muted-foreground w-fit max-w-full rounded px-2 py-0.5 text-xs">
         {t("notYetSourced")}
       </span>
     );
@@ -625,17 +725,15 @@ async function SourcingChips({ sourcing }: { sourcing: ItemSourcing }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {sourcing.quoteCount > 0 ? (
-        <span className="bg-primary/10 text-foreground w-fit rounded px-2 py-0.5 text-xs">
+        <span className="bg-primary/10 text-foreground w-fit max-w-full rounded px-2 py-0.5 text-xs">
           {t("quoted", { count: sourcing.quoteCount })}
         </span>
       ) : null}
       {refusals > 0 ? (
-        <span className="text-foreground w-fit rounded bg-amber-500/20 px-2 py-0.5 text-xs">
+        <span className="text-foreground w-fit max-w-full rounded bg-amber-500/20 px-2 py-0.5 text-xs">
           {t("noSupplierFound", { count: refusals })}
         </span>
       ) : null}
     </div>
   );
 }
-
-

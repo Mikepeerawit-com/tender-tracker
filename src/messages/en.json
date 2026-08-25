@@ -266,8 +266,7 @@
       "allDecided": "Every item has a selected quote.",
       "allDecidedRest": "Ready to build the bid."
     },
-    "column": {
-      "item": "Tender item",
+    "label": {
       "selectedQuote": "Selected quote",
       "landedCost": "Landed cost / unit",
       "selling": "Selling / unit",
@@ -288,8 +287,8 @@
     "needsDecision": "Needs a decision ↓",
     "provisional": "Provisional",
     "pricing": {
-      "landedCost": "Landed cost per unit for {item}, in THB",
-      "selling": "Selling price per unit for {item}, in THB",
+      "landedCost": "Landed cost / unit for {item}, in THB",
+      "selling": "Selling / unit for {item}, in THB",
       "hint": "Add shipping, duty and handling. Saving confirms the cost.",
       "save": "Save",
       "saving": "Saving…",

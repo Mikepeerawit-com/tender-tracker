@@ -17,12 +17,18 @@ import { reportingCurrency } from "@/lib/fx/currencies";
 
 /**
  * Pricing, inline in the Item's row: landed cost, selling price, and the Margin between
- * them — the four money cells of the comparison working sheet.
+ * them.
  *
  * **Margin computes live, in the browser, as the selling price is typed.** That is the
  * whole reason this is a client component. Somebody works out what to bid by moving the
  * selling price until the Margin looks right, and a figure that only appears after a
  * round trip turns that into eight round trips.
+ *
+ * **The Margin sits below the two fields, at every width.** ADR-0009 puts it there for a
+ * phone — the numeric keyboard covers the bottom of the screen, so a figure to the right
+ * of the fields would be a figure nobody watching themselves type can see — and it stays
+ * there at a desk rather than becoming a second arrangement to keep correct. The block is
+ * written once and has no breakpoint of its own.
  *
  * **Nothing here stores a Margin.** It is the selling price less the landed cost, and
  * `marginOf` computes it the same way the totals bar and every dashboard figure do.
@@ -92,15 +98,16 @@ export function ItemPricing({
   );
 
   return (
-    <>
-      <td className="border-border border-t px-2 py-3 align-top">
+    <div className="flex min-w-0 flex-[1_1_18rem] flex-col gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <PriceField
           action={setLandedCostAction}
           name="landedCostPerUnit"
+          caption={t("label.landedCost")}
           label={t("pricing.landedCost", { item: item.productName })}
           // What this field is for, and what saving it does. On the field rather than
           // under it, and repeated into the accessible name the way the quote table
-          // carries its frozen rate: the money columns have no width to spare.
+          // carries its frozen rate: the caption above it has one line and no room.
           hint={t("pricing.hint")}
           value={landedCost}
           storedValue={fieldValue(item.landedCostPerUnit)}
@@ -108,12 +115,11 @@ export function ItemPricing({
         >
           {identity}
         </PriceField>
-      </td>
 
-      <td className="border-border border-t px-2 py-3 align-top">
         <PriceField
           action={setSellingPriceAction}
           name="sellingPricePerUnit"
+          caption={t("label.selling")}
           label={t("pricing.selling", { item: item.productName })}
           value={sellingPrice}
           storedValue={fieldValue(item.sellingPricePerUnit)}
@@ -121,15 +127,22 @@ export function ItemPricing({
         >
           {identity}
         </PriceField>
-      </td>
+      </div>
 
-      <td className="border-border border-t px-2 py-3 text-right align-top tabular-nums">
-        <Margin value={margin?.perUnit ?? null} provisional={margin?.provisional ?? false} />
-      </td>
-      <td className="border-border border-t px-2 py-3 text-right align-top tabular-nums">
-        <Margin value={margin?.onLine ?? null} provisional={margin?.provisional ?? false} />
-      </td>
-    </>
+      {/* Below the fields, never beside them — see the note at the top. */}
+      <dl className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 tabular-nums">
+        <MarginFigure
+          label={t("label.marginPerUnit")}
+          value={margin?.perUnit ?? null}
+          provisional={margin?.provisional ?? false}
+        />
+        <MarginFigure
+          label={t("label.marginOnLine")}
+          value={margin?.onLine ?? null}
+          provisional={margin?.provisional ?? false}
+        />
+      </dl>
+    </div>
   );
 }
 
@@ -144,6 +157,7 @@ export function ItemPricing({
 function PriceField({
   action,
   name,
+  caption,
   label,
   hint,
   value,
@@ -153,6 +167,13 @@ function PriceField({
 }: {
   action: (previous: PricingState, formData: FormData) => Promise<PricingState>;
   name: string;
+  /**
+   * What the field is called, above it. The Item's blocks wrap rather than sitting under
+   * a header strip, so each field says what it is where it is — the accessible name below
+   * opens with the same words and then goes on to say which Item it belongs to, which
+   * four fields all reading "Landed cost / unit" could not.
+   */
+  caption: string;
   label: string;
   /** Said on hover and to a screen reader, never given a line of the row's width. */
   hint?: string;
@@ -168,8 +189,12 @@ function PriceField({
   const form = useRef<HTMLFormElement>(null);
 
   return (
-    <form ref={form} action={formAction} className="flex flex-col items-end gap-1">
+    <form ref={form} action={formAction} className="flex min-w-0 flex-col gap-1">
       {children}
+
+      <span className="text-muted-foreground text-xs" aria-hidden>
+        {caption}
+      </span>
 
       <Input
         type="number"
@@ -215,6 +240,26 @@ function PriceField({
   );
 }
 
+/** One of the two Margins, with the name it is read by beside it. */
+function MarginFigure({
+  label,
+  value,
+  provisional,
+}: {
+  label: string;
+  value: number | null;
+  provisional: boolean;
+}) {
+  return (
+    <div className="flex min-w-0 items-baseline gap-1.5">
+      <dt className="text-muted-foreground text-xs">{label}</dt>
+      <dd>
+        <Margin value={value} provisional={provisional} />
+      </dd>
+    </div>
+  );
+}
+
 /**
  * Margin, or the honest absence of one.
  *
@@ -234,7 +279,11 @@ function Margin({ value, provisional }: { value: number | null; provisional: boo
   }
 
   return (
-    <span className={value < 0 ? "text-destructive font-medium" : "font-medium"}>
+    <span
+      className={
+        value < 0 ? "text-destructive text-sm font-medium" : "text-sm font-medium"
+      }
+    >
       {format.number(value, { style: "currency", currency: reportingCurrency })}
     </span>
   );

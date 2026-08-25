@@ -424,7 +424,7 @@ There are **no metric cards in v1**. `buildspec_1`'s four were labels, not defin
 
 **5 — Tender detail / comparison working sheet.** The densest screen in v1 and the one the prototypes settled in most detail. Prototype: [`prototypes/09-comparison-view/index.html`](https://github.com/Mikepeerawit-com/tender-tracker/blob/prototype/comparison-view/prototypes/09-comparison-view/index.html) on branch `prototype/comparison-view` (variant **D** is the default and is the one that ships; A/B/C are preserved for context). Phone reflow: [`prototypes/16-comparison-view-mobile/index.html`](https://github.com/Mikepeerawit-com/tender-tracker/blob/main/prototypes/16-comparison-view-mobile/index.html).
 
-- **One row per Tender Item**, whole Tender on one page. Columns: Item · Selected Quote · Landed cost/unit · Selling/unit · Margin/unit · Margin on line. A totals bar underneath: coverage, Bid total, landed cost, margin.
+- **One row per Tender Item**, whole Tender on one page, holding: Item · Selected Quote · Landed cost/unit · Selling/unit · Margin/unit · Margin on line. A totals bar underneath: coverage, Bid total, landed cost, margin. The row is a wrapping line rather than a fixed-column table, and the Margins sit under the two price fields at every width — see ADR-0009's amendment for why a table could not also clear the no-overflow bar at 390px.
 - **Openness is derived, not remembered.** An Item with no Selected Quote opens expanded; a decided Item folds away. A twisty overrides per Item for that visit only. The header reads e.g. "2 of 4 Items still need a Quote selected", so the page opens showing exactly the work left.
 - **Expanded, an Item shows a dense table**, cheapest-first in THB: rank · supplier · sourced by · quoted product · unit price (+ derived THB, + `lowest` chip) · line total · photos · Select. **One click to select, no confirm step.**
 - **Cards were tested and lost decisively at desktop width**, collapsing at ~4 of the 8 competing quotes that compete-not-divide makes normal.
@@ -555,7 +555,7 @@ This seam is chosen over a pure-domain-module seam because the two riskiest area
 - Margin from an unconfirmed Landed Cost renders provisional; setting `landed_cost_confirmed_at` turns it into a number.
 - Totals multiply per-unit figures by `quantity`.
 
-**One automated UI assertion:** at a 390×844 viewport, the comparison working sheet's `scrollWidth` never exceeds its `clientWidth`, on the 8-quote stress dataset. That is ADR-0009's failure bar stated in testable terms, and it is the one outcome the design explicitly rules out.
+**One automated UI assertion:** at a 390×844 viewport, the comparison working sheet's `scrollWidth` never exceeds its `clientWidth`, on the 8-quote stress dataset. That is ADR-0009's failure bar stated in testable terms, and it is the one outcome the design explicitly rules out. It lives in `src/components/comparison/working-sheet.layout.test.tsx`, runs in headless Chromium (jsdom reports every `scrollWidth` as `0`), and is re-measured at 768/1024/1280 — the same bar at the widths where the dense table comes back, not a second assertion.
 
 ### What is checked by hand, not by CI
 

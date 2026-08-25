@@ -23,7 +23,12 @@ import { ChevronDown, ChevronRight } from "lucide-react";
  * check a price they remember, and on their next visit the page should again be about the
  * work outstanding rather than about what they happened to poke at last week.
  *
- * Both halves are rendered on the server and passed in — the summary cells and the panel
+ * **The row wraps rather than reflowing.** The summary is a wrapping flex line, so the
+ * Item's blocks sit side by side where there is room and stack where there is not, at
+ * every width and with no breakpoint of its own — ADR-0009 puts the sheet's single
+ * breakpoint on the quote list inside the panel and nowhere else.
+ *
+ * Both halves are rendered on the server and passed in — the summary blocks and the panel
  * carry formatted money, translated banners and signed photo URLs, none of which belong
  * in a client component. All this owns is whether the panel is in the tree.
  */
@@ -32,7 +37,6 @@ export function ItemDisclosure({
   derivedOpen,
   openLabel,
   foldLabel,
-  columns,
   summary,
   panel,
 }: {
@@ -41,9 +45,7 @@ export function ItemDisclosure({
   derivedOpen: boolean;
   openLabel: string;
   foldLabel: string;
-  /** How many cells the panel spans, so it stays a full-width row under the Item. */
-  columns: number;
-  /** The Item's own cells, minus the twisty's — a fragment of `<td>`s. */
+  /** The Item's own blocks, minus the twisty's — a fragment of flex children. */
   summary: ReactNode;
   panel: ReactNode;
 }) {
@@ -52,34 +54,34 @@ export function ItemDisclosure({
   const panelId = `item-quotes-${itemId}`;
 
   return (
-    <>
-      <tr className={open ? "" : "text-muted-foreground"}>
-        <td className="border-border border-t px-2 py-3 align-top">
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-controls={panelId}
-            aria-label={open ? foldLabel : openLabel}
-            className="hover:bg-muted focus-visible:ring-ring/50 inline-flex size-11 items-center justify-center rounded-lg focus-visible:ring-3 focus-visible:outline-none"
-            onClick={() => setOverride(!open)}
-          >
-            {open ? (
-              <ChevronDown className="size-4" aria-hidden />
-            ) : (
-              <ChevronRight className="size-4" aria-hidden />
-            )}
-          </button>
-        </td>
+    <li className="flex flex-col">
+      <div
+        className={`flex flex-wrap items-start gap-x-4 gap-y-3 px-2 py-3 ${
+          open ? "" : "text-muted-foreground"
+        }`}
+      >
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          aria-label={open ? foldLabel : openLabel}
+          className="hover:bg-muted focus-visible:ring-ring/50 inline-flex size-11 shrink-0 items-center justify-center rounded-lg focus-visible:ring-3 focus-visible:outline-none"
+          onClick={() => setOverride(!open)}
+        >
+          {open ? (
+            <ChevronDown className="size-4" aria-hidden />
+          ) : (
+            <ChevronRight className="size-4" aria-hidden />
+          )}
+        </button>
         {summary}
-      </tr>
+      </div>
 
       {open ? (
-        <tr id={panelId}>
-          <td colSpan={columns} className="bg-muted/40 px-3 py-4">
-            {panel}
-          </td>
-        </tr>
+        <div id={panelId} className="bg-muted/40 px-3 py-4">
+          {panel}
+        </div>
       ) : null}
-    </>
+    </li>
   );
 }
