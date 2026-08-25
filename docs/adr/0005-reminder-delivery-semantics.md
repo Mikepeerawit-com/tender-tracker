@@ -1,5 +1,7 @@
 # Reminders catch up, reset when deadlines move, and anchor to one timezone
 
+> **The silent-failure refusal below is generalised to checks by [ADR-0016](0016-a-check-must-be-able-to-fail.md)** — written after this repo shipped two health checks that could not fail, an hour apart.
+>
 > **Rule 2 is narrowed by [ADR-0015](0015-the-missed-submission-is-a-reminder-row.md).** "Suppress a caught-up nudge whose milestone date has passed" turns out to be a rule two of the four Milestones invert, so where a Milestone goes quiet is now a property of the Milestone rather than of reminders in general. Every other decision below stands, and stands for all four.
 
 `buildspec_1` matched reminders with `submission_deadline - today = days_before` and marked them `sent` once, forever. Both halves are silent-failure machines: an exact date match means a single missed cron run drops that day's reminders permanently, and a `sent` flag that is never cleared means pushing a deadline back leaves every reminder for it marked done — so a Tender goes quiet exactly when it has the most runway left. For a product whose stated purpose is "we occasionally miss our submission to the client", a reminder that silently doesn't fire is the worst possible defect.

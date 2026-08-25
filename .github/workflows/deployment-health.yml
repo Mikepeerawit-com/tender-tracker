@@ -33,7 +33,7 @@ env:
   # Protection and answers a redirect to SSO. The first version of this workflow probed
   # it, got the redirect, and reported success having checked nothing: a check that could
   # not fail, shipped into the ticket about checks that cannot fail. It found itself out
-  # on its first production run.
+  # on its first production run. See docs/adr/0016-a-check-must-be-able-to-fail.md.
   PRODUCTION_URL: https://tenders.mikepeerawit.com
 
 jobs:

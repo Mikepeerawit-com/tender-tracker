@@ -1,0 +1,35 @@
+# A check must be able to fail, and the way to know is to make it
+
+[ADR-0005](0005-reminder-delivery-semantics.md) refuses silent-failure machines in the reminder engine — an exact date match that drops a day's reminders forever, a `sent` flag that is never cleared. This generalises that refusal to the things that are supposed to *catch* failures, because on 2026-08-25 this repo shipped two checks that could not fail, an hour apart, while actively thinking about exactly this.
+
+**A check that cannot fail is worse than no check.** A missing check leaves silence, and silence is honestly ambiguous. A check that always passes produces *confidence*, and confidence is acted on. Both faults below were invisible for weeks specifically because something green was pointing the other way.
+
+## The two, because the pattern is only visible in the pair
+
+**`health_check()` as a liveness oracle** ([#40](https://github.com/Mikepeerawit-com/tender-tracker/issues/40)). It is defined in the first migration and needs no table privilege, so it answers one question — "did migration #1 land?" — and is `true` for every possible state of migrations 2..N. The hosted database ran three weeks with no application tables while `/api/health` reported `{"status":"ok"}`. Then CI was red for a month on `permission denied for table orgs`, and it reported `ok` through that too, because a function needs no table grant to run. **It was most confident exactly when the schema was newest.**
+
+Worse, and caught only in review: using it to decide *reachability* reported a database no migration had ever reached — the exact fault the ticket was about — as `"unreachable"`, sending the reader to a Postgres that was fine.
+
+**The deployment gate that read a login page** ([#43](https://github.com/Mikepeerawit-com/tender-tracker/pull/43), fixed in [#45](https://github.com/Mikepeerawit-com/tender-tracker/pull/45)). Written to close the gap the first fault exposed, it probed `deployment_status.environment_url`. Vercel reports the *immutable deployment URL* there for production deployments too, and those sit behind Deployment Protection and answer `302` to SSO. The workflow treated the redirect as "a preview, nothing to assert", exited 0, and reported green having read a login page. It was wrong on its first production run, one hour after the first fault was fixed.
+
+## The test
+
+**Name the conditions under which this check goes red, and confirm each corresponds to a real fault.** If the answer is "when the service is down" and the service being down is not what you are guarding, the check is decorative. Both faults above pass a casual reading and fail this one immediately: `health_check()` goes red only when migration #1 is missing; the gate went red only when a URL was unreachable, never when it was merely uncheckable.
+
+The corollary is that **the failing case must be produced, not imagined.** A mocked `42501` proves the route can format one, not that Postgres would ever hand it one — and that distinction is the whole of #40. So `src/app/api/health/route.exclusive.test.ts` revokes a live grant, withholds a migration row, and renames the probe function away, against the real local Postgres. That is why an `.exclusive.test.ts` seam exists at all: the faults are database-wide, so they cannot run beside anything else.
+
+## What must not be quietly undone
+
+Each of these looks like an oversight and is not. Each has already been got wrong once.
+
+- **`health_check()` is not the reachability oracle, and `/api/health` deliberately no longer calls it.** It remains in the database, unused by the route. Reachability means "the database answered, whatever it said" — a PostgREST error carries a code, a transport failure does not. Wiring the dependency-free function back in as the liveness check is the obvious move and reintroduces the fault.
+- **The probe really reads a row from `tenders` as `authenticated`.** Not `has_table_privilege` — a catalogue would have agreed the grants were fine right up until the image bump that removed them.
+- **The expected migration list is derived from `supabase/migrations/` at build time, never hand-maintained.** A constant somebody must remember to bump is the same forgettable step the probe exists to catch, moved one level up.
+- **The deployment gate probes the public production alias, a constant — never `environment_url`.** Using the field the platform provides for exactly this purpose is the idiomatic choice and is what broke it. There is no skip path: production is public by design, so a redirect is a fault in its own right.
+- **The gate's daily schedule is a backstop, not a nicety.** Its `environment == 'Production'` filter would silently stop matching if Vercel ever renamed the environment, leaving a workflow that never runs and never says so. The schedule cannot be disabled by a rename, and catches what a deploy-triggered check structurally cannot — drift with no deploy, from a paused project or a rotated key.
+
+## Consequences
+
+- **Three faults stay distinguishable in `/api/health` rather than collapsing into "degraded".** `misconfigured`, `unreachable`, a schema behind the build and a schema that cannot be read have four different fixes; collapsing any two sends somebody to the wrong place.
+- **This is about visibility, not prevention.** Nothing yet stops a merge whose migrations were never pushed — that needs production credentials in CI and is open in [#44](https://github.com/Mikepeerawit-com/tender-tracker/issues/44). Do not read the probe as a guarantee that ordering held.
+- **The obvious implementation is the one to distrust here.** Both faults were the *more* natural choice: a dependency-free liveness function, and the platform's own deployment URL. Neither was careless. Reviewing a check by reading it is how both survived — the only reliable review is to break the thing it watches and watch it go red.
