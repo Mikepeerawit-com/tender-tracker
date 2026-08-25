@@ -10,6 +10,11 @@ import {
   type SessionCookieStore,
 } from "@/lib/supabase/session-client";
 
+// Not `server-only`, unlike this module: the add-quote form renders the radio group in
+// the browser. Re-exported below so server-side callers keep reading it from the module
+// that owns Quotes.
+import { matchTypes, type MatchType } from "./quote-form";
+
 /**
  * Recording what a supplier said, and recording that nobody would say anything.
  *
@@ -34,7 +39,7 @@ import {
  * out of another's Quotes; the checks in this file are the ones RLS cannot express.
  */
 
-export type MatchType = "exact" | "alternative";
+export { matchTypes, type MatchType };
 
 export type QuoteFields = {
   tenderItemId: string;

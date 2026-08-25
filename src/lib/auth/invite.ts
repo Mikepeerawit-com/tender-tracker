@@ -5,9 +5,34 @@ import type { SessionCookieStore } from "@/lib/supabase/session-client";
 
 import { currentUser } from "./session";
 
+export const inviteRefusals = ["not_admin", "already_invited", "send_failed"] as const;
+
+export type InviteRefusal = (typeof inviteRefusals)[number];
+
 export type InviteResult =
   | { ok: true; userId: string }
-  | { ok: false; reason: "not_admin" | "already_invited" | "send_failed" };
+  | { ok: false; reason: InviteRefusal };
+
+/**
+ * How an invitation can end, as the Org Admin sees it: the refusals, the send that
+ * worked, and the form's own empty-field case.
+ *
+ * Success is in the list alongside the failures on purpose. An outcome rendering as a
+ * key leaves the admin unable to tell a sent invitation from a silent failure — and the
+ * person waiting to be invited has no way to ask. `messages.test.ts` walks this.
+ */
+export const inviteStatuses = [...inviteRefusals, "sent", "incomplete"] as const;
+
+export type InviteStatus = (typeof inviteStatuses)[number];
+
+export const wecomUserIdRefusals = ["not_admin", "not_found", "taken"] as const;
+
+export type WecomUserIdRefusal = (typeof wecomUserIdRefusals)[number];
+
+/** How saving a WeCom userid can end. Walked by `messages.test.ts`. */
+export const wecomUserIdStatuses = [...wecomUserIdRefusals, "saved"] as const;
+
+export type WecomUserIdStatus = (typeof wecomUserIdStatuses)[number];
 
 /**
  * Invite a colleague by email.
@@ -73,7 +98,7 @@ export async function invite(
 export async function setWecomUserid(
   { userId, wecomUserid }: { userId: string; wecomUserid: string | null },
   store: SessionCookieStore,
-): Promise<{ ok: true } | { ok: false; reason: "not_admin" | "not_found" | "taken" }> {
+): Promise<{ ok: true } | { ok: false; reason: WecomUserIdRefusal }> {
   const caller = await currentUser(store);
 
   if (!caller?.isOrgAdmin) {

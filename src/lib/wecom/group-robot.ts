@@ -25,9 +25,29 @@ const wecomHost = "qyapi.weixin.qq.com";
 /** What a screen may know: that there is one, and when it last changed. Never the URL. */
 export type GroupRobotStatus = { configured: boolean; updatedAt: string | null };
 
+export const groupRobotRefusals = [
+  "not_admin",
+  "not_a_wecom_webhook",
+  "save_failed",
+] as const;
+
+export type GroupRobotRefusal = (typeof groupRobotRefusals)[number];
+
+/**
+ * How saving the webhook can end, as a list rather than a bare union.
+ *
+ * `cleared` is a success with no webhook left behind, and it is distinct from `saved` for
+ * the reason ADR-0013 gives the setting its single source of truth: an admin who empties
+ * the field needs to be told the org now notifies nobody, not congratulated on a save.
+ * `messages.test.ts` walks this.
+ */
+export const groupRobotStatuses = [...groupRobotRefusals, "saved", "cleared"] as const;
+
+export type GroupRobotSaveStatus = (typeof groupRobotStatuses)[number];
+
 export type SetGroupRobotResult =
   | { ok: true }
-  | { ok: false; reason: "not_admin" | "not_a_wecom_webhook" | "save_failed" };
+  | { ok: false; reason: GroupRobotRefusal };
 
 /**
  * Normalise a pasted webhook, or reject it.

@@ -11,8 +11,9 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { currencyOptions } from "@/lib/fx/currencies";
-import type { SubmittedQuote } from "@/lib/quotes/quote-form";
-import type { MatchType } from "@/lib/quotes/quotes";
+// From `@/lib/quotes/quote-form` rather than from `@/lib/quotes/quotes`, which
+// re-exports it: this runs in the browser, and that module is `server-only`.
+import { matchTypes, type MatchType, type SubmittedQuote } from "@/lib/quotes/quote-form";
 
 /**
  * Screen 4: what the supplier said, written down before it is forgotten.
@@ -129,7 +130,7 @@ export function QuoteForm({
         <p className="text-muted-foreground text-xs">{t("matchType.hint")}</p>
 
         <div className="flex flex-wrap gap-2">
-          {(["exact", "alternative"] satisfies MatchType[]).map((option) => (
+          {matchTypes.map((option) => (
             <label
               key={option}
               className="border-input has-checked:border-ring has-checked:bg-muted focus-within:ring-ring/50 flex h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm focus-within:ring-3"

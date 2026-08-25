@@ -9,6 +9,19 @@ import { testMentionMessage } from "./messages";
 import { sendGroupMessages, type RobotBoundary } from "./robot";
 
 /**
+ * The refusals that carry nothing but themselves. `send_failed` is kept out because it
+ * arrives with WeCom's own answer attached, which is the one refusal an admin can act on.
+ */
+export const plainTestMentionRefusals = [
+  "not_admin",
+  "not_found",
+  "no_userid",
+  "no_robot",
+] as const;
+
+export const testMentionRefusals = [...plainTestMentionRefusals, "send_failed"] as const;
+
+/**
  * `detail` carries WeCom's own words — its `errcode`/`errmsg`, an HTTP status, or the
  * transport's error. Surfaced rather than swallowed because this is the screen somebody
  * opens *because* notifications are not arriving, and "it didn't work" is not something
@@ -17,8 +30,20 @@ import { sendGroupMessages, type RobotBoundary } from "./robot";
  */
 export type TestMentionResult =
   | { ok: true }
-  | { ok: false; reason: "not_admin" | "not_found" | "no_userid" | "no_robot" }
+  | { ok: false; reason: (typeof plainTestMentionRefusals)[number] }
   | { ok: false; reason: "send_failed"; detail: string };
+
+/**
+ * How a test mention can end, as a list rather than a bare union.
+ *
+ * The wording here carries more than legibility. `errcode 0` means accepted and never
+ * notified, so this status is the only thing between the Org Admin and believing a
+ * mention was delivered — `conventions.test.ts` holds the success string to what it may
+ * promise, and `messages.test.ts` walks this to hold every status to having one at all.
+ */
+export const testMentionStatuses = [...testMentionRefusals, "sent"] as const;
+
+export type TestMentionStatus = (typeof testMentionStatuses)[number];
 
 /**
  * Post a test @mention to the WeCom group, aimed at one colleague.

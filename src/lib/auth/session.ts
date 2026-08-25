@@ -21,7 +21,27 @@ export type SessionUser = {
  * causes and the same situation — the person cannot use the app — and telling them
  * apart at a login form gives whoever is standing there nothing they can act on.
  */
-export type SignInResult = { ok: true } | { ok: false; reason: "invalid" | "disabled" };
+export const signInRefusals = ["invalid", "disabled"] as const;
+
+export type SignInRefusal = (typeof signInRefusals)[number];
+
+export type SignInResult = { ok: true } | { ok: false; reason: SignInRefusal };
+
+/**
+ * Everything the login screen can say about why somebody is not in — the refusals above,
+ * plus two the sign-in never returns.
+ *
+ * `incomplete` is the form's own: an empty field is refused before any credential is
+ * checked. `link` comes from the URL rather than from an action at all — an invite link
+ * that has expired or been used already lands back here with a flag on it, and that is
+ * the arrival least able to guess what went wrong.
+ *
+ * A list rather than a bare union, as every union the app renders a key from is:
+ * `messages.test.ts` walks this to hold both locales to it.
+ */
+export const loginErrors = [...signInRefusals, "incomplete", "link"] as const;
+
+export type LoginError = (typeof loginErrors)[number];
 
 const profileColumns = "id, org_id, name, email, locale, is_org_admin";
 
