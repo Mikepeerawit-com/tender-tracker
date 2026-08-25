@@ -6,11 +6,11 @@ name: Deployment health
 # was written for ran for three weeks not because the answer was unavailable but because
 # nobody opened the URL — so the probe needs something that opens it without being asked.
 #
-# This is option B from #44, and deliberately the weaker half: it catches a missing
-# `supabase db push` after the deploy, not before the merge. What makes it worth having
-# is that it costs no credentials — #40 built the endpoint and the production hostname is
-# public — where the check that would enforce the ordering needs production credentials
-# in CI and is a decision nobody has taken.
+# This is the *after* half. `preview-schema.yml` is the before half, asking the same
+# question of a pull request's preview so the missing `supabase db push` is caught ahead
+# of the merge rather than after it (#44). The reading of the answer is shared: both call
+# `.github/scripts/probe-health.sh`, because two copies of a five-way diagnosis drift, and
+# the copy that drifts is the one that stops being able to fail.
 
 on:
   deployment_status:
@@ -24,17 +24,8 @@ on:
   schedule:
     - cron: "17 2 * * *"
 
-env:
-  # The public production alias, deliberately **not**
-  # `github.event.deployment_status.environment_url`.
-  #
-  # Vercel reports the immutable deployment URL there — `tender-tracker-<hash>.vercel.app`
-  # — even for a production deployment, and every one of those sits behind Deployment
-  # Protection and answers a redirect to SSO. The first version of this workflow probed
-  # it, got the redirect, and reported success having checked nothing: a check that could
-  # not fail, shipped into the ticket about checks that cannot fail. It found itself out
-  # on its first production run. See docs/adr/0016-a-check-must-be-able-to-fail.md.
-  PRODUCTION_URL: https://tenders.mikepeerawit.com
+permissions:
+  contents: read
 
 jobs:
   probe:
@@ -45,75 +36,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
+        with:
+          # The script only, and only the trusted copy of it. Production deploys come
+          # from the default branch anyway, but pinning says so rather than relying on it.
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
       - name: Ask production about its schema
-        run: |
-          set -uo pipefail
-
-          echo "Probing ${PRODUCTION_URL}/api/health"
-
-          # Deliberately not `curl --retry`. That retries transient *HTTP* errors, 503
-          # among them — and 503 is this endpoint's considered answer about a real fault,
-          # not a blip. Retrying it appends each body to the last, and every `jq` below
-          # then reads three documents and prints three values into one sentence. Retry
-          # only what is genuinely transient: a connection that never opened.
-          attempt=1
-          while true; do
-            response=$(curl -sS --max-time 30 -w '\n%{http_code}' "${PRODUCTION_URL}/api/health" 2>&1) && break
-
-            if [ "$attempt" -ge 3 ]; then
-              echo "::error::${PRODUCTION_URL}/api/health did not answer at all after ${attempt} attempts. Production itself is unreachable, which is a different fault from the app reporting its database unreachable. curl said: ${response}"
-              exit 1
-            fi
-
-            attempt=$((attempt + 1))
-            sleep 5
-          done
-
-          code=$(printf '%s' "$response" | tail -n1)
-          body=$(printf '%s' "$response" | sed '$d')
-
-          # There is no skip path. Production is public by design — that is the whole
-          # reason this workflow needs no credential — so a redirect here is a fault in
-          # its own right, not a preview to step around.
-          if [ "$code" = "302" ] || [ "$code" = "401" ]; then
-            echo "::error::${PRODUCTION_URL}/api/health answered ${code} instead of its status. Deployment Protection appears to be switched on for production, which makes the probe uncheckable from here."
-            exit 1
-          fi
-
-          echo "$body" | jq . || echo "$body"
-
-          status=$(printf '%s' "$body" | jq -r '.status // "unparseable"')
-
-          if [ "$code" = "200" ] && [ "$status" = "ok" ]; then
-            applied=$(printf '%s' "$body" | jq -r '.schema.applied // "null"')
-            echo "::notice::Production is level with its build, at migration ${applied}."
-            exit 0
-          fi
-
-          # Name the fault rather than the failure. Which of these fired decides who fixes
-          # it and how — see the status table in README.md.
-          applied=$(printf '%s' "$body" | jq -r '.schema.applied // "null"')
-          expected=$(printf '%s' "$body" | jq -r '.schema.expected // "unknown"')
-          behind=$(printf '%s' "$body" | jq -r '.schema.behind // "null"')
-          # `tostring`, not `// "unknown"`: jq's alternative operator treats `false` as
-          # absent, so `.tables.readable // "unknown"` reports "unknown" for exactly the
-          # one value this branch exists to catch.
-          readable=$(printf '%s' "$body" | jq -r '.tables.readable | tostring')
-          database=$(printf '%s' "$body" | jq -r '.database // "unknown"')
-
-          if [ "$status" = "misconfigured" ]; then
-            echo "::error::Production has no usable Supabase credentials. See README.md, Deploying step 1 — and remember env vars added after a build need a redeploy."
-          elif [ "$database" = "unreachable" ]; then
-            echo "::error::Production cannot reach its database at all. Check the Supabase project is not paused."
-          elif [ "$applied" = "null" ]; then
-            echo "::error::Production is deployed against a database no migration ever reached. It expects ${expected}. Run \`supabase db push\` — README.md, Deploying step 2."
-          elif [ "$behind" != "0" ] && [ "$behind" != "null" ]; then
-            echo "::error::Production is deployed against a database missing ${behind} of its migration(s) — newest expected ${expected}, newest applied ${applied}. They need not be the newest ones: \`behind\` counts every expected version the database does not hold, including a gap in the middle. Run \`supabase db push\`."
-          elif [ "$readable" = "false" ]; then
-            error=$(printf '%s' "$body" | jq -r '.tables.error // "unknown"')
-            echo "::error::Production has its schema and cannot read it (${error}). Its table grants are missing — this needs a migration granting them, as 20260825010000 did."
-          else
-            echo "::error::${PRODUCTION_URL}/api/health answered ${code} with status '${status}'."
-          fi
-
-          exit 1
+        env:
+          PROBE_TARGET: production
+          # The public production alias, deliberately **not**
+          # `github.event.deployment_status.environment_url`.
+          #
+          # Vercel reports the immutable deployment URL there — `tender-tracker-<hash>`
+          # `.vercel.app` — even for a production deployment, and every one of those sits
+          # behind Deployment Protection and answers a redirect to SSO. The first version
+          # of this workflow probed it, got the redirect, and reported success having
+          # checked nothing: a check that could not fail, shipped into the ticket about
+          # checks that cannot fail. It found itself out on its first production run.
+          #
+          # A preview has no such constant and must use the field; that is the amendment
+          # in docs/adr/0016-a-check-must-be-able-to-fail.md, and it is about which input
+          # exists, never about a redirect being ignorable.
+          HEALTH_ORIGIN: https://tenders.mikepeerawit.com
+        run: .github/scripts/probe-health.sh

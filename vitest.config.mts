@@ -26,6 +26,12 @@ import { migrationsOnDiskEnv } from "./src/lib/schema/migrations-on-disk.mts";
  * they would fail whichever unrelated suite happened to be mid-query. This project runs
  * them in a later `groupOrder`, when nothing else is running.
  *
+ * **`.github/scripts/*.test.ts` — the checks themselves.** The deployment probes are
+ * shell, and ADR-0016 says a check is only reviewed by breaking what it watches. These
+ * run the real script against a real local HTTP server answering each health body shape.
+ * They need no database and no browser, so they are their own project rather than a
+ * reason to start Supabase.
+ *
  * **`.layout.test.tsx` — a real browser.** One thing lives here: ADR-0009's failure bar,
  * that the comparison working sheet never scrolls sideways at 390×844. jsdom has no
  * layout engine and reports every `scrollWidth` as `0`, so that assertion passes there on
@@ -69,6 +75,13 @@ export default defineConfig({
           // only thing that makes revoking a live grant safe.
           sequence: { groupOrder: 1 },
           fileParallelism: false,
+        },
+      },
+      {
+        test: {
+          name: "scripts",
+          environment: "node",
+          include: [".github/scripts/**/*.test.ts"],
         },
       },
       {
