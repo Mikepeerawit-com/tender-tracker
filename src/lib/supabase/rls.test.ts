@@ -218,10 +218,21 @@ describe("row-level security", () => {
   });
 
   it("shows a signed-out caller nothing", async () => {
+    // **Two layers stand here now, and this asserts the outer one.** Every policy in
+    // this schema is `to authenticated`, so the anon key has always matched no row —
+    // but until 20260825010000 it still held a table grant it could never use, and the
+    // refusal came from RLS as a silent empty set. The grants migration takes the
+    // privilege away, so PostgREST now refuses before RLS is consulted at all.
+    //
+    // The assertion is on what the caller ends up with rather than on which layer said
+    // no, because both are correct answers to "shows a signed-out caller nothing" and
+    // the schema is entitled to change which one it leans on. An explicit refusal is
+    // the better of the two: an empty set is also what a working query over no data
+    // looks like.
     const { data, error } = await anonClient().from("tenders").select("id");
 
-    expect(error).toBeNull();
-    expect(data).toEqual([]);
+    expect(data ?? []).toEqual([]);
+    expect(error === null || error.code === "42501").toBe(true);
   });
 });
 
@@ -394,9 +405,12 @@ describe("fx_rates", () => {
       .eq("currency", "CNY")
       .eq("as_of", "2026-08-10");
 
-    // PostgREST reports an update that matches no updatable row as a success over zero
-    // rows, so the rate itself is what has to be checked.
-    expect(error).toBeNull();
+    // Refused outright since 20260825010000: `fx_rates` carries a read-only policy, and
+    // the grants migration now matches it with a read-only *privilege*, so the write is
+    // rejected rather than silently matching zero updatable rows. Either answer leaves
+    // the rate alone, which is the thing that actually matters — so the rate is checked
+    // below regardless, exactly as it was when the refusal was the quiet kind.
+    expect(error === null || error.code === "42501").toBe(true);
 
     const { data } = await service
       .from("fx_rates")
