@@ -1,0 +1,133 @@
+name: Preview schema
+
+# Fail a pull request whose migrations have not been pushed, *before* it is merged (#44).
+#
+# The trick is that there is nothing to build. Preview and Production share one Supabase
+# project — every variable the Marketplace integration supplies is one set scoped to all
+# three environments — and a build's expected migration list is baked from its own
+# checkout by `next.config.ts`. So a preview's `/api/health` is already computing "does
+# the shared database hold every migration *this branch* expects?", and `schema.behind`
+# on a preview *is* the unpushed-migration fault, visible before the merge.
+#
+# That premise is load-bearing rather than incidental. If previews ever get their own
+# database, this check stops meaning anything and must be deleted rather than left green —
+# see docs/adr/0016-a-check-must-be-able-to-fail.md.
+#
+# Why `deployment_status` and not `pull_request`: this repo is public, and a
+# `pull_request` job gets no secrets from a fork, so the check would be red on every
+# outside contribution for reasons having nothing to do with the change.
+# `deployment_status` runs in the base repository's context whatever the pull request's
+# origin.
+
+on:
+  deployment_status:
+  # A preview URL can be probed on demand, which is how the failing case gets *produced*
+  # rather than imagined (ADR-0016) without waiting for a deployment to happen.
+  workflow_dispatch:
+    inputs:
+      preview_url:
+        description: Preview origin to ask, e.g. https://tender-tracker-abc123.vercel.app
+        required: true
+
+permissions:
+  contents: read
+  # The check has to land on the commit, not merely in the Actions tab. A green tick that
+  # came from an older deployment of a different commit is a check that cannot fail in the
+  # way that matters.
+  statuses: write
+
+env:
+  # One name, in one place: the required-status-check rule on `main` matches this string,
+  # so renaming it here without renaming it there turns a blocking check into an absent
+  # one — silence, which is the failure mode this whole ticket is about.
+  STATUS_CONTEXT: Preview schema
+
+jobs:
+  probe:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment_status.environment != 'Production')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # **Not** the deployed commit. This job holds a secret and runs for pull
+          # requests from forks; checking out the head commit would run a fork's version
+          # of the probe script with `VERCEL_AUTOMATION_BYPASS_SECRET` in the environment.
+          # GitHub already takes the workflow *file* from the default branch — this is the
+          # same guarantee for everything the file then executes.
+          #
+          # The cost is that a change to the script is not exercised by its own pull
+          # request's preview check — that pull request runs the previous version. That is
+          # what `workflow_dispatch` above is for. On the pull request that first *adds*
+          # the script there is no previous version at all, which the step below names.
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Ask the preview about its schema
+        id: probe
+        env:
+          PROBE_TARGET: preview
+          # The one place `environment_url` is the right input: a preview has no stable
+          # public alias to prefer over it. A redirect is still a hard failure — that rule
+          # does not narrow, and the script has no path from `302` to success.
+          HEALTH_ORIGIN: ${{ github.event.inputs.preview_url || github.event.deployment_status.environment_url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          # The script is checked out from the default branch, not from the commit being
+          # deployed, so on the pull request that first adds it there is nothing to run.
+          # That happens exactly once and is worth its own sentence: without this the step
+          # dies on "No such file", writes no summary, and the pull request gets the
+          # generic "the probe did not finish and said nothing" — a red that tells the
+          # reader nothing about why.
+          if [ ! -x .github/scripts/probe-health.sh ]; then
+            summary="probe-health.sh is not on ${DEFAULT_BRANCH} yet, so this pull request cannot be checked by it."
+            echo "::error::${summary} This check runs the default branch's copy of the script rather than the pull request's, so that a fork cannot swap it out for one that leaks the bypass secret. It starts working on the first pull request after this one lands."
+            echo "summary=${summary}" >>"$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          .github/scripts/probe-health.sh
+
+      # `always()`, so the red is reported. Without it a failing probe leaves no status at
+      # all, and an absent status reads as "not run yet" rather than "this is broken".
+      #
+      # Turning a red one green after `supabase db push` — same commit, no code change —
+      # is **Re-run all jobs** on the failed run. That replays the same `deployment_status`
+      # payload, asks again, and overwrites the status.
+      #
+      # A `workflow_dispatch` run deliberately writes no status: it takes a URL, not a
+      # commit, and a check whose result can be pointed at an arbitrary sha by hand is not
+      # a check. That is the `github.event_name` half of the condition below.
+      - name: Report the answer against the deployed commit
+        if: always() && github.event_name == 'deployment_status'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Inherited from the workflow-level `env` anyway; named here because every other
+          # variable this step reads is named here.
+          STATUS_CONTEXT: ${{ env.STATUS_CONTEXT }}
+          SHA: ${{ github.event.deployment.sha }}
+          # `outcome`, not `conclusion`: the state must come from what the probe did, so
+          # that a script that dies before writing a summary still reports failure.
+          OUTCOME: ${{ steps.probe.outcome }}
+          SUMMARY: ${{ steps.probe.outputs.summary }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          state=failure
+          [ "$OUTCOME" = "success" ] && state=success
+
+          description="$SUMMARY"
+          if [ -z "$description" ]; then
+            description="The probe did not finish and said nothing. Open the run."
+          fi
+
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="$RUN_URL"

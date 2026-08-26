@@ -147,15 +147,40 @@ forward-compatible — the deployed build ignores what it does not call — so a
 early is safe, while merging first leaves production running against a database it cannot
 read for as long as it takes somebody to notice.
 
-`.github/workflows/deployment-health.yml` is what notices: every finished deployment gets
-asked `/api/health`, and a production one that is not `ok` fails the check with the
-diagnosis in the message. Previews are skipped and say so — they sit behind Deployment
-Protection and answer a redirect to SSO, and asserting on a login page would be worse than
-not asking.
+Two workflows ask, on either side of the merge. Both read the answer with the same
+script, `.github/scripts/probe-health.sh` — the five faults have five different fixes, and
+two copies of that diagnosis would drift.
 
-That gate fires *after* the deploy. Nothing yet *prevents* a merge whose migrations have
-not been pushed — that needs production credentials in CI and is a decision on its own, in
-[#44](https://github.com/Mikepeerawit-com/tender-tracker/issues/44).
+`.github/workflows/preview-schema.yml` is the one that **prevents** the merge. A pull
+request's preview deployment is built from that branch, so it expects that branch's
+migrations; and because preview and production share one Supabase project, it is asking
+about the same database production uses. So `schema.behind` on a preview *is* the
+unpushed-migration fault, visible before anything is merged. It reports a **Preview
+schema** status against the pull request's head commit, and once the setup below is done
+`main` requires it — a red *or absent* status blocks the merge rather than advising
+against it. Absent matters as much as red: if no preview deploys, nothing reports, and an
+unrequired check that never runs looks exactly like one that passed.
+
+`.github/workflows/deployment-health.yml` is the one that **notices** afterwards. Every
+finished production deployment gets asked, and a daily schedule asks again, which is how
+drift with no deploy at all — a paused project, a rotated key, a migration applied by
+hand — still surfaces.
+
+Previews sit behind Deployment Protection and answer a redirect to SSO, so the preview
+check needs a bypass secret. **Until it has one it fails, naming itself; it does not
+pass.** Set it up once:
+
+1. Vercel → the project → **Settings → Deployment Protection → Protection Bypass for
+   Automation** → generate, and copy the value.
+2. `gh secret set VERCEL_AUTOMATION_BYPASS_SECRET` and paste it.
+3. `.github/scripts/require-checks.sh`, which is what makes `main` require the check
+   rather than merely display it. It refuses to run before step 2 — a required check that
+   cannot pass leaves `main` unmergeable, so the order is not optional.
+
+If it is ever rotated on Vercel, the check goes red saying the secret is not getting past
+protection — which is the intended behaviour, not a false alarm. To try a preview URL by
+hand without waiting for a deployment, run the workflow from the Actions tab: it takes the
+preview origin as an input.
 
 ```sh
 supabase link --project-ref <project-ref>   # needs the database password
