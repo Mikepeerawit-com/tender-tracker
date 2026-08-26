@@ -23,13 +23,6 @@ on:
   deployment_status:
   # A preview URL can be probed on demand, which is how the failing case gets *produced*
   # rather than imagined (ADR-0016) without waiting for a deployment to happen.
-  #
-  # It does **not** rescue this file's own pull request. GitHub takes `deployment_status`
-  # *and* `workflow_dispatch` workflows from the default branch, so neither trigger exists
-  # until this is merged — the first run of this check on a pull request is the pull
-  # request after this one. That is a property of the trigger rather than something to
-  # work around, and it is why the evidence for #44 is gathered against a preview URL by
-  # hand first.
   workflow_dispatch:
     inputs:
       preview_url:
@@ -67,7 +60,9 @@ jobs:
           # same guarantee for everything the file then executes.
           #
           # The cost is that a change to the script is not exercised by its own pull
-          # request's preview check. That is what `workflow_dispatch` above is for.
+          # request's preview check — that pull request runs the previous version. That is
+          # what `workflow_dispatch` above is for. On the pull request that first *adds*
+          # the script there is no previous version at all, which the step below names.
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
@@ -80,7 +75,22 @@ jobs:
           # does not narrow, and the script has no path from `302` to success.
           HEALTH_ORIGIN: ${{ github.event.inputs.preview_url || github.event.deployment_status.environment_url }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-        run: .github/scripts/probe-health.sh
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          # The script is checked out from the default branch, not from the commit being
+          # deployed, so on the pull request that first adds it there is nothing to run.
+          # That happens exactly once and is worth its own sentence: without this the step
+          # dies on "No such file", writes no summary, and the pull request gets the
+          # generic "the probe did not finish and said nothing" — a red that tells the
+          # reader nothing about why.
+          if [ ! -x .github/scripts/probe-health.sh ]; then
+            summary="probe-health.sh is not on ${DEFAULT_BRANCH} yet, so this pull request cannot be checked by it."
+            echo "::error::${summary} This check runs the default branch's copy of the script rather than the pull request's, so that a fork cannot swap it out for one that leaks the bypass secret. It starts working on the first pull request after this one lands."
+            echo "summary=${summary}" >>"$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          .github/scripts/probe-health.sh
 
       # `always()`, so the red is reported. Without it a failing probe leaves no status at
       # all, and an absent status reads as "not run yet" rather than "this is broken".
