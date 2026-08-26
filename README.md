@@ -316,3 +316,20 @@ update users set is_org_admin = true where email = '<email>';
 
 If the database somehow has no `orgs` row, `/setup` says so rather than guessing — the row
 is seeded by the schema migration, so its absence means §2 has not run.
+
+## Before launch
+
+Five checks need a real phone and cannot be run from CI: density and 44px tap targets at
+390px, the WeCom in-app webview end to end, Android's camera, the redesign's Chinese read
+by somebody fluent, and both locales read through on every screen. They are hand-checks by
+decision, not by omission — density is a judgement, the webview cannot be driven
+headlessly, and whether a sentence is *right* in Chinese is not a thing a test can answer.
+
+```bash
+scripts/prelaunch-phone-checks.sh
+```
+
+It walks them in order, posts a reminder into the WeCom group so the tap lands in the real
+webview, and assembles the result as a comment on the tracking issue. Answers persist, so a
+run stopped halfway resumes where it left off. Re-run it after any change to login, the
+photo input, or the responsive layout.
