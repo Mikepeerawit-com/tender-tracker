@@ -8,8 +8,16 @@ import type { SessionCookieStore } from "@/lib/supabase/session-client";
 
 import { listItemSourcing, listQuotes, type NoSupplierFound, type Quote } from "./quotes";
 
-/** Everything the item sourcing screen draws, once the Tender and the Item are known. */
-export type ItemSourcingScreen = {
+/**
+ * Everything the item sourcing screen draws, once the Tender and the Item are known.
+ *
+ * `…Data` rather than `ItemSourcingScreen`, for two collisions it would otherwise walk
+ * into: `Screen…` names a component everywhere else in this codebase (`ScreenHeader`,
+ * `ScreenSkeleton`, `ScreenError`), and `ItemSourcing` next door in `quotes.ts` is a
+ * narrower thing entirely — what is known about one Item's sourcing, not what the screen
+ * about it renders.
+ */
+export type ItemSourcingScreenData = {
   /** Every Quote on the Item, in entry order — unranked, as `listQuotes` leaves them. */
   quotes: Quote[];
   /** Those Quotes' photos, keyed by Quote. A Quote with none is absent, not empty. */
@@ -47,14 +55,14 @@ export type ItemSourcingScreen = {
  * signature to save a small query on the org's own `users` table, which is a worse trade
  * than the query.
  *
- * It is a function rather than the top of the page for the reason `vitest.config.ts`
+ * It is a function rather than the top of the page for the reason `vitest.config.mts`
  * gives: an `async` Server Component behind `currentUser` is reachable by no test in this
  * repo, so the ordering above would be guarded by nothing at all.
  */
 export async function loadItemSourcingScreen(
   { tenderId, tenderItemId }: { tenderId: string; tenderItemId: string },
   store: SessionCookieStore,
-): Promise<ItemSourcingScreen> {
+): Promise<ItemSourcingScreenData> {
   const [quotes, sourcing, referenceImages, settings, members] = await Promise.all([
     listQuotes(tenderItemId, store),
     listItemSourcing(tenderId, store),

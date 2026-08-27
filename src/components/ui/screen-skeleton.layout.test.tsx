@@ -58,6 +58,6 @@ describe(`the loading fallback at ${phone.width}×${phone.height}`, () => {
 
     // The bars are `aria-hidden`, so this sentence is the whole of what a screen reader
     // gets — and the fallback would otherwise announce as an empty page.
-    expect(screen.getByRole("status")).toHaveTextContent(en.app.loading);
+    expect(screen.getByRole("status").textContent).toBe(en.app.loading);
   });
 });

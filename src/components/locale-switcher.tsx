@@ -67,11 +67,14 @@ export function LocaleSwitcher({
           ) : null}
         </Button>
       ))}
-      {isPending ? (
-        <span role="status" className="sr-only">
-          {t("switching")}
-        </span>
-      ) : null}
+      {/* Mounted always, with the sentence appearing inside it, rather than mounted when
+          there is something to say. A live region inserted at the same moment it gains
+          its text is one several screen readers never announce, because they have nothing
+          to compare it against — which would make this the silent half of a control whose
+          whole point is that it stopped being silent. */}
+      <span role="status" className="sr-only">
+        {isPending ? t("switching") : ""}
+      </span>
     </nav>
   );
 }

@@ -14,29 +14,28 @@ import { controlRows, expectNoSidewaysScroll, phone } from "@/test/layout";
  * The app bar **while a language is being switched**, which is a wider bar than the one
  * every other suite measures.
  *
- * Switching used to show nothing but two greyed-out buttons, and #48's hand-check read
- * that exactly as it looks — a change with no sign anything was happening (#57). The fix
- * is a spinner on the button that was pressed, and a spinner is 14px plus a gap that the
- * bar did not previously have to find.
+ * The switch now puts a spinner on the button that was pressed (#57), and a spinner is
+ * 14px plus a gap the bar did not previously have to find. #56 is what running out of
+ * width on this bar costs, so the widened state gets measured rather than assumed.
  *
  * That is the whole reason this file exists rather than another case in
  * `screens.layout.test.tsx`. Every other measurement in this repo renders a screen and
  * measures it; this one has to *press something first*, because the state at risk does
- * not exist until then. A control that only fits before it is pressed is a control nobody
- * measured, and #56 is what that costs on a bar this full: an org admin, whose six admin
- * buttons make the worst case, in both locales, since a Han glyph is about twice the
- * width of a Latin letter.
+ * not exist until then — and a control that only fits before it is pressed is one nobody
+ * measured. An org admin throughout, whose six admin buttons are the worst case, in both
+ * locales, since a Han glyph is about twice the width of a Latin letter.
  *
- * `switchLocale` is stubbed with a promise that never settles. That is not a shortcut
- * around timing — it is the only way to hold `isPending` open long enough to measure it,
- * and it is honest about what is being measured: the state a phone on mobile data sits in
- * for as long as the round trip takes.
+ * Only what needs a layout engine is here. Which button spins, and what the live region
+ * says, are DOM facts and are asserted in `locale-switcher.test.tsx` under jsdom, per the
+ * seam split `vitest.config.mts` documents.
+ *
+ * `switchLocale` is stubbed with a promise that never settles — not a shortcut around
+ * timing, but the only way to hold `isPending` open long enough to measure it, and an
+ * honest model of what a phone on mobile data sits in for the length of the round trip.
  */
 
 vi.mock("@/app/actions/auth", () => ({ signOutAction: async () => ({}) }));
-vi.mock("@/app/actions/locale", () => ({
-  switchLocale: () => new Promise(() => {}),
-}));
+vi.mock("@/app/actions/locale", () => ({ switchLocale: () => new Promise(() => {}) }));
 
 const locales = [
   ["en", en],
@@ -51,50 +50,19 @@ describe(`the app bar mid-switch at ${phone.width}×${phone.height}`, () => {
       </NextIntlClientProvider>,
     );
 
+    const { short } = messages.localeSwitcher;
     // The language that is *not* current, which is the only one anybody presses.
-    const target = locale === "en" ? messages.localeSwitcher.short["zh-Hans"] : messages.localeSwitcher.short.en;
+    const target = locale === "en" ? short["zh-Hans"] : short.en;
 
     await userEvent.click(screen.getByRole("button", { name: target }));
 
-    // The transition is open and will not close, so this is the bar as it is while the
-    // server is being waited on.
-    expect(screen.getByRole("status")).toHaveTextContent(messages.localeSwitcher.switching);
-
     expectNoSidewaysScroll();
     expect(controlRows(document.querySelector("header")!)).toBe(1);
-  });
 
-  it("keeps both languages on screen while one of them is being switched to", async () => {
-    render(
-      <NextIntlClientProvider locale="en" messages={en} timeZone="Asia/Bangkok">
-        <AppHeader name="Somchai Prasertkul" isOrgAdmin />
-      </NextIntlClientProvider>,
-    );
-
-    await userEvent.click(
-      screen.getByRole("button", { name: en.localeSwitcher.short["zh-Hans"] }),
-    );
-
-    // The constraint documented on the component, and the one a spinner is most likely to
-    // be traded against: whoever cannot read the language they are looking at has to be
-    // able to see the way out of it, including during the second they are waiting.
-    for (const label of [en.localeSwitcher.short.en, en.localeSwitcher.short["zh-Hans"]]) {
-      const button = screen.getByRole("button", { name: label });
-
-      expect(button).toBeVisible();
-      expect(button.offsetWidth).toBeGreaterThan(0);
+    // Both languages keep a box somebody can see, which is the constraint the extra 14px
+    // would be traded against if the bar ran short.
+    for (const label of [short.en, short["zh-Hans"]]) {
+      expect(screen.getByRole("button", { name: label }).offsetWidth).toBeGreaterThan(0);
     }
-
-    // And the spinner is on the one being switched *to*, not the one already current.
-    const switchingTo = screen.getByRole("button", {
-      name: en.localeSwitcher.short["zh-Hans"],
-    });
-
-    expect(switchingTo.querySelector(".animate-spin")).not.toBeNull();
-    expect(
-      screen
-        .getByRole("button", { name: en.localeSwitcher.short.en })
-        .querySelector(".animate-spin"),
-    ).toBeNull();
   });
 });

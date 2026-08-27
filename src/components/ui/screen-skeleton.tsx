@@ -42,14 +42,20 @@ export function ScreenSkeleton() {
         </p>
 
         <div aria-hidden className="contents">
-          <ScreenHeader heading={<Bar className="h-7 w-48" />} actions={<Bar className="h-11 w-24" />}>
+          <ScreenHeader
+            heading={<Bar className="h-7 w-48" />}
+            actions={<Bar className="h-11 w-24" />}
+          >
             <Bar className="h-4 w-40" />
             <Bar className="h-4 w-32" />
           </ScreenHeader>
 
           <div className="flex flex-col gap-3">
             {[0, 1, 2].map((row) => (
-              <div key={row} className="border-border flex flex-col gap-3 rounded-lg border p-4">
+              <div
+                key={row}
+                className="border-border flex flex-col gap-3 rounded-lg border p-4"
+              >
                 <Bar className="h-4 w-full" />
                 <Bar className="h-4 w-1/2" />
               </div>
