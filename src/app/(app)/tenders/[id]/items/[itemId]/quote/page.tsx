@@ -12,12 +12,8 @@ import { Button } from "@/components/ui/button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { currentUser } from "@/lib/auth/session";
 import { calendarDate, calendarDateFormat, todayIn } from "@/lib/calendar-date";
-import { listQuotePhotosByQuote } from "@/lib/images/quote-photos";
-import { listReferenceImages } from "@/lib/images/reference-images";
-import { listMembers } from "@/lib/org/members";
-import { getOrgSettings } from "@/lib/org/org";
+import { loadItemSourcingScreen } from "@/lib/quotes/item-sourcing-screen";
 import { blankQuote } from "@/lib/quotes/quote-form";
-import { listItemSourcing, listQuotes } from "@/lib/quotes/quotes";
 import { runInstantFromHeaders } from "@/lib/run-instant";
 import { getTender } from "@/lib/tenders/tenders";
 
@@ -64,21 +60,18 @@ export default async function ItemSourcingPage({
   // rather than refusing.
   const isAssignee = tender.assignees.some((assignee) => assignee.id === user.id);
 
-  const quotes = await listQuotes(itemId, store);
-  const photos = await listQuotePhotosByQuote(
-    quotes.map((quote) => quote.id),
-    store,
-  );
-  const sourcing = (await listItemSourcing(tender.id, store)).get(itemId);
-  const refusals = sourcing?.noSupplierFound ?? [];
-  const referenceImages = (await listReferenceImages(tender.id, store)).filter(
-    (image) => image.tenderItemId === itemId,
-  );
+  // One call, and every read inside it that can run alongside another does. It is a
+  // function rather than a run of awaits here because that ordering has a silent failure
+  // in it — see `loadItemSourcingScreen`, which is where it is explained and tested.
+  const { quotes, photos, refusals, referenceImages, timezone, members } =
+    await loadItemSourcingScreen(
+      { tenderId: tender.id, tenderItemId: item.id },
+      store,
+    );
 
   // The day the org is having, not the one the server is having: Vercel runs UTC, which
   // would default a Bangkok evening's Quote to yesterday. The instant is resolved once
   // here, at the top of the render, and passed down (ADR-0010).
-  const { timezone } = await getOrgSettings(store);
   const today = todayIn(timezone, runInstantFromHeaders(await headers()));
 
   return (
@@ -172,7 +165,7 @@ export default async function ItemSourcingPage({
             <AssigneeControls
               tenderId={tender.id}
               assignees={tender.assignees}
-              members={await listMembers(store)}
+              members={members}
               callerId={user.id}
               isOwner={tender.ownerUserId === user.id}
             />
