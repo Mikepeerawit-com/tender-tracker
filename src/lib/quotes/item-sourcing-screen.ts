@@ -28,8 +28,14 @@ export type ItemSourcingScreenData = {
   referenceImages: ReferenceImage[];
   /** The org's timezone, which is where the screen's idea of "today" comes from. */
   timezone: string;
-  /** Everyone who can still be given work, for the enrol-yourself control. */
-  members: Member[];
+  /**
+   * Everyone who can still be given work, for the enrol-yourself control.
+   *
+   * `null` when the caller said the screen would not draw that control, which is not the
+   * same answer as `[]` and must not be flattened into it: an empty array is an org whose
+   * every member is already an Assignee, and this is an org nobody asked about.
+   */
+  members: Member[] | null;
 };
 
 /**
@@ -47,20 +53,34 @@ export type ItemSourcingScreenData = {
  * That is the failure this function exists as a named, tested unit to prevent, and
  * `item-sourcing-screen.test.ts` pins it.
  *
- * **Why `listMembers` is unconditional.** The page awaited it *inside JSX*, on the branch
- * that draws the enrol-yourself control, so it did not begin until React rendered that
- * far down — later than serial. Reading it here costs an Assignee, who never sees that
- * control, one extra query; it costs them no extra time, because it runs alongside four
- * reads the screen always needs. The alternative is a flag threaded through this
- * signature to save a small query on the org's own `users` table, which is a worse trade
- * than the query.
+ * **`withMembers`, and why it is a flag rather than always-on.** The page awaited
+ * `listMembers` *inside JSX*, on the branch that draws the enrol-yourself control, so it
+ * did not begin until React rendered that far down — later than serial. Hoisting it here
+ * fixes that, but hoisting it *unconditionally* would read the org's members on every
+ * visit, including the one this screen exists for: an Assignee entering price after price
+ * off a run of supplier calls, who never sees that control at all. The flag keeps both —
+ * the read starts with the others when it is wanted, and does not happen when it is not.
+ *
+ * The caller already knows the answer. Whether the control renders is exactly
+ * `!isAssignee`, computed on the page before this is called, so nothing is being worked
+ * out twice.
  *
  * It is a function rather than the top of the page for the reason `vitest.config.mts`
  * gives: an `async` Server Component behind `currentUser` is reachable by no test in this
  * repo, so the ordering above would be guarded by nothing at all.
  */
 export async function loadItemSourcingScreen(
-  { tenderId, tenderItemId }: { tenderId: string; tenderItemId: string },
+  {
+    tenderId,
+    tenderItemId,
+    withMembers,
+  }: {
+    tenderId: string;
+    tenderItemId: string;
+    /** Whether the screen will draw the enrol-yourself control, which is the only thing
+     * the org's members are read for. */
+    withMembers: boolean;
+  },
   store: SessionCookieStore,
 ): Promise<ItemSourcingScreenData> {
   const [quotes, sourcing, referenceImages, settings, members] = await Promise.all([
@@ -68,7 +88,9 @@ export async function loadItemSourcingScreen(
     listItemSourcing(tenderId, store),
     listReferenceImages(tenderId, store),
     getOrgSettings(store),
-    listMembers(store),
+    // In the batch rather than after it: when it is wanted it starts with the others, and
+    // when it is not there is no round trip to start.
+    withMembers ? listMembers(store) : null,
   ]);
 
   const photos = await listQuotePhotosByQuote(

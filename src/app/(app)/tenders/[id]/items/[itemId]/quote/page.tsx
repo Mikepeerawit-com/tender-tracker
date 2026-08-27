@@ -65,7 +65,10 @@ export default async function ItemSourcingPage({
   // in it — see `loadItemSourcingScreen`, which is where it is explained and tested.
   const { quotes, photos, refusals, referenceImages, timezone, members } =
     await loadItemSourcingScreen(
-      { tenderId: tender.id, tenderItemId: item.id },
+      // The org's members are read only for the enrol-yourself control below, and that
+      // control is drawn on exactly one branch of this page. An Assignee — who is who
+      // this screen is for — never sees it, and now never pays for it either.
+      { tenderId: tender.id, tenderItemId: item.id, withMembers: !isAssignee },
       store,
     );
 
@@ -165,7 +168,7 @@ export default async function ItemSourcingPage({
             <AssigneeControls
               tenderId={tender.id}
               assignees={tender.assignees}
-              members={members}
+              members={members ?? []}
               callerId={user.id}
               isOwner={tender.ownerUserId === user.id}
             />

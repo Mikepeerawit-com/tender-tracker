@@ -285,8 +285,12 @@ afterAll(async () => {
 });
 
 describe("loading the item sourcing screen", () => {
+  /** The screen as an Assignee gets it: no enrol-yourself control, so no members read. */
+  const load = (tenderItemId: string, withMembers = false) =>
+    loadItemSourcingScreen({ tenderId, tenderItemId, withMembers }, store);
+
   it("gives the photos read the Quote ids the Quotes read returned", async () => {
-    const screen = await loadItemSourcingScreen({ tenderId, tenderItemId: itemId }, store);
+    const screen = await load(itemId);
 
     // The regression the batch would cause, stated the way a reader sees it: the Quote
     // that has a photo comes back with it.
@@ -294,7 +298,7 @@ describe("loading the item sourcing screen", () => {
   });
 
   it("returns every Quote on the Item, photographed or not", async () => {
-    const screen = await loadItemSourcingScreen({ tenderId, tenderItemId: itemId }, store);
+    const screen = await load(itemId);
 
     expect(screen.quotes.map((quote) => quote.id).sort()).toEqual(
       [photographedQuoteId, bareQuoteId].sort(),
@@ -305,14 +309,14 @@ describe("loading the item sourcing screen", () => {
   });
 
   it("narrows the refusals to this Item, not the Tender's", async () => {
-    const screen = await loadItemSourcingScreen({ tenderId, tenderItemId: itemId }, store);
+    const screen = await load(itemId);
 
     expect(screen.refusals.map((refusal) => refusal.userId)).toEqual([assignee.id]);
     expect(screen.refusals[0].note).toBe("MOQ too high");
   });
 
   it("narrows the Reference Images to this Item, not the Tender's", async () => {
-    const screen = await loadItemSourcingScreen({ tenderId, tenderItemId: itemId }, store);
+    const screen = await load(itemId);
 
     expect(screen.referenceImages).toHaveLength(1);
     expect(screen.referenceImages[0].tenderItemId).toBe(itemId);
@@ -321,23 +325,27 @@ describe("loading the item sourcing screen", () => {
   it("reads an Item nobody has sourced as no Quotes, no photos and no refusals", async () => {
     // The empty case is the one the folded-batch bug renders as *every* case, so it is
     // worth pinning that it really is empty here rather than incidentally.
-    const screen = await loadItemSourcingScreen(
-      { tenderId, tenderItemId: otherItemId },
-      store,
-    );
+    const screen = await load(otherItemId);
 
     expect(screen.quotes).toEqual([]);
     expect(screen.photos.size).toBe(0);
     expect(screen.refusals.map((refusal) => refusal.userId)).toEqual([colleague.id]);
   });
 
-  it("carries the org's timezone and its members", async () => {
-    const screen = await loadItemSourcingScreen({ tenderId, tenderItemId: itemId }, store);
+  it("carries the org's timezone, which every visit needs", async () => {
+    // Where the screen's `today` comes from, and the one read here with nothing to do
+    // with the Item.
+    expect((await load(itemId)).timezone).toBe("Asia/Bangkok");
+  });
 
-    // Where the screen's `today` is computed, and what the enrol-yourself control offers
-    // — the two reads that have nothing to do with the Item and were awaited anyway.
-    expect(screen.timezone).toBe("Asia/Bangkok");
-    expect(screen.members.map((member) => member.id).sort()).toEqual(
+  it("reads the org's members only when the screen will offer them", async () => {
+    // The screen draws the enrol-yourself control on one branch, and an Assignee entering
+    // price after price off a run of supplier calls is never on it. `null` says the read
+    // did not happen; `[]` would say the org has nobody left to enrol, which is a
+    // different answer and one this call never asked for.
+    expect((await load(itemId)).members).toBeNull();
+
+    expect((await load(itemId, true)).members?.map((member) => member.id).sort()).toEqual(
       [assignee.id, colleague.id].sort(),
     );
   });
