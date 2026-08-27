@@ -11,7 +11,9 @@ import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { TenderFacts } from "@/components/tenders/tender-facts";
 import { TenderRow } from "@/components/tenders/tender-row";
 import { Button } from "@/components/ui/button";
+import { ScreenError } from "@/components/ui/screen-error";
 import { ScreenHeader } from "@/components/ui/screen-header";
+import { ScreenSkeleton } from "@/components/ui/screen-skeleton";
 import type { Member } from "@/lib/org/members";
 import { blankQuote } from "@/lib/quotes/quote-form";
 import type { Quote } from "@/lib/quotes/quotes";
@@ -143,6 +145,17 @@ function screens(m: typeof en) {
           defaults={blankQuote({ unit: "piece", today: "2026-08-12" })}
         />
       </Body>
+    ),
+    // The two screens that stand in for the others, and are screens in their own right:
+    // whoever taps a link on a phone sees the first of these before anything else, and
+    // sees the second instead of a blank page when the fetch behind it fails (#57).
+    // Neither is wrapped in `Body` — a route-level `loading.tsx` and `error.tsx` replace
+    // the page, so each has to draw the page's own wrapper itself, and does.
+    "the loading fallback": <ScreenSkeleton />,
+    // A digest of the length Next really mints, since it is the one string on this screen
+    // that nobody chose the width of.
+    "a screen that threw": (
+      <ScreenError digest="3990102495" retry={() => {}} />
     ),
   };
 }

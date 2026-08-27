@@ -1,7 +1,14 @@
 {
   "app": {
     "name": "招标跟踪",
-    "description": "记录招标、针对招标收集的报价，以及我们最终的投标内容。"
+    "description": "记录招标、针对招标收集的报价，以及我们最终的投标内容。",
+    "loading": "加载中…",
+    "error": {
+      "title": "此页面无法加载",
+      "explain": "获取页面内容时出错了。重试一次通常就能解决。",
+      "retry": "重试",
+      "reference": "错误编号 {digest}"
+    }
   },
   "localeSwitcher": {
     "label": "语言",
@@ -10,7 +17,8 @@
     "short": {
       "en": "EN",
       "zh-Hans": "中文"
-    }
+    },
+    "switching": "正在切换语言…"
   },
   "login": {
     "title": "登录",

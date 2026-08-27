@@ -1,7 +1,14 @@
 {
   "app": {
     "name": "Tender Tracker",
-    "description": "Tenders, the quotes gathered against them, and what was bid back."
+    "description": "Tenders, the quotes gathered against them, and what was bid back.",
+    "loading": "Loading…",
+    "error": {
+      "title": "This screen could not be loaded",
+      "explain": "Something went wrong while fetching it. Trying again often works.",
+      "retry": "Try again",
+      "reference": "Reference {digest}"
+    }
   },
   "localeSwitcher": {
     "label": "Language",
@@ -10,7 +17,8 @@
     "short": {
       "en": "EN",
       "zh-Hans": "中文"
-    }
+    },
+    "switching": "Switching language…"
   },
   "login": {
     "title": "Sign in",
