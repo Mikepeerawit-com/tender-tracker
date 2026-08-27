@@ -36,6 +36,33 @@
       "no_session": "该邀请链接已过期或已被使用。请联系组织管理员重新发送。"
     }
   },
+  "setup": {
+    "title": "创建首位组织管理员",
+    "description": "此应用尚无任何账号。您在此创建的账号可以邀请其他所有人，并且只能创建一次。",
+    "name": "您的姓名",
+    "email": "邮箱",
+    "password": "密码",
+    "confirmation": "重复密码",
+    "secret": "初始化密钥",
+    "secretHint": "此部署所配置的 SETUP_SECRET。",
+    "requirement": "至少 8 个字符。",
+    "submit": "创建账号",
+    "submitting": "正在创建…",
+    "closed": {
+      "title": "初始化已完成",
+      "description": "此应用已存在账号，因此无法再次创建首位组织管理员。请登录，或联系组织管理员邀请您。",
+      "signIn": "前往登录页面"
+    },
+    "error": {
+      "closed": "此应用已存在账号。初始化只能执行一次，且已经执行过。",
+      "wrong_secret": "初始化密钥不正确。",
+      "no_org": "数据库中不存在组织。请先应用数据库迁移。",
+      "create_failed": "账号创建失败。系统未保存任何内容，请查看服务器日志后重试。",
+      "incomplete": "请填写所有字段，包括初始化密钥。",
+      "too_short": "请至少使用 8 个字符。",
+      "mismatch": "两次输入的密码不一致。"
+    }
+  },
   "chooseLanguage": {
     "title": "Choose your language / 选择语言",
     "option": {

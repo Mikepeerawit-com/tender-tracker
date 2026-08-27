@@ -52,11 +52,13 @@ describe("what the session gate turns away", () => {
 describe("what the session gate lets through", () => {
   /**
    * Each of these is public for a reason of its own, and each reason is a different
-   * caller: a signed-out human, a link in an email, an uptime probe, and Vercel Cron.
+   * caller: a signed-out human, a link in an email, the operator of a database with no
+   * accounts in it, an uptime probe, and Vercel Cron.
    */
   it.each([
     ["/login", "the screen a redirected visitor is being sent to"],
     ["/auth/confirm", "the link in an invite email, opened before any session exists"],
+    ["/setup", "the first Org Admin, who by definition cannot be signed in yet"],
     ["/api/health", "an uptime probe, which carries no cookie and never will"],
     ["/api/cron/daily", "Vercel Cron, which carries a bearer token and no cookie"],
   ])("lets %s through — %s", async (path) => {

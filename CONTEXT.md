@@ -244,8 +244,11 @@ _Avoid_: admin, owner, superuser, manager
 
 **Invite**:
 The email an Org Admin sends to bring a new user into the organisation. The only way an
-account comes into existence, and the only email the app sends. Scanning a WeCom QR code
-never creates an account.
+account comes into existence *from inside the app*, and the only email the app sends.
+Scanning a WeCom QR code never creates an account. One exception, and only one: the first
+Org Admin has nobody to be invited by, and is created once when the organisation is first
+stood up — behind a secret, never repeatable, and never a way for anyone else to arrive
+(ADR-0017).
 _Avoid_: signup, registration, onboarding link
 
 **Connected WeCom**:

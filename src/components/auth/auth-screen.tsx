@@ -20,7 +20,8 @@ export function AuthScreen({
 }: {
   title: string;
   description?: string;
-  children: ReactNode;
+  /** Optional: a signed-out screen can be a notice with nothing to fill in, as `/setup` is once it has run. */
+  children?: ReactNode;
 }) {
   return (
     <div className="bg-background flex flex-1 flex-col items-center justify-center p-6">

@@ -24,6 +24,11 @@ cp .env.example .env.local # fill from `supabase status -o env`
 npm run dev
 ```
 
+Then set `SETUP_SECRET` in `.env.local` to anything you like and open
+<http://127.0.0.1:3000/setup> to create your local Org Admin. It is the same screen a real
+deployment uses (§6), and it reopens after every `npm run db:reset` — which wipes the
+accounts along with everything else.
+
 | Script              | What it does                                             |
 | ------------------- | -------------------------------------------------------- |
 | `npm run dev`       | Development server                                        |
@@ -131,6 +136,10 @@ integration rather than setting the variables by hand. The integration supplies
 `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and the `POSTGRES_*` set, and
 keeps them correct if a key is ever rotated. Hand-copied values are how a deployment
 ends up pointed at the local stack in `.env.local`.
+
+Two variables the integration does not supply: `CRON_SECRET`, which Vercel sets for the
+scheduled job, and **`SETUP_SECRET`**, which you set by hand and which §6 uses once. Both
+are secrets in the ordinary sense — long, random, and not reused.
 
 Environment variables added after the first build do not trigger a rebuild — redeploy
 once, or `/api/health` keeps reporting the state from before they landed.
@@ -254,21 +263,32 @@ instead of a category of intermittent bug.
 ### 6. The first Org Admin
 
 Accounts exist only by invitation and `enable_signup` is off at the platform level, so
-the first account cannot invite itself into existence. Create it by hand, once:
+the first account cannot invite itself into existence. **`/setup` is where it comes from**
+— once per database, and never again
+([ADR-0017](docs/adr/0017-the-first-org-admin-arrives-through-a-guarded-setup-screen.md)).
 
-1. **Authentication → Users → Add user** in the Supabase dashboard. Set a password and
-   tick *Auto Confirm User*. Copy the resulting UUID.
-2. Run this against the project database, using that UUID:
+1. Set `SETUP_SECRET` on the deployment (§1) and redeploy, so the build actually has it.
+2. Open `/setup`, fill in your name, email and password, and paste the secret.
 
-   ```sql
-   insert into users (id, org_id, name, email, is_org_admin)
-   select '<uuid>', id, '<name>', '<email>', true from orgs limit 1;
-   ```
+That is the whole procedure. It signs you in and lands on the language choice, exactly as
+an accepted invitation does. From here everyone else arrives by invitation from inside the
+app, at **/admin/people**.
 
-The `orgs` row is seeded by the schema migration, so it already exists. `is_org_admin`
-gates inviting and nothing else — it grants no extra visibility, and it is not writable
-through the app by anyone, including an Org Admin (see the column grants in
-`20260814010000_membership_is_not_business_data.sql`). Promoting a second admin is the
-same `update` run from the dashboard.
+The screen guards itself twice: an unset `SETUP_SECRET` means **closed**, not "open with
+no password", and any row at all in `users` closes it permanently. So **create
+production's Org Admin through the deployed screen rather than by hand** — an account
+created in the dashboard consumes the second guard forever, and the path then only ever
+runs locally. Locally it reopens after every `npm run db:reset`, which is the point: the
+same screen, run the same way, on a database that resets often.
 
-From here everyone else arrives by invitation from inside the app, at **/admin/people**.
+`is_org_admin` gates inviting and nothing else — it grants no extra visibility, and it is
+not writable through the app by anyone, including an Org Admin (see the column grants in
+`20260814010000_membership_is_not_business_data.sql`). **Promoting a second admin** is an
+`update` run from the Supabase dashboard, and stays one:
+
+```sql
+update users set is_org_admin = true where email = '<email>';
+```
+
+If the database somehow has no `orgs` row, `/setup` says so rather than guessing — the row
+is seeded by the schema migration, so its absence means §2 has not run.
