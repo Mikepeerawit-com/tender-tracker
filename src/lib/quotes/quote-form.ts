@@ -53,6 +53,18 @@ export type QuoteFormState = {
    * this is what those defaults are read from.
    */
   submitted?: SubmittedQuote;
+  /**
+   * The Quote that was written, on the submit that wrote it, and the one field that says
+   * this submit succeeded.
+   *
+   * The action used to end a successful create in a `redirect()`, which returns nothing
+   * by construction — so the id of the Quote just written was never observable by the
+   * browser that wrote it. It has to be now: the photos picked on the same pass are
+   * uploaded against it, and there is nothing to key them by until the price exists.
+   * Hence an id back rather than a redirect out; the action does one or the other, never
+   * both.
+   */
+  quoteId?: string;
 };
 
 /** The refusal, and the form as the user left it. */
@@ -61,6 +73,16 @@ export function refusedQuote(
   submitted: SubmittedQuote,
 ): QuoteFormState {
   return { error, submitted };
+}
+
+/**
+ * The Quote was written, and here is what it is called.
+ *
+ * No `submitted`: the form re-seeds from its blank defaults on a success, which is what
+ * clears it for the next supplier — an Assignee rings several in a row for one Item.
+ */
+export function savedQuote(quoteId: string): QuoteFormState {
+  return { quoteId };
 }
 
 /** The form exactly as posted. */

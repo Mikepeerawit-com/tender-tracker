@@ -9,7 +9,7 @@ import {
 } from "@/app/actions/reference-images";
 import { ImageProblemNotice } from "@/components/images/image-problem-notice";
 import { useImageUpload } from "@/components/images/use-image-upload";
-import { imageAccept } from "@/lib/images/images";
+import { imageAccept, type PendingImage } from "@/lib/images/images";
 
 /**
  * Drop five pictures in at once, against the Tender.
@@ -28,11 +28,13 @@ import { imageAccept } from "@/lib/images/images";
 export function ReferenceImageUploader({ tenderId }: { tenderId: string }) {
   const t = useTranslations("tenders.referenceImages");
   const input = useRef<HTMLInputElement>(null);
-  const { error, progress, busy, upload } = useImageUpload({
-    sign: (images) => signReferenceImageUploadsAction({ tenderId, images }),
-    record: (storagePaths) =>
+  const { error, progress, busy, upload } = useImageUpload();
+  const toThisTender = {
+    sign: (images: PendingImage[]) =>
+      signReferenceImageUploadsAction({ tenderId, images }),
+    record: (storagePaths: string[]) =>
       recordReferenceImagesAction({ tenderId, storagePaths }),
-  });
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -51,7 +53,7 @@ export function ReferenceImageUploader({ tenderId }: { tenderId: string }) {
             if (files.length === 0) return;
 
             try {
-              await upload(files);
+              await upload(files, toThisTender);
             } finally {
               // However the attempt ended, and especially when it failed: the input keeps
               // its old FileList otherwise, so re-picking the same five fires no `change`
