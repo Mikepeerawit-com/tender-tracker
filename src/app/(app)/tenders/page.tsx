@@ -1,13 +1,14 @@
 import { cookies, headers } from "next/headers";
 import Link from "next/link";
-import { getFormatter, getTranslations } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 
+import { TenderRow } from "@/components/tenders/tender-row";
 import { Button } from "@/components/ui/button";
-import { calendarDate, calendarDateFormat, todayIn } from "@/lib/calendar-date";
+import { ScreenHeader } from "@/components/ui/screen-header";
+import { todayIn } from "@/lib/calendar-date";
 import { getOrgSettings } from "@/lib/org/org";
 import { runInstantFromHeaders } from "@/lib/run-instant";
-import type { DeadlineKind, WorklistBlock } from "@/lib/tenders/progress";
-import { listWorklist, type WorklistRow } from "@/lib/tenders/worklist";
+import { listWorklist } from "@/lib/tenders/worklist";
 
 /**
  * Screen 2: the tender list, and the app's home.
@@ -29,30 +30,29 @@ import { listWorklist, type WorklistRow } from "@/lib/tenders/worklist";
  */
 export default async function TendersPage() {
   const t = await getTranslations("tenders");
-  const format = await getFormatter();
   const store = await cookies();
   const { timezone } = await getOrgSettings(store);
   const today = todayIn(timezone, runInstantFromHeaders(await headers()));
   const { sections, total } = await listWorklist(today, store);
-  const day = (value: string) => format.dateTime(calendarDate(value), calendarDateFormat);
   const filled = sections.filter((section) => section.tenders.length > 0);
 
   return (
     <div className="flex flex-1 flex-col gap-8 p-6">
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-col gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-            <p className="text-muted-foreground text-sm">{t("description")}</p>
-          </div>
-          <Button
-            className="h-11"
-            nativeButton={false}
-            render={<Link href="/tenders/new" />}
-          >
-            {t("record")}
-          </Button>
-        </header>
+        <ScreenHeader
+          heading={t("title")}
+          actions={
+            <Button
+              className="h-11"
+              nativeButton={false}
+              render={<Link href="/tenders/new" />}
+            >
+              {t("record")}
+            </Button>
+          }
+        >
+          <p className="text-muted-foreground text-sm break-words">{t("description")}</p>
+        </ScreenHeader>
 
         {filled.length === 0 ? (
           // Two different emptinesses, and they must not read as the same sentence: a
@@ -82,12 +82,7 @@ export default async function TendersPage() {
               <ul className="flex flex-col gap-3">
                 {section.tenders.map((tender) => (
                   <li key={tender.id}>
-                    <TenderRow
-                      block={section.block}
-                      day={day}
-                      t={t}
-                      tender={tender}
-                    />
+                    <TenderRow block={section.block} tender={tender} />
                   </li>
                 ))}
               </ul>
@@ -99,72 +94,3 @@ export default async function TendersPage() {
   );
 }
 
-/**
- * One Tender, as a row.
- *
- * The only thing that changes between blocks is the loudness of the border and, in
- * "Coming up", a chip naming **which** deadline put it there — because either deadline
- * can, and a row that does not say which is a row you have to open to act on. Both
- * deadlines are shown on every row regardless: they are the two dates the job turns on.
- */
-function TenderRow({
-  block,
-  day,
-  t,
-  tender,
-}: {
-  block: WorklistBlock;
-  day: (value: string) => string;
-  t: Awaited<ReturnType<typeof getTranslations<"tenders">>>;
-  tender: WorklistRow;
-}) {
-  const border =
-    block === "submission_missed"
-      ? "border-destructive/40 bg-destructive/5"
-      : "border-border";
-  const deadlines: Record<DeadlineKind, string> = {
-    internal_quote: tender.internalQuoteDeadline,
-    client_submission: tender.clientSubmissionDeadline,
-  };
-
-  return (
-    <Link
-      href={`/tenders/${tender.id}`}
-      className={`${border} hover:bg-muted/50 flex flex-col gap-2 rounded-lg border p-4 transition-colors`}
-    >
-      <div className="flex flex-wrap items-baseline gap-2">
-        <span className="text-muted-foreground font-mono text-xs">
-          {tender.reference}
-        </span>
-        <span className="font-medium">{tender.clientName}</span>
-        <span className="text-muted-foreground text-sm">{tender.title}</span>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="bg-muted text-muted-foreground rounded px-2 py-0.5 text-xs">
-          {t(`progress.${tender.progress}`)}
-        </span>
-        {tender.dueDeadlines.map((kind) => (
-          <span
-            key={kind}
-            className="border-border text-foreground rounded border px-2 py-0.5 text-xs"
-          >
-            {t(`due.${kind}`, { date: day(deadlines[kind]) })}
-          </span>
-        ))}
-      </div>
-
-      <div className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs">
-        <span>{t("itemCount", { count: tender.itemCount })}</span>
-        <span>{t("ownedBy", { name: tender.ownerName })}</span>
-        {/* Whole sentences, not a label glued to a value with a literal colon: Chinese
-            wants a full-width one, and punctuation composed in JSX is a string no
-            translator can reach. */}
-        <span>{t("internalQuoteDue", { date: day(tender.internalQuoteDeadline) })}</span>
-        <span>
-          {t("clientSubmissionDue", { date: day(tender.clientSubmissionDeadline) })}
-        </span>
-      </div>
-    </Link>
-  );
-}
