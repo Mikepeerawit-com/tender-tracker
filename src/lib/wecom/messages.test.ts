@@ -62,6 +62,11 @@ const fixture = {
   // Widened for the outcome news (#34): a **colleague's** name, which is the one identity
   // ADR-0012 permits a message to carry. `supplier` below is the one it never may.
   selectedBy: "Nok",
+  // Widened for the way into the app (#59). Present rather than null on purpose: without
+  // it every rule below would only ever be asked about the linkless branch, and the
+  // branch that carries a URL — the one that could smuggle an id, a query string or a
+  // locale past these rules — would go unguarded. See `@/lib/app-links.ts`.
+  link: "https://tenders.example.com/tenders/8f0e2d1c",
   // None of these may ever leave the app.
   supplier: "SENTINEL-SUPPLIER-ACME",
   price: "SENTINEL-PRICE",
@@ -208,6 +213,7 @@ describe("the missed submission, which is the loudest thing the robot says", () 
       { milestone: "submission_missed", date: "2026-09-01", daysLeft: -1 },
     ],
     mentions: ["somchai"],
+    link: null,
   });
 
   it("says the deadline passed with nothing submitted", () => {
@@ -232,6 +238,7 @@ describe("the decision chase", () => {
         { milestone: "decision_chase", date: "2026-09-20", daysLeft: 0 },
       ],
       mentions: ["somchai"],
+      link: null,
     });
 
     expect(chase.content).toContain("2026-09-20");
@@ -245,6 +252,9 @@ describe("the outcome news", () => {
     client: "Bangkok General Hospital",
     item: "PICC catheter 4Fr",
     mentions: ["somchai"],
+    // These tests are about the wording, which #59 did not change. The link has its own
+    // describe at the foot of this file.
+    link: null,
   };
 
   it("tells the Assignee we bid that it was their quote", () => {
@@ -312,6 +322,7 @@ describe("reminderMessage", () => {
       { milestone: "client_submission", date: "2026-09-01", daysLeft: 0 },
     ],
     mentions: ["somchai", "anong"],
+    link: null,
   });
 
   it("carries every milestone the Tender owes in one message", () => {
@@ -332,6 +343,7 @@ describe("reminderMessage", () => {
         { milestone: "client_submission", date: "2026-09-01", daysLeft: 7 },
       ],
       mentions: [],
+      link: null,
     });
 
     expect(late.content).toContain("2026-09-01");
@@ -346,6 +358,7 @@ describe("reminderMessage", () => {
         { milestone: "internal_quote", date: "2026-08-25", daysLeft: 0 },
       ],
       mentions: [],
+      link: null,
     });
 
     expect(today.content).toContain("今天");
@@ -389,6 +402,7 @@ describe("the daily Digest", () => {
           next: { milestone: "submission_missed", date: "2026-08-20", daysLeft: -5 },
         },
       ],
+      link: null,
     });
 
     expect(digest.content).toContain("T-1042");
@@ -401,7 +415,7 @@ describe("the daily Digest", () => {
   it("@s nobody, because a daily mention is how a group learns to mute the robot", () => {
     // The reminders are the messages that matter, and they arrive through the same
     // robot. A Digest that pinged people every morning would cost them their audience.
-    expect(builders.digestMessage({ tenders: [line("T-1042", 3)] }).mentions).toBe(
+    expect(builders.digestMessage({ tenders: [line("T-1042", 3)], link: null }).mentions).toBe(
       undefined,
     );
   });
@@ -416,6 +430,7 @@ describe("the daily Digest", () => {
           next: { milestone: "submission_missed", date: "2026-08-20", daysLeft: -5 },
         },
       ],
+      link: null,
     });
 
     expect(digest.content).toContain("错过");
@@ -434,6 +449,7 @@ describe("the daily Digest", () => {
           next: null,
         },
       ],
+      link: null,
     });
 
     expect(digest.content).toContain("等待客户决标");
@@ -447,7 +463,7 @@ describe("the daily Digest", () => {
     const many = Array.from({ length: 60 }, (_value, index) =>
       line(`T-${1000 + index}`, index),
     );
-    const digest = builders.digestMessage({ tenders: many });
+    const digest = builders.digestMessage({ tenders: many, link: null });
 
     expect(new TextEncoder().encode(digest.content).length).toBeLessThanOrEqual(2048);
     expect(digest.content).toContain("共 60 个");
@@ -460,7 +476,175 @@ describe("the daily Digest", () => {
 
   it("names no omission when everything fitted", () => {
     expect(
-      builders.digestMessage({ tenders: [line("T-1042", 3)] }).content,
+      builders.digestMessage({ tenders: [line("T-1042", 3)], link: null }).content,
     ).not.toContain("未列出");
+  });
+});
+
+/**
+ * The way into the app (#59).
+ *
+ * Every message here already ended by telling the reader to go and look, and none of them
+ * said where. These tests are about the sentence that closes that gap and about the two
+ * things it must not cost: the Digest's byte budget, and the messages themselves when the
+ * deployment was never told its own origin.
+ */
+describe("the link into the app", () => {
+  const link = "https://tenders.example.com/tenders/8f0e2d1c";
+
+  const reminder = (into: string | null) =>
+    builders.reminderMessage({
+      reference: "T-1042",
+      client: "Bangkok General Hospital",
+      title: "Surgical consumables Q3",
+      milestones: [{ milestone: "client_submission", date: "2026-09-01", daysLeft: 2 }],
+      mentions: ["somchai"],
+      link: into,
+    });
+
+  const outcomes = (into: string | null) => [
+    builders.selectedQuoteOutcomeMessage({
+      reference: "T-1042",
+      client: "Bangkok General Hospital",
+      item: "PICC catheter 4Fr",
+      outcome: "won",
+      mentions: ["somchai"],
+      link: into,
+    }),
+    builders.otherQuotesOutcomeMessage({
+      reference: "T-1042",
+      client: "Bangkok General Hospital",
+      item: "PICC catheter 4Fr",
+      outcome: "won",
+      selectedBy: "Nok",
+      mentions: ["anong"],
+      link: into,
+    }),
+  ];
+
+  const digest = (into: string | null) =>
+    builders.digestMessage({
+      tenders: [
+        {
+          reference: "T-1042",
+          client: "Bangkok General Hospital",
+          title: "Surgical consumables Q3",
+          next: { milestone: "internal_quote", date: "2026-08-25", daysLeft: 3 },
+        },
+      ],
+      link: into,
+    });
+
+  const linked = [
+    ["a reminder", reminder(link)],
+    ["the news for the selected Quote", outcomes(link)[0]],
+    ["the news for everybody else who quoted", outcomes(link)[1]],
+    ["the Digest", digest(link)],
+  ] as const;
+
+  it.each(linked)("%s carries it", (_name, message) => {
+    expect(message.content).toContain(link);
+  });
+
+  it.each(linked)("%s puts it alone on the last line, so WeCom autolinks it", (_name, message) => {
+    // A bare URL on its own line is what WeCom turns into something tappable. Wrapped in
+    // a sentence — "详情见 https://…。" — the trailing punctuation goes into the href,
+    // and the reader gets a 404 from a message nobody can edit.
+    const lines = message.content.split("\n");
+
+    expect(lines[lines.length - 1]).toBe(link);
+  });
+
+  it.each(linked)("%s says nothing extra around it", (_name, message) => {
+    // #59 is explicit that no message's wording changes beyond gaining the link. The
+    // instruction to go and look was already there; this only tells the reader where.
+    expect(message.content.replace(`\n${link}`, "")).not.toContain("http");
+  });
+
+  /**
+   * The whole reason a missing origin is allowed to be quiet: reminders are the product,
+   * and a run that refused to post over an unset configuration line would cause the exact
+   * failure this app exists to prevent. See `@/lib/app-links.ts`.
+   */
+  it.each([
+    ["a reminder", reminder(null), reminder(link)],
+    ["the news for the selected Quote", outcomes(null)[0], outcomes(link)[0]],
+    ["the news for everybody else who quoted", outcomes(null)[1], outcomes(link)[1]],
+    ["the Digest", digest(null), digest(link)],
+  ])("%s is exactly the message it was before when there is none", (_name, without, with_) => {
+    expect(without.content).not.toContain("http");
+    // Not merely "no URL": no stray blank line, no dangling separator, nothing that
+    // reads as a link that failed to render.
+    expect(without.content).toBe(with_.content.replace(`\n${link}`, ""));
+    expect(without.content.endsWith("\n")).toBe(false);
+  });
+
+  describe("the Digest, which is the one message with a budget", () => {
+    const line = (reference: string) => ({
+      reference,
+      client: "Bangkok General Hospital",
+      title: "Surgical consumables Q3",
+      next: { milestone: "client_submission" as const, date: "2026-09-01", daysLeft: 4 },
+    });
+
+    it("carries exactly one, in its footer, not one per Tender", () => {
+      // A URL is 60-70 bytes against a Tender line's 60-90, so per-line links would very
+      // nearly halve how many Tenders fit before the truncation point. The cost of making
+      // each line tappable is paid in Tenders that stop being listed at all, which is the
+      // wrong trade for a message whose whole job is the listing.
+      const many = builders.digestMessage({
+        tenders: Array.from({ length: 8 }, (_value, index) => line(`T-${1000 + index}`)),
+        link,
+      });
+
+      expect(many.content.match(/https:\/\//g)).toHaveLength(1);
+    });
+
+    it("still arrives short and still says how many it left out, with a link on it", () => {
+      const many = Array.from({ length: 60 }, (_value, index) => line(`T-${1000 + index}`));
+      const message = builders.digestMessage({ tenders: many, link });
+
+      expect(new TextEncoder().encode(message.content).length).toBeLessThanOrEqual(2048);
+      expect(message.content).toContain("共 60 个");
+      expect(message.content).toMatch(/其余 \d+ 个未列出/);
+      expect(message.content).toContain(link);
+    });
+
+    it("charges the link against the budget rather than posting it on top", () => {
+      // The self-imposed budget, below WeCom's 2048 because a message over the cap is
+      // refused whole. The footer is charged up front, before any line is added — so the
+      // footer that gets charged has to be the footer that gets posted. Charge the
+      // linkless one and post the linked one and the Digest is over budget by a URL,
+      // which is invisible until the day an org's list is long enough to reach the cap.
+      const budget = 1_800;
+      const many = Array.from({ length: 60 }, (_value, index) => line(`T-${1000 + index}`));
+      const bytes = (message: GroupMessage) =>
+        new TextEncoder().encode(message.content).length;
+
+      expect(bytes(builders.digestMessage({ tenders: many, link }))).toBeLessThanOrEqual(
+        budget,
+      );
+      // The linkless Digest is the one the budget was set for, and it still fits: a
+      // budget the link happens to satisfy because nothing else does is no assertion.
+      expect(
+        bytes(builders.digestMessage({ tenders: many, link: null })),
+      ).toBeLessThanOrEqual(budget);
+    });
+
+    it("keeps the omission line, which can never be the line that did not fit", () => {
+      // The reserved-omission arithmetic is what stops a Digest from truncating silently.
+      // A link long enough to eat the reservation would take the notice with it.
+      const many = Array.from({ length: 200 }, (_value, index) => line(`T-${1000 + index}`));
+      const message = builders.digestMessage({ tenders: many, link });
+      const lines = message.content.split("\n");
+
+      // The footer is two lines now — its sentence, then the bare URL — so the notice
+      // sits third from the end rather than second.
+      expect(lines.slice(-3)).toEqual([
+        expect.stringMatching(/其余 \d+ 个未列出/),
+        "详情请进入系统查看。",
+        link,
+      ]);
+    });
   });
 });

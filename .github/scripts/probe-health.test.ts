@@ -97,6 +97,7 @@ const healthy = {
   database: "reachable",
   schema: { expected: "20260825010000", applied: "20260825010000", behind: 0 },
   tables: { probed: "tenders", readable: true },
+  appOrigin: { configured: true, origin: "https://tenders.example.com" },
 };
 
 describe("a production probe", () => {
@@ -221,7 +222,7 @@ describe("a preview probe", () => {
   );
 });
 
-describe("the five faults stay apart", () => {
+describe("the six faults stay apart", () => {
   it.each([
     [
       "misconfigured",
@@ -247,6 +248,14 @@ describe("the five faults stay apart", () => {
       "a schema it cannot read",
       { status: 503, body: { status: "degraded", database: "reachable", schema: { expected: "1", applied: "1", behind: 0 }, tables: { probed: "tenders", readable: false, error: "42501" } } },
       /grants/i,
+    ],
+    [
+      "a deployment that does not know its own public URL",
+      { status: 503, body: { status: "no-app-origin", database: "reachable", schema: { expected: "1", applied: "1", behind: 0 }, tables: { probed: "tenders", readable: true }, appOrigin: { configured: false, error: "APP_ORIGIN is not set, so group messages carry no link into the app." } } },
+      // Deliberately not /APP_ORIGIN/: the script echoes the body it read, so that string
+      // is in the output whatever the script concludes, and the assertion would pass on
+      // the catch-all. `redeploy` appears only in the sentence this fault writes.
+      /redeploy/i,
     ],
   ])("names %s", async (_name, answer, expected) => {
     const { origin } = await serving(answer as Answer);
@@ -327,5 +336,102 @@ describe("the summary the commit status carries", () => {
     // GitHub truncates a commit status description at 140 characters, and a truncated
     // diagnosis loses the version numbers at the end of the sentence.
     expect(line.length).toBeLessThanOrEqual(140);
+  });
+});
+
+/**
+ * The app not knowing its own public URL (#59).
+ *
+ * The newest of the faults and the easiest to let through, because everything else about
+ * such a deployment is fine: the app serves, the schema is level, the tables read. What
+ * is broken is the reminders, which are the product — they go out telling people to go
+ * into the system and give them no way in. ADR-0016's test applies unchanged: name the
+ * condition under which this goes red, and produce it.
+ */
+describe("a deployment with no APP_ORIGIN", () => {
+  const linkless = {
+    status: "no-app-origin",
+    database: "reachable",
+    schema: { expected: "20260825010000", applied: "20260825010000", behind: 0 },
+    tables: { probed: "tenders", readable: true },
+    appOrigin: {
+      configured: false,
+      error: "APP_ORIGIN is not set, so group messages carry no link into the app.",
+    },
+  };
+
+  it("goes red rather than passing on an otherwise healthy body", async () => {
+    // Everything the older checks look at is fine here. A gate reading only `schema` and
+    // `tables` would call this green, which is the shape ADR-0016 is about.
+    const { origin } = await serving({ status: 503, body: linkless });
+
+    const run = await probe({ PROBE_TARGET: "production", HEALTH_ORIGIN: origin });
+
+    expect(run.code).toBe(1);
+  });
+
+  it("names the variable and the redeploy, which is the whole fix", async () => {
+    const { origin } = await serving({ status: 503, body: linkless });
+
+    const run = await probe({ PROBE_TARGET: "production", HEALTH_ORIGIN: origin });
+
+    expect(run.output).toContain("APP_ORIGIN");
+    expect(run.output).toMatch(/redeploy/i);
+    // Not the catch-all, which would go red for the right reason with the wrong sentence
+    // and send the reader to read a JSON body instead of setting a variable.
+    expect(run.output).not.toMatch(/with status/);
+  });
+
+  it("says the reminders are what is broken, not the deployment", async () => {
+    const { origin } = await serving({ status: 503, body: linkless });
+
+    const run = await probe({ PROBE_TARGET: "production", HEALTH_ORIGIN: origin });
+
+    expect(run.summary).toMatch(/link into the app/i);
+    // Emphatically not the Supabase sentence: this deployment's credentials are fine, and
+    // sending somebody to the Supabase dashboard for it wastes the one thing a named
+    // fault buys.
+    expect(run.output).not.toMatch(/Supabase credentials/i);
+  });
+
+  it("reports it as unconfigured rather than as unknown", async () => {
+    // `jq`'s `//` treats `false` as absent, exactly as it does for `tables.readable`. The
+    // trap has bitten in this file once already, so the second field to meet it is
+    // produced too rather than assumed to have learned the lesson.
+    const { origin } = await serving({ status: 503, body: linkless });
+
+    const run = await probe({ PROBE_TARGET: "production", HEALTH_ORIGIN: origin });
+
+    expect(run.output).not.toMatch(/unknown/i);
+  });
+
+  it("stays quiet about it when the schema is the bigger fault", async () => {
+    // Both wrong at once. The schema is the worse morning and is what the reader should
+    // be sent to; the origin is still reported in the body and goes red on the next probe
+    // once the migrations land.
+    const { origin } = await serving({
+      status: 503,
+      body: {
+        ...linkless,
+        status: "degraded",
+        schema: { expected: "20260901120000", applied: "20260825010000", behind: 2 },
+      },
+    });
+
+    const run = await probe({ PROBE_TARGET: "production", HEALTH_ORIGIN: origin });
+
+    expect(run.code).toBe(1);
+    expect(run.output).toContain("supabase db push");
+    expect(run.summary).not.toMatch(/APP_ORIGIN/);
+  });
+
+  it("passes a deployment that does know its URL", async () => {
+    // The other half of a check that can fail: it has to be able to pass, and on the
+    // shape production actually answers with.
+    const { origin } = await serving({ status: 200, body: healthy });
+
+    const run = await probe({ PROBE_TARGET: "production", HEALTH_ORIGIN: origin });
+
+    expect(run.code).toBe(0);
   });
 });

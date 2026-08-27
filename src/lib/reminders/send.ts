@@ -1,5 +1,6 @@
 import "server-only";
 
+import { appLinks } from "@/lib/app-links";
 import { daysBetween, todayIn } from "@/lib/calendar-date";
 import { digestFor } from "@/lib/digest/digest";
 import { tenderOutcome, type ItemOutcome } from "@/lib/tenders/outcome";
@@ -439,6 +440,9 @@ function tenderMessage(
       // Deduped: an Owner who is also the only Assignee owing a Quote would otherwise be
       // @-ed twice in one message for two different reasons.
       mentions: [...new Set(mentions)],
+      // The Tender, which is the only destination the collapsing above leaves: one
+      // message covers every milestone this Tender owes and every day the run missed.
+      link: appLinks().tender(tender.id),
     }),
     liveIds: live.map((row) => row.id),
     notifications,

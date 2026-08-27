@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { signIn } from "@/lib/auth/session";
 import { respondingRates } from "@/lib/fx/rate-stub";
@@ -454,5 +454,61 @@ describe("what a failed post costs the person recording the Outcome", () => {
       .single();
 
     expect(data?.outcome).toBe("won");
+  });
+});
+
+/**
+ * The way into the app (#59).
+ *
+ * Both outcome messages point at the **Item**, not the Tender it belongs to. That is the
+ * distinction worth a test: the Tender's screen would look plausible, would resolve, and
+ * would drop the reader one level above the Quotes the message is about — including
+ * their own, which is the entire subject of "your quote was not selected".
+ */
+describe("where the outcome news sends people", () => {
+  const origin = "https://tenders.example.test";
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("points both messages at the Item's sourcing screen", async () => {
+    const tender = await aTender([nok, anong]);
+    const winning = await quoteOn(tender.itemId, nok, "Ace Medical");
+
+    await quoteOn(tender.itemId, anong, "Siam Surgical");
+    await selectQuote(
+      { tenderItemId: tender.itemId, quoteId: winning },
+      await signedInAs(owner),
+    );
+
+    vi.stubEnv("APP_ORIGIN", origin);
+
+    const robot = recordingRobot();
+
+    await decide(tender.itemId, "won", robot);
+
+    const link = `${origin}/tenders/${tender.id}/items/${tender.itemId}/quote`;
+
+    // Both audiences, both told where. The one whose Quote we bid and the one whose we
+    // did not are being told different things about the same Item.
+    expect(addressedTo(robot, nok)).toContain(link);
+    expect(addressedTo(robot, anong)).toContain(link);
+    expect(addressedTo(robot, nok)?.split("\n").at(-1)).toBe(link);
+  });
+
+  it("still tells everybody, linkless, when nobody configured an origin", async () => {
+    const tender = await aTender([nok]);
+
+    await quoteOn(tender.itemId, nok, "Ace Medical");
+
+    vi.stubEnv("APP_ORIGIN", "");
+
+    const robot = recordingRobot();
+
+    await decide(tender.itemId, "lost", robot);
+
+    expect(addressedTo(robot, nok)).toContain("详情请进入系统查看。");
+    expect(addressedTo(robot, nok)).not.toContain("http");
   });
 });

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { appOrigin, type AppOrigin } from "@/lib/app-links";
 import { InvalidRunInstantError, runInstantFrom } from "@/lib/run-instant";
 import { expectedMigrations } from "@/lib/schema/expected-migrations";
 import { createServiceClient } from "@/lib/supabase/service-client";
@@ -15,8 +16,8 @@ export const dynamic = "force-dynamic";
  * `health_check()` is defined in the first migration and needs no table privilege — it
  * asks "did migration #1 land", which is `true` for every possible state of the rest.
  *
- * Five faults, five fixes, kept apart on purpose. Collapsing any two sends somebody to
- * the wrong place, so read the body rather than the status code — four of these are
+ * Six faults, six fixes, kept apart on purpose. Collapsing any two sends somebody to
+ * the wrong place, so read the body rather than the status code — five of these are
  * `503` and only the body tells them apart:
  *
  * | Answer | Fix |
@@ -26,6 +27,14 @@ export const dynamic = "force-dynamic";
  * | `schema.applied: null` | Reachable, and `health_probe()` is not there — no migration ever reached it. `supabase db push`. |
  * | `schema.behind > 0` | Reachable and partly migrated: `applied` names what it holds. `supabase db push`. |
  * | `tables.readable: false` | The schema is there and unreadable; check its grants. |
+ * | `no-app-origin` | Nobody set `APP_ORIGIN`, so group messages carry no link into the app. |
+ *
+ * **`no-app-origin` is deliberately not folded into `misconfigured`** (#59). "No Supabase
+ * credentials" and "nobody set the app's public URL" are different errands with different
+ * fixes, and the app is fully usable under the second — it is the *reminders* that arrive
+ * without a way in, and they are the product. It is reported here rather than by refusing
+ * to send, because a run suppressed over a missing config line would turn a formatting gap
+ * into the exact failure this app exists to prevent. See `@/lib/app-links.ts`.
  *
  * `health_check()` is deliberately *not* the reachability oracle any more, and this is
  * the subtlest half of #40. See docs/adr/0016-a-check-must-be-able-to-fail.md before
@@ -50,6 +59,12 @@ export async function GET(request: Request): Promise<Response> {
     throw error;
   }
 
+  // Environment only, and so unable to fail: read here so that every response below can
+  // carry it, including the ones where the database was never asked. Same reason as the
+  // expected-migrations read that follows — a probe that names a fact only when it is
+  // unhappy about it leaves the reader guessing on the healthy answer.
+  const origin = appOrigin();
+
   // Read before anything else can fail, so that "what did this build expect?" is
   // answerable in every response below — including the ones where the database never
   // got asked. A probe that only names the version when it is unhappy leaves the reader
@@ -64,6 +79,7 @@ export async function GET(request: Request): Promise<Response> {
         status: "misconfigured",
         error: error instanceof Error ? error.message : String(error),
         schema: unknownSchema("unknown"),
+        appOrigin: originReport(origin),
         checkedAt: checkedAt.toISOString(),
       },
       { status: 500 },
@@ -85,6 +101,7 @@ export async function GET(request: Request): Promise<Response> {
         status: "misconfigured",
         error: error instanceof Error ? error.message : String(error),
         schema: unknownSchema(newest),
+        appOrigin: originReport(origin),
         checkedAt: checkedAt.toISOString(),
       },
       { status: 500 },
@@ -105,6 +122,7 @@ export async function GET(request: Request): Promise<Response> {
         schema: probe.reachable
           ? { ...unknownSchema(newest), error: probe.error }
           : unknownSchema(newest),
+        appOrigin: originReport(origin),
         checkedAt: checkedAt.toISOString(),
       },
       { status: 503 },
@@ -116,15 +134,36 @@ export async function GET(request: Request): Promise<Response> {
   const applied = new Set(probe.applied);
   const behind = expected.filter((version) => !applied.has(version)).length;
 
+  // The database faults outrank the origin: an app that cannot read its own tables is a
+  // worse morning than one whose reminders arrive without a link, and the reader should
+  // be sent to the bigger thing first. Nothing is lost by the ordering — the origin fault
+  // does not go away, it surfaces on the next probe once the schema is level.
+  const schemaHealthy = behind === 0 && probe.tables.readable;
   const body = {
-    status: behind === 0 && probe.tables.readable ? "ok" : "degraded",
+    status: !schemaHealthy ? "degraded" : origin.error === null ? "ok" : "no-app-origin",
     database: "reachable",
     schema: { expected: newest, applied: newestOf(probe.applied), behind },
     tables: probe.tables,
+    appOrigin: originReport(origin),
     checkedAt: checkedAt.toISOString(),
   };
 
   return Response.json(body, { status: body.status === "ok" ? 200 : 503 });
+}
+
+/**
+ * What the response says about the app's own public URL.
+ *
+ * The origin is named on success rather than reported as a bare `true`, because the
+ * misconfiguration this is most likely to meet is not an unset variable — it is one set
+ * to the wrong thing, a preview URL or the Supabase one, which `configured: true` alone
+ * would report as healthy-looking. The value is the app's own public address and is
+ * public by construction; production's `/api/health` is deliberately unauthenticated.
+ */
+function originReport(origin: AppOrigin) {
+  return origin.error === null
+    ? { configured: true, origin: origin.origin }
+    : { configured: false, error: origin.error };
 }
 
 /** What the schema block says when the database could not be asked. */
