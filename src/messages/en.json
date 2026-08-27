@@ -36,6 +36,33 @@
       "no_session": "That invitation link has expired or has already been used. Ask your Org Admin for a new one."
     }
   },
+  "setup": {
+    "title": "Create the first Org Admin",
+    "description": "This app has no accounts yet. The account you create here is the one that can invite everyone else, and it can only be created once.",
+    "name": "Your name",
+    "email": "Email",
+    "password": "Password",
+    "confirmation": "Repeat password",
+    "secret": "Setup secret",
+    "secretHint": "The SETUP_SECRET configured on this deployment.",
+    "requirement": "At least 8 characters.",
+    "submit": "Create account",
+    "submitting": "Creating…",
+    "closed": {
+      "title": "Setup is already done",
+      "description": "This app already has an account, so the first Org Admin cannot be created again. Sign in, or ask your Org Admin to invite you.",
+      "signIn": "Go to the sign-in screen"
+    },
+    "error": {
+      "closed": "This app already has an account. Setup runs once and has already run.",
+      "wrong_secret": "That setup secret is not right.",
+      "no_org": "There is no organisation in the database. Apply the schema migrations first.",
+      "create_failed": "The account could not be created. Nothing was saved — check the server logs and try again.",
+      "incomplete": "Fill in every field, including the setup secret.",
+      "too_short": "Use at least 8 characters.",
+      "mismatch": "Those two passwords are not the same."
+    }
+  },
   "chooseLanguage": {
     "title": "Choose your language / 选择语言",
     "option": {

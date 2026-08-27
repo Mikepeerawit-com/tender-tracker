@@ -110,6 +110,22 @@ describe("the way in", () => {
       error_code: "signup_disabled",
     });
   });
+
+  it("mints an Org Admin in exactly one place", () => {
+    // ADR-0017's whole claim, and the one part of it no runtime test can reach: a test
+    // proves what the code it calls does, not that a *second* writer has appeared
+    // somewhere else. `/setup` earns the right to set this column by being unreachable
+    // twice — a secret, and a `users` table that is empty exactly once per database.
+    // Neither guard travels with the column. Anything else that learns to write it is
+    // promotion with no gate at all, and it would work perfectly in every environment a
+    // developer will try.
+    //
+    // Promoting a second admin stays an `update` from the Supabase dashboard (README §6),
+    // which is why this is a rule about the codebase rather than about the database.
+    expect(offendingFiles(/is_org_admin\s*:/)).toEqual([
+      join(sourceRoot, "lib", "auth", "setup.ts"),
+    ]);
+  });
 });
 
 describe("the group robot", () => {
