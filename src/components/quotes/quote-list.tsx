@@ -1,9 +1,13 @@
-import { getFormatter, getTranslations } from "next-intl/server";
+import { useFormatter, useTranslations } from "next-intl";
 
 import { QuotePhotoControls } from "@/components/quotes/quote-photos";
 import { calendarDate, calendarDateFormat } from "@/lib/calendar-date";
 import type { QuotePhoto } from "@/lib/images/quote-photos";
-import { reportingCurrency, type Quote } from "@/lib/quotes/quotes";
+// `reportingCurrency` from its own module, not the re-export on `@/lib/quotes/quotes`:
+// that module is `server-only`, and a value import from it is what made this component
+// unrenderable in a browser test. The type still comes from there — types are erased.
+import { reportingCurrency } from "@/lib/fx/currencies";
+import type { Quote } from "@/lib/quotes/quotes";
 
 /**
  * Every Quote already recorded against one Tender Item, on the screen where the next one
@@ -20,8 +24,12 @@ import { reportingCurrency, type Quote } from "@/lib/quotes/quotes";
  * **who sourced it**, which is never dropped, and the frozen rate the THB figure came
  * from. Two Assignees ringing the same supplier and getting different prices is expected,
  * and reading it as a duplicate is the mistake this column exists to prevent.
+ *
+ * Rendered on the server, and sync rather than `async` so that `screens.layout.test.tsx`
+ * can measure it at 390px: `useTranslations` and `useFormatter` work in a Server
+ * Component, and an `async` one is unreachable from a browser test (#56).
  */
-export async function QuoteList({
+export function QuoteList({
   tenderId,
   quotes,
   photos,
@@ -31,8 +39,8 @@ export async function QuoteList({
   /** Every Quote's photos, keyed by Quote — one query for the whole Item. */
   photos: Map<string, QuotePhoto[]>;
 }) {
-  const t = await getTranslations("quotes");
-  const format = await getFormatter();
+  const t = useTranslations("quotes");
+  const format = useFormatter();
 
   if (quotes.length === 0) {
     return <p className="text-muted-foreground text-sm">{t("none")}</p>;

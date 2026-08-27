@@ -1,15 +1,16 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getFormatter, getTranslations } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 
 import { WorkingSheet } from "@/components/comparison/working-sheet";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { OutcomePanel } from "@/components/tenders/outcome-panel";
+import { TenderFacts } from "@/components/tenders/tender-facts";
 import { ImageCountBadge } from "@/components/images/image-count-badge";
 import { Button } from "@/components/ui/button";
+import { ScreenHeader } from "@/components/ui/screen-header";
 import { currentUser } from "@/lib/auth/session";
-import { calendarDate, calendarDateFormat } from "@/lib/calendar-date";
 import { getComparisonSheet } from "@/lib/comparison/sheet";
 import { listReferenceImages } from "@/lib/images/reference-images";
 import { listMembers } from "@/lib/org/members";
@@ -40,9 +41,6 @@ export default async function TenderPage({ params }: PageProps<"/tenders/[id]">)
   if (!tender) notFound();
 
   const t = await getTranslations("tenders");
-  const format = await getFormatter();
-  const day = (value: string) =>
-    format.dateTime(calendarDate(value), calendarDateFormat);
   const members = await listMembers(store);
   // The org's timezone, because `submitted_at` and `outcome_at` are instants and the day
   // they land on is the day it was in Bangkok — never the day it was on a Vercel box.
@@ -60,51 +58,28 @@ export default async function TenderPage({ params }: PageProps<"/tenders/[id]">)
   return (
     <div className="flex flex-1 flex-col gap-8 p-6">
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-col gap-2">
-            <span className="text-muted-foreground font-mono text-xs">
-              {tender.reference}
-            </span>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {tender.clientName}
-            </h1>
-            <p className="text-muted-foreground text-sm">{tender.title}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" className="h-11" nativeButton={false} render={<Link href="/tenders" />}>
-              {t("backToList")}
-            </Button>
-            <Button
-              variant="outline"
-              className="h-11"
-              nativeButton={false} render={<Link href={`/tenders/${tender.id}/edit`} />}
-            >
-              {t("edit")}
-            </Button>
-          </div>
-        </header>
+        <ScreenHeader
+          eyebrow={tender.reference}
+          heading={tender.clientName}
+          actions={
+            <>
+              <Button variant="ghost" className="h-11" nativeButton={false} render={<Link href="/tenders" />}>
+                {t("backToList")}
+              </Button>
+              <Button
+                variant="outline"
+                className="h-11"
+                nativeButton={false} render={<Link href={`/tenders/${tender.id}/edit`} />}
+              >
+                {t("edit")}
+              </Button>
+            </>
+          }
+        >
+          <p className="text-muted-foreground text-sm break-words">{tender.title}</p>
+        </ScreenHeader>
 
-        <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Fact label={t("owner")} value={tender.ownerName} />
-          <Fact label={t("dateReceived")} value={day(tender.dateReceived)} />
-          <Fact
-            label={t("internalQuoteDeadline")}
-            value={day(tender.internalQuoteDeadline)}
-          />
-          <Fact
-            label={t("clientSubmissionDeadline")}
-            value={day(tender.clientSubmissionDeadline)}
-          />
-          <Fact
-            label={t("expectedDecisionDate")}
-            value={
-              tender.expectedDecisionDate
-                ? day(tender.expectedDecisionDate)
-                : t("notSet")
-            }
-          />
-          <Fact label={t("notes")} value={tender.notes ?? t("notSet")} />
-        </dl>
+        <TenderFacts tender={tender} />
 
         <WorkingSheet
           tenderId={tender.id}
@@ -145,11 +120,3 @@ export default async function TenderPage({ params }: PageProps<"/tenders/[id]">)
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <dt className="text-muted-foreground text-xs">{label}</dt>
-      <dd className="text-sm">{value}</dd>
-    </div>
-  );
-}

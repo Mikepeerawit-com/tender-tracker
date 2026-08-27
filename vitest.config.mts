@@ -4,6 +4,7 @@ import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
 
 import { migrationsOnDiskEnv } from "./src/lib/schema/migrations-on-disk.mts";
+import { phone } from "./src/test/phone.mts";
 
 /**
  * Two seams, told apart by the file extension.
@@ -32,11 +33,20 @@ import { migrationsOnDiskEnv } from "./src/lib/schema/migrations-on-disk.mts";
  * They need no database and no browser, so they are their own project rather than a
  * reason to start Supabase.
  *
- * **`.layout.test.tsx` — a real browser.** One thing lives here: ADR-0009's failure bar,
- * that the comparison working sheet never scrolls sideways at 390×844. jsdom has no
- * layout engine and reports every `scrollWidth` as `0`, so that assertion passes there on
- * a sheet overflowing by a mile. It runs in headless Chromium instead, which is why this
- * project alone needs `npx playwright install chromium`.
+ * **`.layout.test.tsx` — a real browser.** ADR-0009's failure bar, that nothing scrolls
+ * sideways at 390×844. jsdom has no layout engine and reports every `scrollWidth` as `0`,
+ * so those assertions pass there on a page overflowing by a mile. They run in headless
+ * Chromium instead, which is why this project alone needs
+ * `npx playwright install chromium`.
+ *
+ * It began as one file guarding the comparison sheet, and #56 was what that cost: the app
+ * shell's header overflowed on every screen for an org admin and no test could see it.
+ * Every screen is an `async` Server Component, most of them behind a layout that gates on
+ * `currentUser`, so none is reachable from a browser test. What is reachable is the sync
+ * presentational seam those pages hand their data to — `AppHeader`, `TenderRow` and
+ * `ScreenHeader`, the last of which is the header of all three screens hand-check 1 of
+ * #48 walked. That is why they are components rather than markup inlined in a page: a
+ * screen with no such seam cannot be measured here at all.
  */
 export default defineConfig({
   test: {
@@ -104,11 +114,9 @@ export default defineConfig({
             enabled: true,
             provider: playwright(),
             headless: true,
-            // 390x844 — an iPhone 14/15 in CSS pixels, which is the width ADR-0009's
-            // failure bar is stated at.
-            instances: [
-              { browser: "chromium", viewport: { width: 390, height: 844 } },
-            ],
+            // The width ADR-0009's failure bar is stated at, held in one place so the
+            // suites that name it in their titles cannot drift from what is measured.
+            instances: [{ browser: "chromium", viewport: phone }],
           },
         },
       },

@@ -9,6 +9,7 @@ import { QuoteForm } from "@/components/quotes/quote-form";
 import { QuoteList } from "@/components/quotes/quote-list";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { Button } from "@/components/ui/button";
+import { ScreenHeader } from "@/components/ui/screen-header";
 import { currentUser } from "@/lib/auth/session";
 import { calendarDate, calendarDateFormat, todayIn } from "@/lib/calendar-date";
 import { listQuotePhotosByQuote } from "@/lib/images/quote-photos";
@@ -83,34 +84,10 @@ export default async function ItemSourcingPage({
   return (
     <div className="flex flex-1 flex-col gap-8 p-6">
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-col gap-2">
-            <span className="text-muted-foreground font-mono text-xs">
-              {tender.reference} · {tender.clientName}
-            </span>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {item.productName}
-            </h1>
-            <p className="text-muted-foreground text-sm">
-              {tenders("item.quantified", {
-                quantity: item.quantity,
-                unit: item.unit,
-              })}
-            </p>
-            {item.description ? (
-              <p className="text-muted-foreground text-sm">{item.description}</p>
-            ) : null}
-            <p className="text-muted-foreground text-xs">
-              {tenders("internalQuoteDue", {
-                date: format.dateTime(
-                  calendarDate(tender.internalQuoteDeadline),
-                  calendarDateFormat,
-                ),
-              })}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
+        <ScreenHeader
+          eyebrow={`${tender.reference} · ${tender.clientName}`}
+          heading={item.productName}
+          actions={
             <Button
               variant="outline"
               className="h-11"
@@ -119,8 +96,26 @@ export default async function ItemSourcingPage({
             >
               {t("backToTender")}
             </Button>
-          </div>
-        </header>
+          }
+        >
+          <p className="text-muted-foreground text-sm break-words">
+            {tenders("item.quantified", {
+              quantity: item.quantity,
+              unit: item.unit,
+            })}
+          </p>
+          {item.description ? (
+            <p className="text-muted-foreground text-sm break-words">{item.description}</p>
+          ) : null}
+          <p className="text-muted-foreground text-xs break-words">
+            {tenders("internalQuoteDue", {
+              date: format.dateTime(
+                calendarDate(tender.internalQuoteDeadline),
+                calendarDateFormat,
+              ),
+            })}
+          </p>
+        </ScreenHeader>
 
         {referenceImages.length > 0 ? (
           <section className="flex flex-col items-start gap-2">

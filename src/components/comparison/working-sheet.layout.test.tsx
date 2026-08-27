@@ -10,13 +10,19 @@ import type { QuotePhoto } from "@/lib/images/quote-photos";
 import type { ReferenceImage } from "@/lib/images/reference-images";
 import type { Quote } from "@/lib/quotes/quotes";
 import messages from "@/messages/en.json";
+import { expectNoSidewaysScroll, phone } from "@/test/layout";
 
 import { WorkingSheet } from "./working-sheet";
 
 /**
- * **The project's one automated UI assertion**, and the only test in the repo that needs
- * a real browser: at 390×844, on eight competing Quotes, the comparison working sheet
- * never scrolls sideways.
+ * At 390×844, on eight competing Quotes, the comparison working sheet never scrolls
+ * sideways.
+ *
+ * This was for a long time the project's *only* automated UI assertion, and #56 was the
+ * bill for that: a hand-check found the tender list, a Tender and this sheet all wider
+ * than the phone, because the app shell above them had never been measured by anything.
+ * The `layout` project now guards `app-header`, `tender-row` and `screen-header` too, and
+ * `overflowing` moved to `@/test/layout` so it can be pointed at any of them.
  *
  * ADR-0009 states the failure bar in exactly those terms — *"a table that works by
  * scrolling sideways is a failure, not a pass"* — and it is the one outcome the design
@@ -49,8 +55,6 @@ vi.mock("@/app/actions/comparison", () => ({
   setSellingPriceAction: async () => ({}),
 }));
 
-const phone = { width: 390, height: 844 };
-
 describe(`the working sheet at ${phone.width}×${phone.height}`, () => {
   it("never scrolls sideways, anywhere on the page", () => {
     const { container } = renderSheet();
@@ -61,10 +65,7 @@ describe(`the working sheet at ${phone.width}×${phone.height}`, () => {
 
     // And "anywhere", which is the half a single element's measurement would miss: one
     // cell wider than its column overflows the page just as surely as the table does.
-    expect(overflowing(document.body)).toEqual([]);
-    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
-      document.documentElement.clientWidth,
-    );
+    expectNoSidewaysScroll();
   });
 
   it("reflows the quote list into cards rather than keeping a table", () => {
@@ -92,10 +93,7 @@ describe(`the working sheet at ${phone.width}×${phone.height}`, () => {
       expect(getComputedStyle(container.querySelector("thead")!).display).toBe(
         "table-header-group",
       );
-      expect(overflowing(document.body)).toEqual([]);
-      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
-        document.documentElement.clientWidth,
-      );
+      expectNoSidewaysScroll();
     } finally {
       // Put the phone back, so a width set here is not what the next test measures.
       await page.viewport(phone.width, phone.height);
@@ -122,33 +120,6 @@ function renderSheet() {
   );
 }
 
-/**
- * Every element whose own content is wider than the box drawn for it.
- *
- * Two things are excluded, and only two. `.sr-only` *is* a one-pixel box with its content
- * clipped out of it, so overflowing is how it works rather than a way it has failed. And
- * a form control scrolls its own value by design — a price longer than its field is a
- * text box doing its job, not a page pushed sideways, and how wide the value measures
- * depends on the font that happened to load. Neither can push the page out: an element
- * too wide for its parent is caught on the parent, and the page itself is measured
- * separately by the caller.
- */
-function overflowing(root: HTMLElement): string[] {
-  return [...root.querySelectorAll<HTMLElement>("*")]
-    .filter((element) => element.closest(".sr-only") === null)
-    .filter((element) => !["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName))
-    .filter((element) => element.scrollWidth > element.clientWidth)
-    .map(describeElement);
-}
-
-/** Enough of an element to find it in the markup from a failure message. */
-function describeElement(element: Element): string {
-  const text = (element.textContent ?? "").trim().slice(0, 40);
-
-  // `getAttribute`, not `className`: on an SVG — and lucide's chevrons are in this tree —
-  // `className` is an `SVGAnimatedString` and stringifies to nothing anybody can search for.
-  return `${element.tagName.toLowerCase()}.${element.getAttribute("class")} — "${text}"`;
-}
 
 /* =======================================================================
    Ticket 09's dataset, at the shape the sheet reads it in.
@@ -205,7 +176,7 @@ function quote({
     matchType: alternativeProductName === null ? "exact" : "alternative",
     alternativeProductName,
     detailNotes: null,
-    quotedAt: "2026-08-12T03:00:00.000Z",
+    quotedAt: "2026-08-12",
     sourcedByUserId: `user-${sourcedByName}`,
     sourcedByName,
   };
