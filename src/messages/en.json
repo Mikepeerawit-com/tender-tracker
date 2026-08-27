@@ -6,7 +6,11 @@
   "localeSwitcher": {
     "label": "Language",
     "en": "English",
-    "zh-Hans": "简体中文"
+    "zh-Hans": "简体中文",
+    "short": {
+      "en": "EN",
+      "zh-Hans": "中文"
+    }
   },
   "login": {
     "title": "Sign in",
@@ -74,7 +78,8 @@
     "signOut": "Sign out",
     "people": "People",
     "tenders": "Tenders",
-    "groupRobot": "Group Robot"
+    "groupRobot": "Group Robot",
+    "menu": "Menu"
   },
   "images": {
     "viewing": "{position} of {total}",

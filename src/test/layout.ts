@@ -29,22 +29,50 @@ export function expectNoSidewaysScroll(): void {
 }
 
 /**
+ * How many rows a bar laid its controls out on.
+ *
+ * Every link and button inside `root`, grouped by the top edge they were drawn at: one
+ * distinct top edge means one row. This is the half `expectNoSidewaysScroll` cannot see —
+ * a header allowed to wrap never overflows, it just gets taller, and #56's first fix did
+ * exactly that and cost three rows on a phone. Measuring the outcome rather than the
+ * `flex-wrap` property keeps the assertion about what a reader sees.
+ */
+export function controlRows(root: HTMLElement): number {
+  const tops = [...root.querySelectorAll<HTMLElement>("a, button")].map(
+    (control) => control.offsetTop,
+  );
+
+  return new Set(tops).size;
+}
+
+/**
  * Every element whose own content is wider than the box drawn for it.
  *
- * Two things are excluded, and only two. `.sr-only` *is* a one-pixel box with its content
- * clipped out of it, so overflowing is how it works rather than a way it has failed. And
- * a form control scrolls its own value by design — a price longer than its field is a
- * text box doing its job, not a page pushed sideways, and how wide the value measures
- * depends on the font that happened to load. Neither can push the page out: an element
- * too wide for its parent is caught on the parent, and the page itself is measured
- * separately by {@link expectNoSidewaysScroll}.
+ * Three things are excluded, and only three. `.sr-only` *is* a one-pixel box with its
+ * content clipped out of it, so overflowing is how it works rather than a way it has
+ * failed. A form control scrolls its own value by design — a price longer than its field
+ * is a text box doing its job, not a page pushed sideways, and how wide the value
+ * measures depends on the font that happened to load. And an element clipping on its own
+ * x-axis is doing the same: `truncate` is `overflow: hidden` plus an ellipsis, so a
+ * truncating element *always* measures wider than its box — that is the mechanism, not a
+ * fault. The app bar's member name is one, deliberately (#56).
+ *
+ * What unites all three is that none can widen the page: an element too wide for its
+ * parent is caught on the parent, one that clips has already given up the excess, and the
+ * page itself is measured separately by {@link expectNoSidewaysScroll}.
  */
 export function overflowing(root: HTMLElement): string[] {
   return [...root.querySelectorAll<HTMLElement>("*")]
     .filter((element) => element.closest(".sr-only") === null)
     .filter((element) => !["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName))
+    .filter((element) => !clipsHorizontally(element))
     .filter((element) => element.scrollWidth > element.clientWidth)
     .map(describeElement);
+}
+
+/** Whether the element hides its own horizontal overflow rather than passing it on. */
+function clipsHorizontally(element: HTMLElement): boolean {
+  return ["hidden", "clip"].includes(getComputedStyle(element).overflowX);
 }
 
 /** Enough of an element to find it in the markup from a failure message. */

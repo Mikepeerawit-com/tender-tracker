@@ -1,6 +1,6 @@
 import { render } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import { describe, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import "@/app/globals.css";
 
@@ -19,7 +19,7 @@ import type { Tender } from "@/lib/tenders/tenders";
 import type { WorklistRow } from "@/lib/tenders/worklist";
 import en from "@/messages/en.json";
 import zhHans from "@/messages/zh-Hans.json";
-import { expectNoSidewaysScroll, phone } from "@/test/layout";
+import { controlRows, expectNoSidewaysScroll, phone } from "@/test/layout";
 
 /**
  * **Whole screens, header and body together** — the shape hand-check 1 of #48 actually
@@ -163,6 +163,9 @@ describe(`a whole screen at ${phone.width}×${phone.height}`, () => {
     );
 
     expectNoSidewaysScroll();
+
+    // The bar stays one row on every screen, not just when measured on its own.
+    expect(controlRows(document.querySelector("header")!)).toBe(1);
   });
 });
 

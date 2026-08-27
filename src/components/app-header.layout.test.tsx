@@ -1,6 +1,6 @@
 import { render } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import { describe, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import "@/app/globals.css";
 
@@ -8,7 +8,7 @@ import en from "@/messages/en.json";
 import zhHans from "@/messages/zh-Hans.json";
 
 import { AppHeader } from "./app-header";
-import { expectNoSidewaysScroll, phone } from "@/test/layout";
+import { controlRows, expectNoSidewaysScroll, phone } from "@/test/layout";
 
 /**
  * The bar that is on every screen, at the width #56 was reported at.
@@ -61,5 +61,10 @@ describe(`the app header at ${phone.width}×${phone.height}`, () => {
     );
 
     expectNoSidewaysScroll();
+
+    // And the half the overflow check cannot see. A bar allowed to wrap never overflows,
+    // it just gets taller: the first fix for #56 did that and spent three of the phone's
+    // rows on navigation, which is what this pins shut.
+    expect(controlRows(document.querySelector("header")!)).toBe(1);
   });
 });

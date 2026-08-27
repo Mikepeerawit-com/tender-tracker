@@ -1,9 +1,9 @@
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
-import { signOutAction } from "@/app/actions/auth";
+import { AppMenu } from "@/components/app-menu";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Button } from "@/components/ui/button";
-import { useTranslations } from "next-intl";
 
 /**
  * The bar across the top of everything behind the login.
@@ -22,23 +22,18 @@ import { useTranslations } from "next-intl";
  * is for components that know about Tenders, and this is app chrome that knows about
  * neither — it knows about the nav and the session.
  *
- * **Why the bar wraps.** An org admin's is six buttons wide — Tenders, People, Group
- * Robot, the two locales and Sign out — and `Button` is `shrink-0 whitespace-nowrap`, so
- * not one of them gives up a pixel. On a 390px phone that is far more than the row has,
- * and because this bar is on every screen it pushed *every* screen sideways: hand-check 1
- * of #48 reported the tender list, a Tender and the comparison sheet all too wide, which
- * is one cause on the thing all three share rather than three faults (#56). Wrapping is
- * the fix rather than shrinking, because the buttons are tap targets and the 44px floor
- * is not negotiable for them.
+ * **One row, at every width.** #56 found six buttons here on a 390px phone with nothing
+ * able to wrap — `Button` is `shrink-0 whitespace-nowrap`, so not one of them gives up a
+ * pixel — and the bar pushed every screen sideways. Letting it wrap fixed the overflow
+ * and cost three rows on a phone, which is most of a small screen spent on navigation.
+ * So the bar does not wrap: what stays on it is the tender list and the language, and
+ * everything rarer is behind {@link AppMenu}.
  *
- * **The `flex-wrap` that does the work is the right-hand group's**, and it is worth being
- * exact about that, because three other things here look like the fix and are not. Taking
- * `flex-wrap` off that group alone fails `app-header.layout.test.tsx`; taking it off the
- * outer bar, or `min-w-0` off the left group or off the name, currently fails nothing —
- * the right group's wrap already keeps the bar inside the viewport. Those three are kept
- * as defence for inputs the fixtures do not have, chiefly a member enrolled under a very
- * long name with no space in it, but nothing measures them today. If one of them ever
- * looks redundant enough to delete, that is the honest reason it can be.
+ * The name is the one part that can be any width, because a member is enrolled under
+ * whatever name they gave. `min-w-0` with `truncate` lets it give up space to the
+ * controls either side of it rather than push them off the row — it is the only thing
+ * here that may be shortened, since a clipped name is still recognisable and half a
+ * button is not.
  */
 export function AppHeader({
   name,
@@ -50,30 +45,22 @@ export function AppHeader({
   const t = useTranslations("nav");
 
   return (
-    <header className="border-border flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b px-4 py-3">
-      <div className="flex min-w-0 flex-wrap items-center gap-3">
-        <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/tenders" />}>
+    <header className="border-border flex items-center justify-between gap-2 border-b px-4 py-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-11"
+          nativeButton={false}
+          render={<Link href="/tenders" />}
+        >
           {t("tenders")}
         </Button>
-        <span className="text-muted-foreground min-w-0 text-sm break-words">{name}</span>
+        <span className="text-muted-foreground min-w-0 truncate text-sm">{name}</span>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        {isOrgAdmin ? (
-          <>
-            <Button variant="ghost" size="sm" nativeButton={false} render={<a href="/admin/people" />}>
-              {t("people")}
-            </Button>
-            <Button variant="ghost" size="sm" nativeButton={false} render={<a href="/admin/group-robot" />}>
-              {t("groupRobot")}
-            </Button>
-          </>
-        ) : null}
-        <LocaleSwitcher />
-        <form action={signOutAction}>
-          <Button type="submit" variant="ghost" size="sm">
-            {t("signOut")}
-          </Button>
-        </form>
+      <div className="flex shrink-0 items-center gap-1">
+        <LocaleSwitcher compact />
+        <AppMenu isOrgAdmin={isOrgAdmin} />
       </div>
     </header>
   );
