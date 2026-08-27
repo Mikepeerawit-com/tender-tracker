@@ -1,5 +1,6 @@
 import "server-only";
 
+import { appLinks } from "@/lib/app-links";
 import { daysBetween } from "@/lib/calendar-date";
 import type { ReminderMilestone } from "@/lib/reminders/schedule";
 import { createServiceClient } from "@/lib/supabase/service-client";
@@ -195,7 +196,12 @@ export async function digestFor(
 
   const lines = digestLines((data ?? []).map(fromRow), today);
 
-  return lines.length === 0 ? null : digestMessage({ tenders: lines });
+  // One link, to the list — the Digest is the one message that is not about a single
+  // Tender, and the Tenders list is what it is a listing of. Null when the deployment was
+  // never told its origin, which costs the link and never the Digest.
+  const link = appLinks().tenders();
+
+  return lines.length === 0 ? null : digestMessage({ tenders: lines, link });
 }
 
 function fromRow(row: TenderRow): DigestTender {

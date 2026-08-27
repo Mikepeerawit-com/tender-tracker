@@ -46,8 +46,12 @@ type HealthBody = {
     error?: string;
   };
   tables?: { probed: string; readable: boolean; error?: string };
+  appOrigin?: { configured: boolean; origin?: string; error?: string };
   checkedAt: string;
 };
+
+/** A usable `APP_ORIGIN`, so the healthy answer below really is the healthy answer. */
+const configuredOrigin = "https://tenders.example.test";
 
 function healthRequest(headers: Record<string, string> = {}): Request {
   return new Request("http://localhost/api/health", { headers });
@@ -214,6 +218,10 @@ describe("GET /api/health", () => {
 
   beforeEach(() => {
     vi.stubEnv("ALLOW_RUN_INSTANT_HEADER", "true");
+    // Set for every test, because an unset one is now a fault in its own right and every
+    // assertion of `ok` below would otherwise be asserting the wrong thing. The tests
+    // that care about it unset it themselves.
+    vi.stubEnv("APP_ORIGIN", configuredOrigin);
   });
 
   afterEach(() => {
@@ -376,5 +384,36 @@ describe("GET /api/health", () => {
       expect(body.schema).toEqual({ expected: newest, applied: newest, behind: 0 });
       expect(body.database).toBe("reachable");
     });
+  });
+});
+
+/**
+ * The app not knowing its own public URL (#59), where the schema is *also* behind.
+ *
+ * The rest of that fault needs nothing taken away from Postgres and lives in
+ * `route.test.ts`; this one case withholds a migration, so it belongs to the exclusive
+ * seam and only it is here.
+ */
+describe("GET /api/health, with no APP_ORIGIN and a schema behind the build", () => {
+  beforeAll(() => withSuperuser(restoreWithheld));
+
+  beforeEach(() => {
+    vi.stubEnv("ALLOW_RUN_INSTANT_HEADER", "true");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("names the schema as the fault and still reports the origin, so nothing hides behind a redeploy", async () => {
+    // The database fault outranks it in `status`, and must not swallow it: a deployment
+    // fixed for the schema and still linkless has to go red again on the next probe
+    // rather than come back green. That is only true if the origin is in every answer.
+    vi.stubEnv("APP_ORIGIN", "");
+
+    const { body } = await withMigrationWithheld(newest, () => health());
+
+    expect(body.status).toBe("degraded");
+    expect(body.appOrigin).toMatchObject({ configured: false });
   });
 });

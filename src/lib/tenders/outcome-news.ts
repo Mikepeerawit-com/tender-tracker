@@ -1,5 +1,6 @@
 import "server-only";
 
+import { appLinks } from "@/lib/app-links";
 import { createServiceClient } from "@/lib/supabase/service-client";
 import { webhookFor } from "@/lib/wecom/group-robot";
 import {
@@ -118,6 +119,10 @@ export async function announceOutcome(
     selectedBy,
     quoterIds,
     people,
+    // The Item, not the Tender: this news is about one Item, and the Item's sourcing
+    // screen is where its Quotes live — including the reader's own, which is what
+    // "your quote was not selected" is sending them to go and look at.
+    link: appLinks().tenderItem(item.tender_id, item.id),
   });
 
   // Written whatever the send does, and **this is where it differs from the reminder
@@ -167,6 +172,7 @@ function outcomeMessages({
   selectedBy,
   quoterIds,
   people,
+  link,
 }: {
   reference: string;
   client: string;
@@ -175,8 +181,10 @@ function outcomeMessages({
   selectedBy: string | null;
   quoterIds: string[];
   people: Map<string, Recipient>;
+  link: string | null;
 }): GroupMessage[] {
-  const head = { reference, client, item, outcome };
+  // Both messages are about the same Item, so both point at the same screen.
+  const head = { reference, client, item, outcome, link };
   const others = quoterIds.filter((userId) => userId !== selectedBy);
   const messages: GroupMessage[] = [];
 

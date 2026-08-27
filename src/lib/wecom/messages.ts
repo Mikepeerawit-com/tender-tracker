@@ -24,11 +24,26 @@ import type { GroupMessage } from "./robot";
  * mention is there to drive people to. `messages.test.ts` enforces this by calling every
  * builder below with a fixture full of exactly those fields.
  *
+ * A link into the app is **not** a loosening of that rule, and is the thing the rule
+ * always assumed (#59). A URL of ids discloses nothing the message around it does not
+ * already say — it names the same Tender or Item — and anyone tapping it meets login and
+ * then RLS. ADR-0012 put it plainly: *the mention is a pointer, not a report*, and its job
+ * is to drive somebody into the app, where the financial detail lives behind the access
+ * rules that actually bind. Until #59 the pointer pointed nowhere. See
+ * `@/lib/app-links.ts` for what a link may carry and why a missing origin is quiet.
+ *
  * ## Convention
  *
  * **Every builder takes a single object argument and returns a {@link GroupMessage}.**
  * That is what lets the financial-silence test call all of them, including ones added
  * after it was written.
+ *
+ * Every builder whose message tells the reader to go and look also takes a
+ * `link: string | null` — required, and never read from the environment here. These are
+ * pure text functions, and `link` is required rather than optional so that a message
+ * added later cannot repeat the defect #59 was filed for: telling somebody to go
+ * somewhere without saying where. `null` is a decision ("this one points nowhere"), not
+ * a default.
  */
 
 /**
@@ -114,6 +129,12 @@ export type DueMilestone = {
  * The milestone's own date is named, not the day the nudge fell due. A caught-up reminder
  * is posted late by definition, and "due 25 Aug" is the fact worth reading; which offset
  * row produced it is this app's bookkeeping.
+ *
+ * `link` points at **the Tender**, which is the one honest destination it has: the
+ * collapsing above means one message covers every milestone and every missed day for one
+ * Tender, so there is exactly one thing it is about. `submission_missed` is no exception —
+ * it is the loudest thing this app says, and it is loud in its wording, not in where it
+ * sends people.
  */
 export function reminderMessage({
   reference,
@@ -121,12 +142,14 @@ export function reminderMessage({
   title,
   milestones,
   mentions,
+  link,
 }: {
   reference: string;
   client: string;
   title: string;
   milestones: DueMilestone[];
   mentions: string[];
+  link: string | null;
 }): GroupMessage {
   return {
     content: [
@@ -135,6 +158,7 @@ export function reminderMessage({
         milestoneLines[milestone](date, daysLeft),
       ),
       "请进入系统跟进。",
+      ...linkLine(link),
     ].join("\n"),
     // The `@` is not written into the text — WeCom renders it from `mentioned_list`, and
     // writing it by hand would show each name twice.
@@ -144,6 +168,24 @@ export function reminderMessage({
 
 function remaining(daysLeft: number): string {
   return daysLeft === 0 ? "(就是今天)" : `(还剩 ${daysLeft} 天)`;
+}
+
+/**
+ * The URL as its own last line, or nothing at all.
+ *
+ * **Alone on the line, with no punctuation after it.** WeCom autolinks a bare URL in a
+ * `text` message, and `text` is the only type it lets carry a mention — so every message
+ * here is one, and markdown is not available to route around a rendering problem
+ * (ADR-0012; switching a message to markdown is an amendment to that ADR, decided
+ * outside a pull request). A URL wrapped in a sentence takes the trailing 。into the
+ * href, and the reader gets a 404 from a message nobody can edit.
+ *
+ * Nothing rather than a placeholder when there is no link: the message is then exactly
+ * the one this app sent before #59, down to the last character, which is what lets a
+ * deployment with no configured origin go on reminding people. See `@/lib/app-links.ts`.
+ */
+function linkLine(link: string | null): string[] {
+  return link === null ? [] : [link];
 }
 
 /**
@@ -209,9 +251,22 @@ const digestBudget = 1_800;
  * long list arrives short and says so, instead of being refused whole and arriving not
  * at all. The count in the header is always the true one.
  */
-export function digestMessage({ tenders }: { tenders: DigestLine[] }): GroupMessage {
+export function digestMessage({
+  tenders,
+  link,
+}: {
+  tenders: DigestLine[];
+  link: string | null;
+}): GroupMessage {
   const head = `【招标跟踪】今日概览:共 ${tenders.length} 个进行中的招标`;
-  const foot = "详情请进入系统查看。";
+  // **One link, in the footer, and never one per line.** A Tender's line is roughly 60-90
+  // bytes and a URL is another 60-70, so per-line links would very nearly halve how many
+  // Tenders fit before the truncation below — the cost of making each line tappable would
+  // be paid in Tenders that stop being listed at all, which is the wrong trade for a
+  // message whose whole job is the listing. It also needs no new arithmetic: the footer
+  // is charged against the budget up front, before any line is added, so a longer one is
+  // handled by the accounting that is already here.
+  const foot = ["详情请进入系统查看。", ...linkLine(link)].join("\n");
   const omission = (count: number) => `其余 ${count} 个未列出。`;
 
   // Reserved up front at its longest, so the line that says what was dropped can never
@@ -289,6 +344,10 @@ function outcomeHead(
  * Both endings are worth saying to this person. A `lost` here is not their failure — the
  * client chose elsewhere — but they are the one who will be asked why, and finding out
  * from the group beats finding out in a meeting.
+ *
+ * `link` points at **the Tender Item**, not the Tender: this message is about one Item,
+ * and the Item's sourcing screen is where that Item's Quotes live — including the
+ * reader's own, which is the thing they are being sent to look at.
  */
 export function selectedQuoteOutcomeMessage({
   reference,
@@ -296,12 +355,14 @@ export function selectedQuoteOutcomeMessage({
   item,
   outcome,
   mentions,
+  link,
 }: {
   reference: string;
   client: string;
   item: string;
   outcome: AnnouncedOutcome;
   mentions: string[];
+  link: string | null;
 }): GroupMessage {
   return {
     content: [
@@ -310,6 +371,7 @@ export function selectedQuoteOutcomeMessage({
         ? "你的报价被选用,并且中标了。"
         : "本次投标采用的是你的报价,客户最终选择了其他供应商。",
       "详情请进入系统查看。",
+      ...linkLine(link),
     ].join("\n"),
     mentions,
   };
@@ -329,6 +391,10 @@ export function selectedQuoteOutcomeMessage({
  * ADR-0012 permits, in the same breath as forbidding the supplier's own name. It is null
  * when the Item was decided with no Quote ever selected, and the attribution is then
  * dropped rather than guessed at.
+ *
+ * `link` points at **the Tender Item**, for the same reason as above and rather more
+ * pointedly: "your quote was not selected" is a sentence whose only useful answer is to
+ * go and see what was.
  */
 export function otherQuotesOutcomeMessage({
   reference,
@@ -337,6 +403,7 @@ export function otherQuotesOutcomeMessage({
   outcome,
   selectedBy,
   mentions,
+  link,
 }: {
   reference: string;
   client: string;
@@ -344,6 +411,7 @@ export function otherQuotesOutcomeMessage({
   outcome: AnnouncedOutcome;
   selectedBy: string | null;
   mentions: string[];
+  link: string | null;
 }): GroupMessage {
   return {
     content: [
@@ -352,6 +420,7 @@ export function otherQuotesOutcomeMessage({
         ? "本次投标未记录选用的报价。"
         : `本次投标采用的是 ${selectedBy} 的报价。`,
       "你的报价未被选用。详情请进入系统查看。",
+      ...linkLine(link),
     ].join("\n"),
     mentions,
   };

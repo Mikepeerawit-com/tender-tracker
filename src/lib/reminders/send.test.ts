@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { signIn } from "@/lib/auth/session";
 import { respondingLatestRates, respondingRates, unreachableRates } from "@/lib/fx/rate-stub";
@@ -1316,5 +1316,103 @@ describe("the daily Digest", () => {
 
     expect(digestOf(robot, digestClient)).not.toContain(client);
     expect(digestOf(robot)).not.toContain(digestClient);
+  });
+});
+
+/**
+ * The way into the app (#59).
+ *
+ * The wording of these messages already told the reader to go and follow up. What is
+ * asserted here is the half that was missing: *where*, and that it is the right where —
+ * the builders in `@/lib/wecom/messages.ts` cover the shape of the line, and this covers
+ * the id that reaches it. A reminder pointing at somebody else's Tender would satisfy
+ * every test in that file.
+ */
+describe("where a reminder and the Digest send people", () => {
+  const origin = "https://tenders.example.test";
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("points a reminder at the Tender it is about", async () => {
+    const tender = await aTender({
+      internalQuoteDeadline: "2026-08-11",
+      clientSubmissionDeadline: "2026-08-13",
+    });
+    const reference = await referenceOf(tender.id);
+
+    vi.stubEnv("APP_ORIGIN", origin);
+
+    const robot = recordingRobot();
+
+    await sendDailyPosts(runInstant, robot);
+
+    const content = reminderFor(robot, reference);
+
+    // This Tender's id, not merely some URL: one message per Tender per run means the
+    // link is the only thing distinguishing two mornings' worth of otherwise similar
+    // reminders, and a wrong id is a 404 in a chat nobody can edit.
+    expect(content).toContain(`${origin}/tenders/${tender.id}`);
+    expect(content.split("\n").at(-1)).toBe(`${origin}/tenders/${tender.id}`);
+  });
+
+  it("points the Digest at the Tenders list, once", async () => {
+    await aTender({
+      internalQuoteDeadline: "2026-08-11",
+      clientSubmissionDeadline: "2026-08-13",
+    });
+
+    vi.stubEnv("APP_ORIGIN", origin);
+
+    const robot = recordingRobot();
+
+    await sendDailyPosts(runInstant, robot);
+
+    const digest = digestOf(robot);
+
+    expect(digest.split("\n").at(-1)).toBe(`${origin}/tenders`);
+    // Not one per line — that trade is paid in Tenders that stop being listed at all.
+    expect(digest.match(/https:\/\//g)).toHaveLength(1);
+  });
+
+  it("still posts every message, linkless, when nobody configured an origin", async () => {
+    // The whole reason a missing origin is quiet. Reminders are the product: a run that
+    // refused over an unset configuration line would cause the exact failure this app
+    // exists to prevent, which is the silent-failure shape ADR-0005 refuses here.
+    const tender = await aTender({
+      internalQuoteDeadline: "2026-08-11",
+      clientSubmissionDeadline: "2026-08-13",
+    });
+    const reference = await referenceOf(tender.id);
+
+    vi.stubEnv("APP_ORIGIN", "");
+
+    const robot = recordingRobot();
+
+    await sendDailyPosts(runInstant, robot);
+
+    expect(reminderFor(robot, reference)).toContain("请进入系统跟进。");
+    expect(reminderFor(robot, reference)).not.toContain("http");
+    expect(digestOf(robot)).not.toBe("");
+    expect(digestOf(robot)).not.toContain("http");
+  });
+
+  it("posts no link at all rather than a broken one when the origin will not do", async () => {
+    // A deployment where somebody pasted the Supabase URL, or an `http://` one. The
+    // health endpoint is what makes this visible; the messages just stay honest.
+    const tender = await aTender({
+      internalQuoteDeadline: "2026-08-11",
+      clientSubmissionDeadline: "2026-08-13",
+    });
+    const reference = await referenceOf(tender.id);
+
+    vi.stubEnv("APP_ORIGIN", "http://tenders.example.test");
+
+    const robot = recordingRobot();
+
+    await sendDailyPosts(runInstant, robot);
+
+    expect(reminderFor(robot, reference)).not.toContain("http");
   });
 });

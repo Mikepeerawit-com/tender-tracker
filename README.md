@@ -92,19 +92,22 @@ mid-test is repaired by the next one.
 Vercel, with Supabase in Singapore (`ap-southeast-1`). Live at
 <https://tenders.mikepeerawit.com>.
 
-`GET /api/health` is the acceptance check for every step below. It answers three
+`GET /api/health` is the acceptance check for every step below. It answers four
 questions — can this deployment reach Postgres, is the schema the one this build was
-written against, and can the app still read its own tables — and it names both migration
-versions either way, so a healthy answer is checkable rather than merely reassuring:
+written against, can the app still read its own tables, and does it know its own public
+URL — and it names both migration versions and the origin either way, so a healthy answer
+is checkable rather than merely reassuring:
 
 ```
 200 {"status":"ok","database":"reachable",
      "schema":{"expected":"20260825020000","applied":"20260825020000","behind":0},
-     "tables":{"probed":"tenders","readable":true},"checkedAt":"…"}
+     "tables":{"probed":"tenders","readable":true},
+     "appOrigin":{"configured":true,"origin":"https://tenders.mikepeerawit.com"},
+     "checkedAt":"…"}
 ```
 
 Every fault has a different fix, so read the body — the status code alone cannot tell
-them apart, and four of these five are `503`:
+them apart, and five of these six are `503`:
 
 | Response | Meaning | Fix |
 | --- | --- | --- |
@@ -113,6 +116,14 @@ them apart, and four of these five are `503`:
 | `503 {"schema":{"applied":null}}` | It answers, and `health_probe()` is not there — **no migration ever reached this database.** | Step 2. |
 | `503 {"schema":{"behind":3}}` | Partly migrated: `applied` names the newest version it does hold. | Step 2. |
 | `503 {"tables":{"readable":false,"error":"42501"}}` | The schema is there and the app may not read it — its table grants are missing. | A migration granting them, as `20260825010000` did. |
+| `503 {"status":"no-app-origin"}` | Nobody set `APP_ORIGIN`, or set it to something that is not an absolute `https` origin — so **every reminder goes out with no link into the app.** | Set it on the deployment, then redeploy. |
+
+The last row is the app working and the *messages* being broken, which is why it is not
+folded into `misconfigured`: the app has its Supabase credentials and serves fine, and
+what is missing is the thing that makes a reminder tappable. The messages still send
+without it — reminders are the product, and suppressing a run over a missing config line
+would cause the exact failure this app exists to prevent — so this endpoint is the only
+place the fault is visible. See `src/lib/app-links.ts`.
 
 Note the third and fourth rows are one fault reported two ways, because the probe cannot
 report its own absence: `health_probe()` ships in a migration, so a database that has
@@ -140,6 +151,19 @@ ends up pointed at the local stack in `.env.local`.
 Two variables the integration does not supply: `CRON_SECRET`, which Vercel sets for the
 scheduled job, and **`SETUP_SECRET`**, which you set by hand and which §6 uses once. Both
 are secrets in the ordinary sense — long, random, and not reused.
+
+A third, which is not a secret at all: **`APP_ORIGIN`**, the app's own public origin —
+`https://tenders.mikepeerawit.com` here, absolute, no trailing slash. It is what lets a
+reminder carry a link into the app, and nothing else in the environment can supply it,
+since every URL is built server-side in the cron run. Leave it out and the messages still
+go, without links; `/api/health` answers `no-app-origin` and the gate below stays red
+until it is set.
+
+**Set it for Preview as well as Production.** `preview-schema.yml` runs the same probe
+against a pull request's deployment (§4), so a Preview environment without it turns every
+PR check red — for a real fault, but not the one the reader is looking for. Production's
+value is the right one to give both: the origin is what a *message* points at, and no
+message is ever sent from a preview.
 
 Environment variables added after the first build do not trigger a rebuild — redeploy
 once, or `/api/health` keeps reporting the state from before they landed.

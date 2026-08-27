@@ -16,6 +16,10 @@
 # is one file. Two copies would drift, and the copy that drifts is the one that quietly
 # stops being able to fail — see docs/adr/0016-a-check-must-be-able-to-fail.md.
 #
+# Every fault below is named separately because each has a different fix, and a probe that
+# only says "red" sends the reader to guess. `probe-health.test.ts` produces each one
+# against a real server rather than reading for them.
+#
 # Inputs, all environment:
 #   HEALTH_ORIGIN                    required. Origin to ask; `/api/health` is appended.
 #   PROBE_TARGET                     required. `production` or `preview`.
@@ -141,6 +145,10 @@ behind=$(printf '%s' "$body" | jq -r '.schema.behind // "null"')
 # exists to catch.
 readable=$(printf '%s' "$body" | jq -r '.tables.readable | tostring')
 database=$(printf '%s' "$body" | jq -r '.database // "unknown"')
+# Same `tostring`, same reason: `false` is exactly the value this branch exists to catch,
+# and `//` would report it as absent. A deployment too old to carry the field at all reads
+# "null" and falls through, which is the right way for this to be wrong.
+origin_configured=$(printf '%s' "$body" | jq -r '.appOrigin.configured | tostring')
 
 if [ "$status" = "misconfigured" ]; then
   fail "${label} has no usable Supabase credentials." \
@@ -166,6 +174,16 @@ if [ "$readable" = "false" ]; then
   error=$(printf '%s' "$body" | jq -r '.tables.error // "unknown"')
   fail "${label} has its schema and cannot read it (${error}): its table grants are missing." \
     "This needs a migration granting them, as 20260825010000 did."
+fi
+
+# Last of the named faults rather than first, because every fault above it is worse: the
+# app is *working* here, and it is the reminders that arrive with no way into it. A
+# deployment fixed for one of the above and still linkless goes red again on the next
+# probe rather than coming back green — /api/health reports the origin in every answer.
+if [ "$origin_configured" = "false" ]; then
+  origin_error=$(printf '%s' "$body" | jq -r '.appOrigin.error // "unknown"')
+  fail "${label} does not know its own public URL, so every reminder it sends has no link into the app." \
+    "${origin_error} Set APP_ORIGIN on the deployment to the app's absolute https origin with no trailing slash — see .env.example — and redeploy, because env vars added after a build need one."
 fi
 
 fail "${label} answered ${code} with status '${status}'." "${url}"
