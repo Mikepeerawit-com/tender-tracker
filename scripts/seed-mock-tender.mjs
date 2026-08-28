@@ -10,6 +10,7 @@
 // deployment, not something to point at a database with real Tenders in it.
 //
 //   node --env-file=.env.local scripts/seed-mock-tender.mjs
+//   node --env-file=.env.local scripts/seed-mock-tender.mjs --due-soon
 //   node --env-file=.env.local scripts/seed-mock-tender.mjs --undo
 //
 // Against production, pull the environment first:
@@ -25,6 +26,8 @@ const MOCK_CLIENT = "Mock Client Co.";
 const MOCK_SUPPLIER = "Mock Supply Co.";
 
 const undo = process.argv.includes("--undo");
+// --due-soon arms a genuine reminder instead of staying silent. See the deadlines below.
+const dueSoon = process.argv.includes("--due-soon");
 const emailArg = process.argv.indexOf("--email");
 const wantedEmail = emailArg === -1 ? null : process.argv[emailArg + 1];
 
@@ -110,6 +113,16 @@ if (undo) {
 // quote deadline and 7/3/1/0 before the client one (src/lib/reminders/schedule.ts), and
 // a mock Tender that nudges a real WeCom group at 08:00 is not a mock any more.
 // expected_decision_date stays null, which is what holds off the decision chase.
+//
+// --due-soon is the deliberate exception, and it exists for one check: #48 asks whether
+// a *reminder* link opens the app, and a link hand-posted into the group is what made
+// that check dishonest the first time it was run. So the internal deadline goes exactly
+// three days out, which lands the 3-days-before row on today and none of the others:
+// due dates are stored, and the cron asks `due_date <= today`, so a deadline any nearer
+// fires the whole ramp at once and posts three messages instead of one.
+//
+// The client deadline stays far out either way — nothing here should ever fire the
+// 7/3/1/0 escalation into a real group.
 const { data: tender, error: tenderError } = await db
   .from("tenders")
   .insert({
@@ -118,7 +131,7 @@ const { data: tender, error: tenderError } = await db
     client_name: MOCK_CLIENT,
     title: MOCK_TITLE,
     date_received: on(0),
-    internal_quote_deadline: on(80),
+    internal_quote_deadline: dueSoon ? on(3) : on(80),
     client_submission_deadline: on(110),
     expected_decision_date: null,
     owner_user_id: user.id,
@@ -205,8 +218,21 @@ console.log(`
 
     ${app}/tenders/${tender.id}/items/${item.id}/quote
 
-  Deadlines are 80 and 110 days out and no decision date is set, so the nightly
-  cron will not post anything about this to the WeCom group.
+  ${
+    dueSoon
+      ? `The internal quote deadline is 3 days out, so the next cron run posts ONE
+  genuine internal_quote reminder about this to the real WeCom group. That is
+  what --due-soon is for; it is not the default.
+
+  Fire it without waiting for 01:00 UTC:
+
+    curl -sS -H "Authorization: Bearer $CRON_SECRET" ${app}/api/cron/daily
+
+  Reminders are marked sent once posted, so a second run stays quiet. To get
+  another one, --undo and seed again.`
+      : `Deadlines are 80 and 110 days out and no decision date is set, so the nightly
+  cron will not post anything about this to the WeCom group.`
+  }
 
   Remove it with:  node --env-file=<the same file> scripts/seed-mock-tender.mjs --undo
 `);
