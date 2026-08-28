@@ -48,3 +48,6 @@ yarn-error.log*
 
 # macos
 .DS_Store
+
+# Wizard scratch: captured secrets and hand-check results. Never committed.
+.wizard/
