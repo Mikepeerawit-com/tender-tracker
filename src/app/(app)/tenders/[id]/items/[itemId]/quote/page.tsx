@@ -63,7 +63,7 @@ export default async function ItemSourcingPage({
   // One call, and every read inside it that can run alongside another does. It is a
   // function rather than a run of awaits here because that ordering has a silent failure
   // in it — see `loadItemSourcingScreen`, which is where it is explained and tested.
-  const { quotes, photos, refusals, referenceImages, timezone, members } =
+  const { quotes, photos, refusals, referenceImages, timezone, members, selectedQuoteId } =
     await loadItemSourcingScreen(
       // The org's members are read only for the enrol-yourself control below, and that
       // control is drawn on exactly one branch of this page. An Assignee — who is who
@@ -130,7 +130,15 @@ export default async function ItemSourcingPage({
           <h2 className="text-sm font-medium">
             {t("recorded", { count: quotes.length })}
           </h2>
-          <QuoteList tenderId={tender.id} quotes={quotes} photos={photos} />
+          <QuoteList
+            tenderId={tender.id}
+            tenderItemId={item.id}
+            quotes={quotes}
+            photos={photos}
+            callerId={user.id}
+            isOwner={tender.ownerUserId === user.id}
+            selectedQuoteId={selectedQuoteId}
+          />
         </section>
 
         {isAssignee ? (

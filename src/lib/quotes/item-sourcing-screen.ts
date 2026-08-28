@@ -4,7 +4,10 @@ import { listQuotePhotosByQuote, type QuotePhoto } from "@/lib/images/quote-phot
 import { listReferenceImages, type ReferenceImage } from "@/lib/images/reference-images";
 import { listMembers, type Member } from "@/lib/org/members";
 import { getOrgSettings } from "@/lib/org/org";
-import type { SessionCookieStore } from "@/lib/supabase/session-client";
+import {
+  createSessionClient,
+  type SessionCookieStore,
+} from "@/lib/supabase/session-client";
 
 import { listItemSourcing, listQuotes, type NoSupplierFound, type Quote } from "./quotes";
 
@@ -28,6 +31,15 @@ export type ItemSourcingScreenData = {
   referenceImages: ReferenceImage[];
   /** The org's timezone, which is where the screen's idea of "today" comes from. */
   timezone: string;
+  /**
+   * The Item's Selected Quote, or null when nobody has chosen one.
+   *
+   * Read here rather than derived from `quotes`, because it is a fact about the *Item* —
+   * a Quote does not know it was picked. The screen needs it for one thing only: deleting
+   * the Selected Quote clears the selection, and the row that offers that delete is the
+   * only place able to say so before it happens.
+   */
+  selectedQuoteId: string | null;
   /**
    * Everyone who can still be given work, for the enrol-yourself control.
    *
@@ -83,15 +95,21 @@ export async function loadItemSourcingScreen(
   },
   store: SessionCookieStore,
 ): Promise<ItemSourcingScreenData> {
-  const [quotes, sourcing, referenceImages, settings, members] = await Promise.all([
-    listQuotes(tenderItemId, store),
-    listItemSourcing(tenderId, store),
-    listReferenceImages(tenderId, store),
-    getOrgSettings(store),
-    // In the batch rather than after it: when it is wanted it starts with the others, and
-    // when it is not there is no round trip to start.
-    withMembers ? listMembers(store) : null,
-  ]);
+  const [quotes, sourcing, referenceImages, settings, members, selection] =
+    await Promise.all([
+      listQuotes(tenderItemId, store),
+      listItemSourcing(tenderId, store),
+      listReferenceImages(tenderId, store),
+      getOrgSettings(store),
+      // In the batch rather than after it: when it is wanted it starts with the others, and
+      // when it is not there is no round trip to start.
+      withMembers ? listMembers(store) : null,
+      createSessionClient(store)
+        .from("tender_items")
+        .select("selected_quote_id")
+        .eq("id", tenderItemId)
+        .maybeSingle(),
+    ]);
 
   const photos = await listQuotePhotosByQuote(
     quotes.map((quote) => quote.id),
@@ -107,5 +125,6 @@ export async function loadItemSourcingScreen(
     ),
     timezone: settings.timezone,
     members,
+    selectedQuoteId: selection.data?.selected_quote_id ?? null,
   };
 }

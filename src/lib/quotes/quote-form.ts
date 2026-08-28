@@ -131,3 +131,37 @@ export function blankQuote({
 function text(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
 }
+
+/**
+ * A Quote as the correction form seeds from it.
+ *
+ * Everything back to the strings the browser posted, for the reason {@link SubmittedQuote}
+ * is strings in the first place: the inputs are uncontrolled and read `defaultValue`, and
+ * a null lead time has to arrive as `""` rather than as the word "null".
+ *
+ * `currency` rides along because the form displays it. It is not posted and the server
+ * would not read it if it were — the stored value is the only one an edit uses.
+ */
+export function quoteAsSubmitted(quote: {
+  supplierName: string;
+  unitPrice: number;
+  currency: string;
+  quotedUnit: string;
+  leadTimeDays: number | null;
+  matchType: MatchType;
+  alternativeProductName: string | null;
+  detailNotes: string | null;
+  quotedAt: string;
+}): SubmittedQuote {
+  return {
+    supplierName: quote.supplierName,
+    unitPrice: String(quote.unitPrice),
+    currency: quote.currency,
+    quotedUnit: quote.quotedUnit,
+    leadTimeDays: quote.leadTimeDays === null ? "" : String(quote.leadTimeDays),
+    matchType: quote.matchType,
+    alternativeProductName: quote.alternativeProductName ?? "",
+    detailNotes: quote.detailNotes ?? "",
+    quotedAt: quote.quotedAt,
+  };
+}

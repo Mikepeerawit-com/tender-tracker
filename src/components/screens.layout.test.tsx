@@ -139,7 +139,17 @@ function screens(m: typeof en) {
         >
           <p className="text-muted-foreground text-sm break-words">40,000 piece</p>
         </ScreenHeader>
-        <QuoteList tenderId={tender.id} quotes={quotes} photos={new Map()} />
+        <QuoteList
+          tenderId={tender.id}
+          tenderItemId="item-gloves"
+          quotes={quotes}
+          photos={new Map()}
+          // The reader sourced these, so the row draws its edit and delete controls —
+          // which is the crowded case, and the one worth measuring at 390px.
+          callerId={quotes[0].sourcedByUserId}
+          isOwner={false}
+          selectedQuoteId={quotes[0].id}
+        />
         <QuoteForm
           tenderId={tender.id}
           tenderItemId="item-gloves"
