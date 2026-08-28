@@ -10,6 +10,7 @@ import {
   type ImageProblem,
   type PendingImage,
   type StoredImageUpload,
+  type UploadOutcome,
 } from "@/lib/images/images";
 import { createStorageClient } from "@/lib/supabase/storage-client";
 
@@ -28,10 +29,30 @@ import { createStorageClient } from "@/lib/supabase/storage-client";
  * dropped signal, the count that has to keep meaning something. Two copies would be two
  * chances to get those wrong, and the copy that got them wrong would be the one nobody
  * had a picture from.
+ *
+ * ## Where a batch is filed is decided when it runs, not when the screen was drawn
+ *
+ * `sign` and `record` are arguments to {@link ImageUpload.upload}, not to the hook. They
+ * used to be the hook's own configuration, closed over an entity id known at render — and
+ * that is exactly the assumption the create-a-Quote form cannot hold to. There, the Quote
+ * does not exist while the photos are being picked; its id arrives from the submit that
+ * writes it, a beat before the batch runs. Naming the destination per batch is what lets
+ * the same loop serve a Quote that has existed for a week and one that has existed for a
+ * hundred milliseconds.
  */
 
 /** How far through a batch the upload is. Null when nothing is in flight. */
 export type UploadProgress = { done: number; total: number };
+
+/** Where one batch is being filed: how to get keys for it, and how to record what landed. */
+export type ImageDestination = {
+  sign: (
+    images: PendingImage[],
+  ) => Promise<
+    { ok: true; uploads: StoredImageUpload[] } | { ok: false; reason: ImageProblem }
+  >;
+  record: (storagePaths: string[]) => Promise<{ error?: ImageProblem }>;
+};
 
 export type ImageUpload = {
   error: ImageProblem | null;
@@ -39,30 +60,32 @@ export type ImageUpload = {
   busy: boolean;
   /** Discard whatever the last attempt said, without starting another. */
   clearError: () => void;
-  upload: (files: File[]) => Promise<void>;
+  /**
+   * Run one batch, and say what became of it.
+   *
+   * The returned {@link UploadOutcome} is the same fact as `error`, plus the one thing
+   * only this loop can know: *which* files are still to do. A caller with the picker
+   * still on screen can ignore it. The create-a-Quote form cannot — by the time it hears,
+   * the price is written and the only useful sentence names the photos to try again.
+   */
+  upload: (files: File[], to: ImageDestination) => Promise<UploadOutcome>;
 };
 
-export function useImageUpload({
-  sign,
-  record,
-}: {
-  sign: (
-    images: PendingImage[],
-  ) => Promise<
-    { ok: true; uploads: StoredImageUpload[] } | { ok: false; reason: ImageProblem }
-  >;
-  record: (storagePaths: string[]) => Promise<{ error?: ImageProblem }>;
-}): ImageUpload {
+export function useImageUpload(): ImageUpload {
   const [error, setError] = useState<ImageProblem | null>(null);
   const [progress, setProgress] = useState<UploadProgress | null>(null);
 
-  async function upload(files: File[]) {
+  /** Report it once, in both directions. */
+  function refuse(reason: ImageProblem, failed: File[]): UploadOutcome {
+    setError(reason);
+
+    return { failed, error: reason };
+  }
+
+  async function upload(files: File[], to: ImageDestination): Promise<UploadOutcome> {
     setError(null);
 
-    if (files.length > maxImagesAtOnce) {
-      setError("too_many");
-      return;
-    }
+    if (files.length > maxImagesAtOnce) return refuse("too_many", files);
 
     setProgress({ done: 0, total: files.length });
 
@@ -76,21 +99,21 @@ export function useImageUpload({
       // Checked here as well as on the server, because here is the only place it can be
       // said *before* the upload rather than instead of it.
       if (prepared.some((file) => file.size > maxImageBytes)) {
-        setError("too_large");
-        return;
+        return refuse("too_large", files);
       }
 
-      const signed = await sign(
+      const signed = await to.sign(
         prepared.map((file) => ({ contentType: file.type, byteSize: file.size })),
       );
 
-      if (!signed.ok) {
-        setError(signed.reason);
-        return;
-      }
+      if (!signed.ok) return refuse(signed.reason, files);
 
       const client = createStorageClient();
       const uploaded: string[] = [];
+      // Indexed against `files` rather than `prepared`: the compressor re-encodes to JPEG
+      // and renames as it goes, and the name worth showing somebody is the one they saw
+      // in the picker.
+      const failed: File[] = [];
 
       // One at a time, and in step with `prepared`: the server signs a URL per picture in
       // the order it was given them. Sequential rather than parallel on purpose — several
@@ -104,27 +127,27 @@ export function useImageUpload({
           // decided something.
           .uploadToSignedUrl(signedUpload.storagePath, signedUpload.token, prepared[index]);
 
-        if (!uploadError) uploaded.push(signedUpload.storagePath);
+        if (uploadError) failed.push(files[index]);
+        else uploaded.push(signedUpload.storagePath);
 
         setProgress({ done: index + 1, total: prepared.length });
       }
 
-      if (uploaded.length === 0) {
-        setError("failed");
-        return;
-      }
+      if (uploaded.length === 0) return refuse("failed", files);
 
       // Only what landed. A signal that dropped after the third picture should keep the
       // three, not lose all five — and the server refuses a path nothing was uploaded to,
       // so claiming the other two would refuse the batch that did work.
-      const recorded = await record(uploaded);
+      const recorded = await to.record(uploaded);
 
-      if (recorded.error) {
-        setError(recorded.error);
-        return;
-      }
+      // Nothing was written down, so nothing counts as done — the objects that did land
+      // are orphans with no row pointing at them, which is what every one of these files
+      // still being outstanding means.
+      if (recorded.error) return refuse(recorded.error, files);
 
-      if (uploaded.length < prepared.length) setError("failed");
+      if (failed.length > 0) return refuse("failed", failed);
+
+      return { failed: [], error: null };
     } finally {
       setProgress(null);
     }

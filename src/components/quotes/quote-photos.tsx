@@ -1,20 +1,18 @@
 "use client";
 
-import { useActionState, useRef } from "react";
-import { Camera, Images } from "lucide-react";
+import { useActionState } from "react";
 import { useTranslations } from "next-intl";
 
 import {
-  recordQuotePhotosAction,
   removeQuotePhotoAction,
-  signQuotePhotoUploadsAction,
   type QuotePhotoFormState,
 } from "@/app/actions/quote-photos";
 import { ImageCountBadge } from "@/components/images/image-count-badge";
 import { ImageProblemNotice } from "@/components/images/image-problem-notice";
 import { useImageUpload } from "@/components/images/use-image-upload";
+import { QuotePhotoPicker } from "@/components/quotes/quote-photo-picker";
+import { quotePhotoDestination } from "@/components/quotes/quote-photo-uploads";
 import { Button } from "@/components/ui/button";
-import { photoAccept } from "@/lib/images/images";
 import type { QuotePhoto } from "@/lib/images/quote-photos";
 
 /**
@@ -23,18 +21,17 @@ import type { QuotePhoto } from "@/lib/images/quote-photos";
  * Load-bearing rather than decorative: on an Alternative these are often the only way to
  * judge how far the substitute really is from what the client asked for.
  *
- * ## Two inputs, and the second one is required
+ * ## This is the *afterwards* path, and it is not a workaround
  *
- * The camera input carries `accept="image/*" capture`, because on a phone the gesture
- * here is *take one now* — the supplier is on the line or has just rung off. But
- * **`capture` is a hint, not a guarantee** (buildspec_2.md A4): the WeCom webview was
- * measured opening the camera straight away on an iPhone, Android was never measured at
- * all, and the research on Android WebView is bad enough that a camera hint is the
- * sharper risk of the two. So the library picker sits beside it, visible, always, rather
- * than as something to find when the first button does nothing.
+ * Photos are also picked on the create-a-Quote form now, in the same pass as the price
+ * (#60), which is the path the phone case wanted. This one stays because photos genuinely
+ * do arrive later: by email, from a supplier who rang back, from a colleague who took
+ * them. Both entry points are permanent, and both draw the same {@link QuotePhotoPicker}
+ * — the camera hint and the visible library fallback are required in both places for the
+ * reason that component gives.
  *
- * The picker is also the honest control for the common desktop case, where a supplier
- * emailed a photograph and somebody is entering the Quote at a desk.
+ * What only exists here is everything about photos that are already stored: the count
+ * badge, the thumbnails, and the way to take one back off.
  */
 export function QuotePhotoControls({
   tenderId,
@@ -47,27 +44,7 @@ export function QuotePhotoControls({
 }) {
   const t = useTranslations("quotes.photos");
   const shared = useTranslations("images");
-  const camera = useRef<HTMLInputElement>(null);
-  const library = useRef<HTMLInputElement>(null);
-  const { error, progress, busy, upload } = useImageUpload({
-    sign: (images) => signQuotePhotoUploadsAction({ quoteId, images }),
-    record: (storagePaths) =>
-      recordQuotePhotosAction({ quoteId, storagePaths, tenderId }),
-  });
-
-  async function onPicked(input: HTMLInputElement) {
-    const files = [...(input.files ?? [])];
-
-    if (files.length === 0) return;
-
-    try {
-      await upload(files);
-    } finally {
-      // Cleared however it ended: the input keeps its old FileList otherwise, so
-      // re-taking the same photo fires no `change` event and the retry looks like a hang.
-      input.value = "";
-    }
-  }
+  const { error, progress, busy, upload } = useImageUpload();
 
   return (
     <div className="flex flex-col gap-2">
@@ -77,49 +54,12 @@ export function QuotePhotoControls({
           images={photos}
         />
 
-        {/* Both inputs are off-screen and driven by their buttons, because a bare file
-            input cannot be given a label a thumb can find. Neither is *hidden* in the
-            sense that matters: both buttons are visible, side by side, always. */}
-        <input
-          ref={camera}
-          type="file"
-          accept={photoAccept}
-          capture="environment"
-          className="sr-only"
-          tabIndex={-1}
-          onChange={(event) => void onPicked(event.currentTarget)}
-        />
-        <input
-          ref={library}
-          type="file"
-          multiple
-          accept={photoAccept}
-          className="sr-only"
-          tabIndex={-1}
-          onChange={(event) => void onPicked(event.currentTarget)}
-        />
-
-        <Button
-          type="button"
-          variant="outline"
-          className="h-11"
+        <QuotePhotoPicker
           disabled={busy}
-          onClick={() => camera.current?.click()}
-        >
-          <Camera className="size-4" aria-hidden />
-          {t("take")}
-        </Button>
-
-        <Button
-          type="button"
-          variant="outline"
-          className="h-11"
-          disabled={busy}
-          onClick={() => library.current?.click()}
-        >
-          <Images className="size-4" aria-hidden />
-          {t("choose")}
-        </Button>
+          onPicked={(files) =>
+            upload(files, quotePhotoDestination({ quoteId, tenderId }))
+          }
+        />
       </div>
 
       {progress ? (

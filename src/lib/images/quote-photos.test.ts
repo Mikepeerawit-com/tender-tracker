@@ -246,6 +246,26 @@ describe("signing an upload", () => {
     expect(result).toEqual({ ok: false, reason: "not_found" });
   });
 
+  it("mints no key at all for a Quote that was never written", async () => {
+    // The server half of #60's ordering guarantee. The create-a-Quote form now holds
+    // photos in the browser and uploads them after the price is saved, which means the
+    // one run that must stay impossible is the one where the Quote was refused and the
+    // photos went up anyway. The client is built not to ask (`saveQuoteThenPhotos`); this
+    // is the half that says asking would get nowhere — no token, no path, so not even an
+    // orphaned object in a folder nothing answers to.
+    const store = await signedInAs(assignee.email);
+
+    const result = await signQuotePhotoUploads(
+      {
+        quoteId: crypto.randomUUID(),
+        images: [{ contentType: "image/jpeg", byteSize: 100_000 }],
+      },
+      store,
+    );
+
+    expect(result).toEqual({ ok: false, reason: "not_found" });
+  });
+
   it("refuses a file that is not a picture this app can store", async () => {
     const store = await signedInAs(assignee.email);
 

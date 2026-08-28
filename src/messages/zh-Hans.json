@@ -289,6 +289,7 @@
     "detailNotesHint": "选填——包装、起订量，以及电话里说过的任何事。",
     "save": "保存报价",
     "saving": "保存中…",
+    "saved": "报价已保存。",
     "sourcedBy": "由 {name} 询得",
     "perUnit": "每 {unit}",
     "quotedInThb": "以泰铢报价，无需换算。",
@@ -304,7 +305,13 @@
       "remove": "删除",
       "removeNumbered": "删除第 {position} 张照片",
       "openCount": "查看 {count, plural, other {# 张供应商照片}}",
-      "alt": "供应商照片 {position}"
+      "alt": "供应商照片 {position}",
+      "attach": "供应商照片",
+      "attachHint": "现在就可以添加——保存价格后会立即上传。之后也可以在该条报价上补加。",
+      "waiting": "{count, plural, other {保存时将一并上传 # 张照片}}",
+      "removeHeld": "移除 {name}",
+      "savedWithout": "{supplier} 的报价已保存。以下照片未能上传：{names}",
+      "retry": "重新上传这些照片"
     },
     "noSupplier": {
       "title": "找不到供应商",

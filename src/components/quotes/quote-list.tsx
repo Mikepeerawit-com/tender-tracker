@@ -51,8 +51,10 @@ export function QuoteList({
       {quotes.map((quote) => (
         <li
           key={quote.id}
-          // The anchor a just-saved Quote is redirected to, so the price lands on screen
-          // beside its own camera button rather than somewhere below the fold.
+          // A stable handle on one Quote's row. It was the anchor a successful create
+          // redirected to, back when a photo could only be attached from here; the create
+          // form takes photos on the way in now (#60) and stays where it is, so nothing
+          // navigates to this any more — but a row worth linking to is worth naming.
           id={`quote-${quote.id}`}
           className={`flex flex-col gap-2 rounded-lg border p-4 ${
             quote.matchType === "alternative"

@@ -2,10 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 
 import {
   refusedQuote,
+  savedQuote,
   submittedQuote,
   type QuoteFormState,
 } from "@/lib/quotes/quote-form";
@@ -44,11 +44,15 @@ export async function createQuoteAction(
   revalidatePath(`/tenders/${tenderId}`, "layout");
   revalidatePath("/tenders");
 
-  // Back to the Item's sourcing screen, at the Quote that was just written down — where
-  // its photo input is. The price is saved first and the photos second because the path
-  // is keyed by the Quote's id, and because that is the order that survives a phone
-  // dying halfway.
-  redirect(`/tenders/${tenderId}/items/${tenderItemId}/quote#quote-${result.quoteId}`);
+  // The id, rather than a redirect back to the Item's sourcing screen at this Quote's
+  // anchor. The redirect existed to put somebody beside the photo input of the row that
+  // had just appeared — a second pass through the screen for one supplier call, which is
+  // the thing #60 removes. The photos are now picked on the way in and uploaded against
+  // this id the moment it exists, on the page the browser never left.
+  //
+  // One or the other, never both: `redirect()` throws, so an action that redirects has no
+  // return value for a caller to read an id out of.
+  return savedQuote(result.quoteId);
 }
 
 export async function recordNoSupplierFoundAction(

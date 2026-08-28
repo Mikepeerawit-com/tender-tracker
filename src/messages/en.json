@@ -289,6 +289,7 @@
     "detailNotesHint": "Optional — packaging, minimums, anything said on the call.",
     "save": "Save quote",
     "saving": "Saving…",
+    "saved": "Quote saved.",
     "sourcedBy": "Sourced by {name}",
     "perUnit": "per {unit}",
     "quotedInThb": "Quoted in THB — not converted.",
@@ -304,7 +305,13 @@
       "remove": "Remove",
       "removeNumbered": "Remove photo {position}",
       "openCount": "Open {count, plural, =1 {# supplier photo} other {# supplier photos}}",
-      "alt": "Supplier photo {position}"
+      "alt": "Supplier photo {position}",
+      "attach": "Supplier photos",
+      "attachHint": "Add them now — they upload as soon as the price is saved. You can also add them later from the quote.",
+      "waiting": "{count, plural, =1 {# photo will be attached when you save} other {# photos will be attached when you save}}",
+      "removeHeld": "Remove {name}",
+      "savedWithout": "The quote from {supplier} is saved. These photos did not upload: {names}",
+      "retry": "Try those photos again"
     },
     "noSupplier": {
       "title": "No supplier found",

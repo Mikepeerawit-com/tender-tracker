@@ -134,3 +134,19 @@ export type ImageProblem = (typeof imageProblems)[number];
 export type ImageResult<T = Record<never, never>> =
   | ({ ok: true } & T)
   | { ok: false; reason: ImageProblem };
+
+/**
+ * What became of one batch of pictures.
+ *
+ * The uploader knows exactly which files did not land — it walks them one at a time and
+ * counts — and until now it threw that away and reported a bare "failed". Which is enough
+ * for the Reference Image path, where the picker is still on screen and the pictures are
+ * still in the library. It is not enough on the create-a-Quote form, where the price has
+ * already been written down and the only useful sentence is *which* photos to try again.
+ */
+export type UploadOutcome = {
+  /** The files that did not make it, in the order they were picked. Empty when all did. */
+  failed: File[];
+  /** Why they did not, or null when nothing failed. */
+  error: ImageProblem | null;
+};
