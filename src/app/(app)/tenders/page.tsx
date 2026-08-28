@@ -45,7 +45,7 @@ export default async function TendersPage() {
             <Button
               className="h-11"
               nativeButton={false}
-              render={<Link href="/tenders/new" />}
+              render={<Link href="/tenders/new" prefetch={false} />}
             >
               {t("record")}
             </Button>

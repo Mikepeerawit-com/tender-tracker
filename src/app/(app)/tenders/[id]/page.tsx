@@ -11,11 +11,7 @@ import { ImageCountBadge } from "@/components/images/image-count-badge";
 import { Button } from "@/components/ui/button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { currentUser } from "@/lib/auth/session";
-import { getComparisonSheet } from "@/lib/comparison/sheet";
-import { listReferenceImages } from "@/lib/images/reference-images";
-import { listMembers } from "@/lib/org/members";
-import { getOrgSettings } from "@/lib/org/org";
-import { getTender } from "@/lib/tenders/tenders";
+import { loadTenderScreen } from "@/lib/tenders/tender-screen";
 
 /**
  * Screen 5: the Tender detail, which *is* the comparison working sheet.
@@ -34,26 +30,18 @@ export default async function TenderPage({ params }: PageProps<"/tenders/[id]">)
 
   if (!user) redirect("/login");
 
-  const tender = await getTender(id, store);
+  // One batch, not six reads in a row: `loadTenderScreen` holds the ordering and the
+  // reason for it. The signed URLs among the Reference Images are minted on this render
+  // and good for the hour, which is why this screen cannot be cached beyond the request
+  // that drew it.
+  const { tender, members, timezone, referenceImages, unassignedImages, sheet } =
+    await loadTenderScreen(id, store);
 
   // Another org's Tender and a deleted one are the same answer through RLS, and the
   // same answer is the right one to give.
   if (!tender) notFound();
 
   const t = await getTranslations("tenders");
-  const members = await listMembers(store);
-  // The org's timezone, because `submitted_at` and `outcome_at` are instants and the day
-  // they land on is the day it was in Bangkok — never the day it was on a Vercel box.
-  const { timezone } = await getOrgSettings(store);
-  // Signed URLs, minted on this render and good for the hour. They are why this page
-  // cannot be cached beyond the request that drew it.
-  const referenceImages = await listReferenceImages(tender.id, store);
-  // Every Item, every competing Quote and every Quote's photos, in a fixed handful of
-  // queries for the whole Tender rather than a handful per Item.
-  const sheet = await getComparisonSheet(tender.id, store);
-  const unassignedImages = referenceImages.filter(
-    (image) => image.tenderItemId === null,
-  );
 
   return (
     <div className="flex flex-1 flex-col gap-8 p-6">

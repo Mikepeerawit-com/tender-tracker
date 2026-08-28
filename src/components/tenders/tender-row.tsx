@@ -46,9 +46,19 @@ export function TenderRow({
     client_submission: tender.clientSubmissionDeadline,
   };
 
+  // `prefetch={false}` because the prefetch is bought and then thrown away. Every route
+  // here is dynamic, so Next prefetches the shell down to `(app)/loading.tsx` — which
+  // still runs the proxy and the layout's `currentUser()` — and then keeps it for
+  // `staleTimes.dynamic`, which has defaulted to 0 seconds since Next 15. Measured on
+  // production: the row was prefetched twice, and the tap 2.5s later re-fetched from
+  // scratch anyway and took 652ms. One row is one wasted invocation; a worklist is one per
+  // row, all landing on a Free-tier database at the moment the screen opens — which is the
+  // moment somebody is about to tap. Turning this back on wants `staleTimes.dynamic` set
+  // with it, and that is a staleness decision worth an ADR.
   return (
     <Link
       href={`/tenders/${tender.id}`}
+      prefetch={false}
       className={`${border} hover:bg-muted/50 flex min-w-0 flex-col gap-2 rounded-lg border p-4 transition-colors`}
     >
       <div className="flex min-w-0 flex-wrap items-baseline gap-2">

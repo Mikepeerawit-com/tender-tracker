@@ -235,12 +235,16 @@ function ItemSummary({ tenderId, item }: { tenderId: string; item: SheetItem }) 
             means different work from one somebody has already given up on. */}
         <SourcingChips sourcing={item.sourcing} />
 
+        {/* One per Tender Item, so this is the same fan-out the worklist rows have, on the
+            screen a multi-item Tender makes longest — see `tender-row.tsx`. */}
         <Button
           variant="ghost"
           size="sm"
           className="h-11 px-2"
           nativeButton={false}
-          render={<Link href={`/tenders/${tenderId}/items/${item.id}/quote`} />}
+          render={
+            <Link href={`/tenders/${tenderId}/items/${item.id}/quote`} prefetch={false} />
+          }
         >
           {ts("source")}
         </Button>
