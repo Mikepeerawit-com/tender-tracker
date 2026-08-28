@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 
 import { EditQuoteForm } from "@/components/quotes/edit-quote-form";
 import { currentUser } from "@/lib/auth/session";
-import { quoteAsSubmitted } from "@/lib/quotes/quote-form";
+import { mayCorrectQuote, quoteAsSubmitted } from "@/lib/quotes/quote-form";
 import { listQuotes } from "@/lib/quotes/quotes";
 import { getTender } from "@/lib/tenders/tenders";
 
@@ -51,7 +51,13 @@ export default async function EditQuotePage({
 
   const sourcing = `/tenders/${tender.id}/items/${item.id}/quote`;
 
-  if (quote.sourcedByUserId !== user.id && tender.ownerUserId !== user.id) {
+  if (
+    !mayCorrectQuote({
+      sourcedByUserId: quote.sourcedByUserId,
+      callerId: user.id,
+      ownerUserId: tender.ownerUserId,
+    })
+  ) {
     redirect(sourcing);
   }
 

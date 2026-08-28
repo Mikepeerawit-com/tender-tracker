@@ -26,9 +26,10 @@ const initialState: QuoteFormState = {};
  *
  * The confirm is drawn from what the row already knows rather than from a refused round
  * trip, so the warning arrives before the press rather than after it. `deleteQuote` refuses
- * an unconfirmed delete of a Selected Quote anyway, and `clears_selection` renders through
- * the same notice as every other refusal — so a stale row that has become Selected since
- * the page was drawn is told, rather than quietly getting its way.
+ * an unconfirmed delete of a Selected Quote anyway, and that refusal is the second way into
+ * the same confirm: a row drawn before somebody else selected this Quote asks on the way
+ * back instead of on the way out. Without that, the press would be refused and re-refused
+ * with no way for the person to agree to what they are being warned about.
  */
 export function QuoteRowControls({
   tenderId,
@@ -49,6 +50,11 @@ export function QuoteRowControls({
   const [state, formAction, isPending] = useActionState(deleteQuoteAction, initialState);
   const [confirming, setConfirming] = useState(false);
 
+  // The row was drawn knowing this Quote is Selected, or the server has just said so
+  // about a row drawn before it was. Either way the delete has a cost to report and must
+  // be agreed to rather than merely repeated.
+  const costsTheSelection = isSelected || state.error === "clears_selection";
+
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -68,7 +74,7 @@ export function QuoteRowControls({
         {/* A Quote nobody selected goes on one press. The second press exists to report a
             cost, and inventing one where there is none teaches people to click through
             it — which is exactly what would make the Selected case fail to land. */}
-        {isSelected && !confirming ? (
+        {costsTheSelection && !confirming ? (
           <Button
             type="button"
             variant="ghost"

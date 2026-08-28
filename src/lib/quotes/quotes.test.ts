@@ -8,6 +8,7 @@ import {
   memoryCookieStore,
   type SessionCookieStore,
 } from "@/lib/supabase/session-client";
+import { tenderProgress } from "@/lib/tenders/progress";
 import { addAssignee, createTender, getTender } from "@/lib/tenders/tenders";
 
 import {
@@ -47,7 +48,7 @@ const assignee = { id: "", email: `quote-assignee-${run}@example.test` };
 const rival = { id: "", email: `quote-rival-${run}@example.test` };
 /** An Assignee on the same Tender who sourced none of it — the one an edit must refuse. */
 const colleague = { id: "", email: `quote-colleague-${run}@example.test` };
-/** An Org Admin, and an Assignee, and neither the sourcer nor the Owner. */
+/** An Org Admin, and an Assignee, and neither the Quote's Assignee nor the Owner. */
 const admin = { id: "", email: `quote-admin-${run}@example.test` };
 const bystander = { id: "", email: `quote-bystander-${run}@example.test` };
 const outsider = { id: "", email: `quote-outsider-${run}@example.test` };
@@ -1148,7 +1149,7 @@ describe("who may correct a Quote", () => {
       await signedInAs(colleague.email),
     );
 
-    expect(result).toEqual({ ok: false, reason: "not_sourcer" });
+    expect(result).toEqual({ ok: false, reason: "not_sourced_by_you" });
     expect((await listQuotes(itemId, theirs))[0].unitPrice).toBe(125.5);
   });
 
@@ -1181,7 +1182,7 @@ describe("who may correct a Quote", () => {
         { quoteId, ...aCorrection({ unitPrice: 1 }) },
         await signedInAs(admin.email),
       ),
-    ).toEqual({ ok: false, reason: "not_sourcer" });
+    ).toEqual({ ok: false, reason: "not_sourced_by_you" });
   });
 
   it("gives another org's Quote the same answer as a deleted one", async () => {
@@ -1248,7 +1249,7 @@ describe("taking a Quote back", () => {
 
     expect(
       await deleteQuote({ quoteId }, await signedInAs(colleague.email)),
-    ).toEqual({ ok: false, reason: "not_sourcer" });
+    ).toEqual({ ok: false, reason: "not_sourced_by_you" });
     expect(await listQuotes(itemId, theirs)).toHaveLength(1);
   });
 
@@ -1268,7 +1269,7 @@ describe("taking a Quote back", () => {
 
     expect(await deleteQuote({ quoteId }, await signedInAs(admin.email))).toEqual({
       ok: false,
-      reason: "not_sourcer",
+      reason: "not_sourced_by_you",
     });
   });
 
@@ -1357,22 +1358,81 @@ describe("taking a Quote back", () => {
   });
 
   it("takes the Item's last Quote back to Not Yet Sourced, which regresses the Tender", async () => {
-    // The derivation already handles this and nothing new is needed for it — but a
-    // Tender that went on reading `quoted` with an Item nobody has a price for is the
-    // failure a delete path can introduce, so it is pinned here.
+    // The derivation already handles this and nothing new is needed for it — but a Tender
+    // that went on reading `quoted` with an Item nobody has a price for is exactly the
+    // failure a delete path can introduce, so it is pinned end to end rather than at the
+    // count that feeds it.
+    //
+    // Two Items, because that is what makes the regression `sourcing` rather than `new`:
+    // one Item still has a price, so the Tender is being worked rather than untouched.
     const store = await signedInAs(assignee.email);
-    const quoteId = await aWrittenQuote(store);
+    const built = await createTender(
+      {
+        clientName: "Bangkok General Hospital",
+        title: `Two-item regression ${run}`,
+        dateReceived: "2026-08-01",
+        internalQuoteDeadline: "2026-08-20",
+        clientSubmissionDeadline: "2026-08-28",
+        expectedDecisionDate: null,
+        ownerUserId: assignee.id,
+        notes: null,
+        items: [
+          {
+            productName: "Nitrile gloves, powder-free",
+            description: null,
+            quantity: 500,
+            unit: "box of 50",
+          },
+          {
+            productName: "Surgical masks, type IIR",
+            description: null,
+            quantity: 200,
+            unit: "box of 50",
+          },
+        ],
+      },
+      store,
+    );
 
-    expect((await countItemSourcing([itemId], store)).get(itemId)).toMatchObject({
-      quoteCount: 1,
-    });
+    if (!built.ok) throw new Error(`could not create a Tender: ${built.reason}`);
 
-    expect(await deleteQuote({ quoteId }, store)).toEqual({ ok: true });
+    const added = await addAssignee(
+      { tenderId: built.tenderId, userId: assignee.id },
+      store,
+    );
+
+    if (!added.ok) throw new Error(`could not assign: ${added.reason}`);
+
+    const items = (await getTender(built.tenderId, store))!.items.map((item) => item.id);
+
+    /** The Tender as `tenderProgress` needs it, built from what the database now says. */
+    const progressNow = async () => {
+      const counts = await countItemSourcing(items, store);
+
+      return tenderProgress({
+        submittedAt: null,
+        internalQuoteDeadline: "2026-08-20",
+        clientSubmissionDeadline: "2026-08-28",
+        items: items.map((id) => ({
+          outcome: null,
+          quoteCount: counts.get(id)?.quoteCount ?? 0,
+          noSupplierFoundCount: counts.get(id)?.noSupplierFoundCount ?? 0,
+        })),
+      });
+    };
+
+    await aWrittenQuote(store, { tenderItemId: items[0] });
+
+    const doomed = await aWrittenQuote(store, { tenderItemId: items[1] });
+
+    // Every Item has a price, so the Bid could be built today.
+    expect(await progressNow()).toBe("quoted");
+
+    expect(await deleteQuote({ quoteId: doomed }, store)).toEqual({ ok: true });
 
     // Absent, not zeroed: Not Yet Sourced is an absence, and `tenderProgress` reads a
-    // missing entry as an Item with no Quote — which takes a `quoted` Tender back to
-    // `sourcing` as soon as one of its Items has none.
-    expect((await countItemSourcing([itemId], store)).get(itemId)).toBeUndefined();
-    expect((await listItemSourcing(tenderId, store)).get(itemId)).toBeUndefined();
+    // missing entry as an Item with no Quote.
+    expect((await countItemSourcing(items, store)).get(items[1])).toBeUndefined();
+    expect(await progressNow()).toBe("sourcing");
   });
 });

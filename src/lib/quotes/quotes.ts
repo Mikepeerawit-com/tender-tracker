@@ -13,7 +13,7 @@ import {
 // Not `server-only`, unlike this module: the add-quote form renders the radio group in
 // the browser. Re-exported below so server-side callers keep reading it from the module
 // that owns Quotes.
-import { matchTypes, type MatchType } from "./quote-form";
+import { mayCorrectQuote, matchTypes, type MatchType } from "./quote-form";
 
 /**
  * Recording what a supplier said, and recording that nobody would say anything.
@@ -39,7 +39,7 @@ import { matchTypes, type MatchType } from "./quote-form";
  * out of another's Quotes; the checks in this file are the ones RLS cannot express.
  */
 
-export { matchTypes, type MatchType };
+export { mayCorrectQuote, matchTypes, type MatchType };
 
 export type QuoteFields = {
   tenderItemId: string;
@@ -86,7 +86,7 @@ export const quoteProblems = [
   "forbidden",
   "not_found",
   "not_assignee",
-  "not_sourcer",
+  "not_sourced_by_you",
   "clears_selection",
   "incomplete",
   "invalid_price",
@@ -575,6 +575,31 @@ export async function listItemSourcing(
   return sourcing;
 }
 
+/**
+ * Which Quote an Item has been **Selected** from, or null when nobody has chosen yet.
+ *
+ * A fact about the Item rather than about any Quote — a Quote does not know it was picked,
+ * which is why this cannot be read off {@link listQuotes}. `tender_items.selected_quote_id`
+ * is the single column A8 chose over a `quotes.is_selected` boolean, so that "one Selected
+ * Quote per Item" is structural rather than a rule the app has to remember.
+ *
+ * Named here rather than issued inline by the screen that wants it: every other read the
+ * sourcing screen makes is a function in this module, and a raw table query in a loader is
+ * how the next one comes to be written there too.
+ */
+export async function selectedQuoteId(
+  tenderItemId: string,
+  store: SessionCookieStore,
+): Promise<string | null> {
+  const { data } = await createSessionClient(store)
+    .from("tender_items")
+    .select("selected_quote_id")
+    .eq("id", tenderItemId)
+    .maybeSingle();
+
+  return data?.selected_quote_id ?? null;
+}
+
 /** How one Item's sourcing stands, counted rather than read. */
 export type ItemSourcingCount = { quoteCount: number; noSupplierFoundCount: number };
 
@@ -723,7 +748,8 @@ async function assigneeProblem(
  * an Assignee is what earns you the right to *enter* a Quote; changing one somebody else
  * entered is a different act.
  *
- * **Sourcer-only, with the Tender's Owner as the override.** `created_by_user_id` is
+ * **Only the Assignee who sourced it, with the Tender's Owner as the override.**
+ * `created_by_user_id` is
  * "sourced by" and it is load-bearing: there is deliberately no unique index on (Item,
  * supplier) because two Assignees ringing the same supplier is expected and informative
  * (ADR-0004), which makes that column the only thing distinguishing two otherwise
@@ -763,10 +789,13 @@ async function correctableQuote(
 
   if (!data) return { reason: "not_found" };
 
-  const isSourcer = data.created_by_user_id === callerId;
-  const isOwner = data.item?.tender?.owner_user_id === callerId;
+  const permitted = mayCorrectQuote({
+    sourcedByUserId: data.created_by_user_id,
+    callerId,
+    ownerUserId: data.item?.tender?.owner_user_id ?? null,
+  });
 
-  if (!isSourcer && !isOwner) return { reason: "not_sourcer" };
+  if (!permitted) return { reason: "not_sourced_by_you" };
 
   return {
     quote: {

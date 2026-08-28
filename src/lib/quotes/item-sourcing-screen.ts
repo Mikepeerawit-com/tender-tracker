@@ -4,12 +4,15 @@ import { listQuotePhotosByQuote, type QuotePhoto } from "@/lib/images/quote-phot
 import { listReferenceImages, type ReferenceImage } from "@/lib/images/reference-images";
 import { listMembers, type Member } from "@/lib/org/members";
 import { getOrgSettings } from "@/lib/org/org";
-import {
-  createSessionClient,
-  type SessionCookieStore,
-} from "@/lib/supabase/session-client";
+import type { SessionCookieStore } from "@/lib/supabase/session-client";
 
-import { listItemSourcing, listQuotes, type NoSupplierFound, type Quote } from "./quotes";
+import {
+  listItemSourcing,
+  listQuotes,
+  selectedQuoteId,
+  type NoSupplierFound,
+  type Quote,
+} from "./quotes";
 
 /**
  * Everything the item sourcing screen draws, once the Tender and the Item are known.
@@ -95,7 +98,7 @@ export async function loadItemSourcingScreen(
   },
   store: SessionCookieStore,
 ): Promise<ItemSourcingScreenData> {
-  const [quotes, sourcing, referenceImages, settings, members, selection] =
+  const [quotes, sourcing, referenceImages, settings, members, selected] =
     await Promise.all([
       listQuotes(tenderItemId, store),
       listItemSourcing(tenderId, store),
@@ -104,11 +107,7 @@ export async function loadItemSourcingScreen(
       // In the batch rather than after it: when it is wanted it starts with the others, and
       // when it is not there is no round trip to start.
       withMembers ? listMembers(store) : null,
-      createSessionClient(store)
-        .from("tender_items")
-        .select("selected_quote_id")
-        .eq("id", tenderItemId)
-        .maybeSingle(),
+      selectedQuoteId(tenderItemId, store),
     ]);
 
   const photos = await listQuotePhotosByQuote(
@@ -125,6 +124,6 @@ export async function loadItemSourcingScreen(
     ),
     timezone: settings.timezone,
     members,
-    selectedQuoteId: selection.data?.selected_quote_id ?? null,
+    selectedQuoteId: selected,
   };
 }

@@ -8,6 +8,10 @@ import type { QuotePhoto } from "@/lib/images/quote-photos";
 // that module is `server-only`, and a value import from it is what made this component
 // unrenderable in a browser test. The type still comes from there — types are erased.
 import { reportingCurrency } from "@/lib/fx/currencies";
+// The predicate from `@/lib/quotes/quote-form`, not the re-export on
+// `@/lib/quotes/quotes`: that module is `server-only`, and a value import from it is what
+// made this component unrenderable in a browser test.
+import { mayCorrectQuote } from "@/lib/quotes/quote-form";
 import type { Quote } from "@/lib/quotes/quotes";
 
 /**
@@ -36,7 +40,7 @@ export function QuoteList({
   quotes,
   photos,
   callerId,
-  isOwner,
+  ownerUserId,
   selectedQuoteId,
 }: {
   tenderId: string;
@@ -46,8 +50,8 @@ export function QuoteList({
   photos: Map<string, QuotePhoto[]>;
   /** Who is reading. A Quote is correctable by whoever sourced it, and by nobody else. */
   callerId: string;
-  /** Whether that reader owns the Tender, which is the one override on sourced-by. */
-  isOwner: boolean;
+  /** Who owns the Tender — the one override on sourced-by, and never a role. */
+  ownerUserId: string;
   /** The Item's Selected Quote, whose deletion costs a decision and so asks twice. */
   selectedQuoteId: string | null;
 }) {
@@ -166,10 +170,15 @@ export function QuoteList({
             photos={photos.get(quote.id) ?? []}
           />
 
-          {/* Correcting is the sourcer's, with the Owner as the override. Everybody else
+          {/* Correcting belongs to the Assignee who sourced it, with the Owner
+              as the override. Everybody else
               sees the Quote and no controls — the server refuses them either way, and an
               Edit button that leads to a refusal is worse than no button. */}
-          {quote.sourcedByUserId === callerId || isOwner ? (
+          {mayCorrectQuote({
+            sourcedByUserId: quote.sourcedByUserId,
+            callerId,
+            ownerUserId,
+          }) ? (
             <QuoteRowControls
               tenderId={tenderId}
               tenderItemId={tenderItemId}

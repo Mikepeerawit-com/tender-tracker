@@ -160,6 +160,13 @@ export function QuoteFieldInputs({
   );
 }
 
+/**
+ * One labelled input with its hint underneath.
+ *
+ * Exported because the currency cell is passed in from outside — the entry form's picker
+ * and the correction form's read-only value have to sit in the same grid column, wearing
+ * the same label and spacing, or the two screens stop looking like one form.
+ */
 export function Field({
   id,
   label,

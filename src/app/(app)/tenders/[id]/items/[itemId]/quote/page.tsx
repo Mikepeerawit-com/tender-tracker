@@ -136,7 +136,7 @@ export default async function ItemSourcingPage({
             quotes={quotes}
             photos={photos}
             callerId={user.id}
-            isOwner={tender.ownerUserId === user.id}
+            ownerUserId={tender.ownerUserId}
             selectedQuoteId={selectedQuoteId}
           />
         </section>

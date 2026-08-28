@@ -339,7 +339,7 @@
       "forbidden": "You are not signed in.",
       "not_found": "That tender item is no longer there.",
       "not_assignee": "Only an assignee can enter quotes on this tender. Add yourself to it first.",
-      "not_sourcer": "Only the assignee who sourced this quote, or the tender's owner, can change it.",
+      "not_sourced_by_you": "Only the assignee who sourced this quote, or the tender's owner, can change it.",
       "clears_selection": "This quote is the one selected for this item. Deleting it clears that selection — confirm below if that is what you want.",
       "incomplete": "Fill in the supplier and the unit the price is per.",
       "invalid_price": "Give a price greater than zero. If nobody would quote, record no supplier found instead.",
