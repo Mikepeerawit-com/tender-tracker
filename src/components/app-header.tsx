@@ -47,12 +47,14 @@ export function AppHeader({
   return (
     <header className="border-border flex items-center justify-between gap-2 border-b px-4 py-3">
       <div className="flex min-w-0 items-center gap-2">
+        {/* This link is on every screen in the app, so its prefetch fires most often and
+            is discarded most often — see the note in `tender-row.tsx`. */}
         <Button
           variant="ghost"
           size="sm"
           className="h-11"
           nativeButton={false}
-          render={<Link href="/tenders" />}
+          render={<Link href="/tenders" prefetch={false} />}
         >
           {t("tenders")}
         </Button>

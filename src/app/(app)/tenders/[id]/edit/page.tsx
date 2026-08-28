@@ -24,13 +24,21 @@ export default async function EditTenderPage({
 
   if (!user) redirect("/login");
 
-  const tender = await getTender(id, store);
+  // Three reads that never needed each other. `listReferenceImages` was written as
+  // `tender.id`, which reads like a dependency on the Tender having come back; it is the
+  // `id` out of the params either way, so all three start together. The cost is the
+  // reads still happening when there is no such Tender — they come back empty through
+  // RLS and are thrown away, which is one wasted trip on the mistaken link in exchange
+  // for two removed from every real edit.
+  const [tender, members, referenceImages] = await Promise.all([
+    getTender(id, store),
+    listMembers(store),
+    listReferenceImages(id, store),
+  ]);
 
   if (!tender) notFound();
 
   const t = await getTranslations("tenders");
-  const members = await listMembers(store);
-  const referenceImages = await listReferenceImages(tender.id, store);
 
   return (
     <div className="flex flex-1 flex-col gap-8 p-6">

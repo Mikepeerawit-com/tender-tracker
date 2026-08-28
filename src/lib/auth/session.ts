@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { isLocale, type Locale } from "@/i18n/config";
 import { createServiceClient } from "@/lib/supabase/service-client";
 import {
@@ -86,8 +88,22 @@ export async function signOut(store: SessionCookieStore): Promise<void> {
  * disabling someone ends their live session on their very next request — they do not
  * keep working until a 30-day cookie expires. The one place that must not use this is
  * the sign-in check above, which needs to tell "disabled" apart from "wrong password".
+ *
+ * Read **at most once per request**, however many times it is asked for. Two round trips
+ * live in here — `getUser()` against the auth server, then the profile row — and one
+ * screen asks for them more than once: `(app)/layout.tsx` gates on the answer, and the
+ * page beneath it needs the same answer to decide what the caller may do. That was two
+ * separate pairs of round trips on every render, for one question with one answer.
+ *
+ * `cache()` is scoped to a single request, so this can never hand one user another's
+ * session. It keys on `store` by reference, which is sound because `cookies()` is itself
+ * memoised per request and hands every caller the same object.
+ *
+ * Outside a render — every test below — React's `cache` is a pass-through that does not
+ * memoise at all, so a test that disables a member between two calls still sees the
+ * second answer change. Deliberate: the dedupe must not be able to hide that.
  */
-export async function currentUser(
+export const currentUser = cache(async function currentUser(
   store: SessionCookieStore,
 ): Promise<SessionUser | null> {
   const supabase = createSessionClient(store);
@@ -116,4 +132,4 @@ export async function currentUser(
     locale: isLocale(profile.locale) ? profile.locale : null,
     isOrgAdmin: profile.is_org_admin,
   };
-}
+});

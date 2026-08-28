@@ -6,10 +6,13 @@ import type { SessionCookieStore } from "@/lib/supabase/session-client";
 /**
  * Refreshes the session on every request, and turns anyone without one away.
  *
- * The refresh is the load-bearing half. Access tokens last an hour; the 30-day session
- * survives because each request quietly exchanges the refresh token and writes the new
- * pair back as `Set-Cookie`. Without this the app would work perfectly for an hour and
- * then log everyone out.
+ * The refresh is the load-bearing half, and the only half. Access tokens last an hour;
+ * the 30-day session survives because each request quietly exchanges the refresh token —
+ * when, and only when, it has expired — and writes the new pair back as `Set-Cookie`.
+ * Without this the app would work perfectly for an hour and then log everyone out.
+ *
+ * Turning people away is the other half, and it is deliberately the *weak* half. See the
+ * note on `getSession()` below for what this does and does not decide.
  *
  * (`proxy.ts`, not `middleware.ts` — the middleware filename is deprecated in Next 16.)
  */
@@ -55,18 +58,33 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     },
   };
 
-  // `getUser()` is what performs the refresh, and it revalidates against the auth
-  // server rather than trusting the cookie as sent.
+  // `getSession()`, not `getUser()`. Both perform the refresh this file exists for — it
+  // happens inside `__loadSession`, which exchanges the refresh token only once the
+  // access token has actually expired — but `getUser()` additionally revalidates against
+  // the auth server on *every* request. That is a network round trip standing in front of
+  // every navigation, and in front of every RSC prefetch a screen fires off, for an
+  // answer this file does not need.
+  //
+  // What is given up is nothing this file was relying on. The redirect below is an
+  // optimistic check deciding whether to send somebody to the login screen, and Next's
+  // own guidance is that Proxy "should not be used as a full session management or
+  // authorization solution". The real gate is `(app)/layout.tsx`, which still calls
+  // `currentUser()` and so still asks the auth server — and it is the stronger question
+  // regardless, being the one that catches a disabled member. Every authenticated page
+  // outside `(app)` (`/choose-language`, `/set-password`) gates itself the same way.
+  //
+  // So a forged cookie that merely parses as a session buys exactly one thing: reaching a
+  // layout that asks the auth server about it and redirects to `/login`. It reads nothing.
   const {
-    data: { user },
-  } = await createSessionClient(store).auth.getUser();
+    data: { session },
+  } = await createSessionClient(store).auth.getSession();
 
   const { pathname } = request.nextUrl;
   const isPublic = publicPaths.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );
 
-  if (!user && !isPublic) {
+  if (!session && !isPublic) {
     const login = request.nextUrl.clone();
     login.pathname = "/login";
     login.search = "";

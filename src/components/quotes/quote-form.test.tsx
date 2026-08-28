@@ -250,24 +250,30 @@ describe("when the Quote saves and a photo does not", () => {
     await user.upload(choosePhotos(), [aPhoto("first.jpg"), aPhoto("second.jpg")]);
     await user.click(save());
 
-    await waitFor(() =>
+    // Both sentences, waited for together. They arrive on separate state updates — the
+    // offer is appended as the upload loop finishes, the success is set when the action
+    // settles — so waiting only for the offer and then reading the success synchronously
+    // is a race the test loses on a slow machine and wins on a fast one. It has failed in
+    // CI and passed locally on the same commit for exactly that reason.
+    await waitFor(() => {
       expect(
         screen.queryByText(
           /the quote from ace medical is saved\. these photos did not upload: second\.jpg/i,
         ),
-      ).not.toBeNull(),
-    );
+      ).not.toBeNull();
+      expect(screen.queryByText("Quote saved.")).not.toBeNull();
+    });
 
     // The one that did land was still recorded: a dropped signal after the first photo
     // keeps the first.
     expect(server.record).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ storagePaths: ["an-org/quotes/quote-written/0.jpg"] }),
     );
-    // And the Quote is reported as saved, not as refused. `images.error.failed` and
-    // `quotes.error.failed` are the same sentence, so "no refusal is on screen" is asserted
-    // by what a success does and a refusal does not: the form goes back to blank, rather
-    // than being re-seeded with the price that was just typed into it.
-    expect(screen.queryByText("Quote saved.")).not.toBeNull();
+    // And the Quote is reported as saved, not as refused — asserted in the `waitFor`
+    // above. `images.error.failed` and `quotes.error.failed` are the same sentence, so
+    // "no refusal is on screen" is asserted by what a success does and a refusal does
+    // not: the form goes back to blank, rather than being re-seeded with the price that
+    // was just typed into it.
     expect(screen.getByLabelText(/supplier/i)).toHaveProperty("value", "");
 
     // Retrying aims at the Quote that exists rather than writing a second one, and
