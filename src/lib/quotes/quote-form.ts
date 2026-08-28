@@ -131,3 +131,74 @@ export function blankQuote({
 function text(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
 }
+
+/**
+ * A Quote as the correction form seeds from it.
+ *
+ * Everything back to the strings the browser posted, for the reason {@link SubmittedQuote}
+ * is strings in the first place: the inputs are uncontrolled and read `defaultValue`, and
+ * a null lead time has to arrive as `""` rather than as the word "null".
+ *
+ * `currency` rides along because the form displays it. It is not posted and the server
+ * would not read it if it were — the stored value is the only one an edit uses.
+ */
+export function quoteAsSubmitted(quote: {
+  supplierName: string;
+  unitPrice: number;
+  currency: string;
+  quotedUnit: string;
+  leadTimeDays: number | null;
+  matchType: MatchType;
+  alternativeProductName: string | null;
+  detailNotes: string | null;
+  quotedAt: string;
+}): SubmittedQuote {
+  return {
+    supplierName: quote.supplierName,
+    unitPrice: String(quote.unitPrice),
+    currency: quote.currency,
+    quotedUnit: quote.quotedUnit,
+    leadTimeDays: quote.leadTimeDays === null ? "" : String(quote.leadTimeDays),
+    matchType: quote.matchType,
+    alternativeProductName: quote.alternativeProductName ?? "",
+    detailNotes: quote.detailNotes ?? "",
+    quotedAt: quote.quotedAt,
+  };
+}
+
+/**
+ * May this person correct this Quote?
+ *
+ * The Assignee who sourced it, and the Tender's Owner as the override. Sourced-by is
+ * load-bearing: there is deliberately no unique index on (Tender Item, supplier), because
+ * two Assignees ringing the same supplier is expected and informative (ADR-0004), which
+ * makes `created_by_user_id` the only thing distinguishing two otherwise identical rows.
+ * If any Assignee could edit any Quote, the duplicate banner in the comparison view would
+ * stop reporting what it claims.
+ *
+ * An **Org Admin is not an override**: they have no extra visibility and no say over
+ * Tenders they do not own, which is why this asks two questions and neither is about a
+ * role.
+ *
+ * Lives here rather than in `./quotes` for the reason {@link matchTypes} does — that
+ * module is `server-only`, and the Quote list and the edit page both have to ask this in
+ * a component that renders in a browser test. `./quotes` re-exports it, and its own
+ * standing check calls it, so the sentence the server enforces and the one the screens
+ * draw cannot drift apart.
+ *
+ * The screens asking is not what makes it safe. `updateQuote` and `deleteQuote` ask again
+ * against the stored row; hiding the controls is so nobody is *invited* to correct a Quote
+ * that is not theirs.
+ */
+export function mayCorrectQuote({
+  sourcedByUserId,
+  callerId,
+  ownerUserId,
+}: {
+  sourcedByUserId: string;
+  callerId: string;
+  /** The Owner of the Tender the Quote's Item belongs to; null when it cannot be read. */
+  ownerUserId: string | null;
+}): boolean {
+  return sourcedByUserId === callerId || ownerUserId === callerId;
+}

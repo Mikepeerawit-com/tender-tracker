@@ -2,19 +2,25 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { signIn } from "@/lib/auth/session";
 import { failingRates, respondingRates, unreachableRates } from "@/lib/fx/rate-stub";
+import type { FxBoundary } from "@/lib/fx/rates";
 import { createServiceClient } from "@/lib/supabase/service-client";
 import {
   memoryCookieStore,
   type SessionCookieStore,
 } from "@/lib/supabase/session-client";
+import { tenderProgress } from "@/lib/tenders/progress";
 import { addAssignee, createTender, getTender } from "@/lib/tenders/tenders";
 
 import {
   clearNoSupplierFound,
+  countItemSourcing,
   createQuote,
+  deleteQuote,
   listItemSourcing,
   listQuotes,
   recordNoSupplierFound,
+  updateQuote,
+  type QuoteCorrection,
   type QuoteFields,
 } from "./quotes";
 
@@ -40,6 +46,10 @@ const service = createServiceClient();
 
 const assignee = { id: "", email: `quote-assignee-${run}@example.test` };
 const rival = { id: "", email: `quote-rival-${run}@example.test` };
+/** An Assignee on the same Tender who sourced none of it — the one an edit must refuse. */
+const colleague = { id: "", email: `quote-colleague-${run}@example.test` };
+/** An Org Admin, and an Assignee, and neither the Quote's Assignee nor the Owner. */
+const admin = { id: "", email: `quote-admin-${run}@example.test` };
 const bystander = { id: "", email: `quote-bystander-${run}@example.test` };
 const outsider = { id: "", email: `quote-outsider-${run}@example.test` };
 
@@ -74,7 +84,11 @@ async function createOrg(name: string): Promise<string> {
   return data.id;
 }
 
-async function createMember(org: string, who: { id: string; email: string }) {
+async function createMember(
+  org: string,
+  who: { id: string; email: string },
+  { isOrgAdmin = false }: { isOrgAdmin?: boolean } = {},
+) {
   const { data, error } = await service.auth.admin.createUser({
     email: who.email,
     password,
@@ -87,7 +101,13 @@ async function createMember(org: string, who: { id: string; email: string }) {
 
   const { error: profileError } = await service
     .from("users")
-    .insert({ id: who.id, org_id: org, name: who.email, email: who.email });
+    .insert({
+      id: who.id,
+      org_id: org,
+      name: who.email,
+      email: who.email,
+      is_org_admin: isOrgAdmin,
+    });
 
   if (profileError) throw profileError;
 }
@@ -162,16 +182,87 @@ function rates(rate: number, asOf?: string, currency = "CNY") {
   return respondingRates(rate, asOf);
 }
 
+/** The same Quote, written and handed back by id — what a correction needs to aim at. */
+async function aWrittenQuote(
+  store: SessionCookieStore,
+  overrides: Partial<QuoteFields> = {},
+  boundary: FxBoundary = {},
+): Promise<string> {
+  const result = await createQuote(aQuote(overrides), store, boundary);
+
+  if (!result.ok) throw new Error(`could not create a Quote: ${result.reason}`);
+
+  return result.quoteId;
+}
+
+/**
+ * A correction as the edit form posts one: every correctable field, with no currency
+ * among them. Defaults match `aQuote`, so an override is the only thing that changed.
+ */
+function aCorrection(
+  overrides: Partial<Omit<QuoteCorrection, "quoteId">> = {},
+): Omit<QuoteCorrection, "quoteId"> {
+  return {
+    supplierName: "Ace Medical",
+    unitPrice: 125.5,
+    quotedUnit: "box of 50",
+    leadTimeDays: 14,
+    matchType: "exact",
+    alternativeProductName: null,
+    detailNotes: null,
+    quotedAt: "2026-08-18",
+    ...overrides,
+  };
+}
+
+/**
+ * The stored row, read past the app's own shaping.
+ *
+ * `listQuotes` does not carry `created_at` or `updated_at`, and the four rate fields are
+ * the ones an edit must leave alone byte for byte — so these assertions read the row
+ * rather than the type a screen gets.
+ */
+async function storedQuote(quoteId: string) {
+  const { data, error } = await service
+    .from("quotes")
+    // One string literal rather than a concatenation: `supabase-js` infers the row type
+    // by parsing this at the type level, and a `+` between two halves leaves it with
+    // nothing to parse.
+    .select(
+      "unit_price, currency, quoted_unit, lead_time_days, detail_notes, quoted_at, fx_rate_mid, fx_rate_applied, fx_rate_as_of, fx_rate_is_stale, created_at, updated_at",
+    )
+    .eq("id", quoteId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return data;
+}
+
+/** The four fields ADR-0018 says move together or not at all. */
+function frozenRateOf(row: NonNullable<Awaited<ReturnType<typeof storedQuote>>>) {
+  return {
+    mid: row.fx_rate_mid,
+    applied: row.fx_rate_applied,
+    asOf: row.fx_rate_as_of,
+    isStale: row.fx_rate_is_stale,
+  };
+}
+
 beforeAll(async () => {
   orgId = await createOrg(`Quotes ${run}`);
   otherOrgId = await createOrg(`Quotes other ${run}`);
 
   await createMember(orgId, assignee);
   await createMember(orgId, rival);
+  await createMember(orgId, colleague);
+  await createMember(orgId, admin, { isOrgAdmin: true });
   await createMember(orgId, bystander);
   await createMember(otherOrgId, outsider);
 
-  ({ tenderId, itemId } = await aTender(assignee, [assignee, rival]));
+  // `assignee` owns this Tender as well as being on it, which is what makes the Owner
+  // override testable: `rival` sources a Quote the Owner did not.
+  ({ tenderId, itemId } = await aTender(assignee, [assignee, rival, colleague, admin]));
   ({ itemId: otherItemId } = await aTender(outsider, [outsider]));
 });
 
@@ -191,7 +282,14 @@ afterAll(async () => {
   await service.from("tenders").delete().in("org_id", [orgId, otherOrgId]);
   await service.from("suppliers").delete().in("org_id", [orgId, otherOrgId]);
 
-  const memberIds = [assignee.id, rival.id, bystander.id, outsider.id].filter(Boolean);
+  const memberIds = [
+    assignee.id,
+    rival.id,
+    colleague.id,
+    admin.id,
+    bystander.id,
+    outsider.id,
+  ].filter(Boolean);
 
   await service.from("users").delete().in("id", memberIds);
 
@@ -744,5 +842,597 @@ describe("what a Tender knows about its own sourcing", () => {
 
     expect((await listItemSourcing(tenderId, theirs)).size).toBe(0);
     expect(await listQuotes(itemId, theirs)).toEqual([]);
+  });
+});
+
+/**
+ * Correcting a Quote, and taking one back.
+ *
+ * A Quote was written once and could never be touched again (#55). That mattered more
+ * than a typo usually does: a wrong Quote is not inert — it feeds the comparison working
+ * sheet, it can be an Item's Selected Quote, and a wrong price that happens to be the
+ * lowest is the one most likely to be picked.
+ *
+ * The sharp part is the rate, and ADR-0018 is the contract: correcting a price keeps the
+ * frozen rate, correcting `quoted_at` re-freezes it against the new date. Both halves are
+ * held to here, because a row carrying the rate for a day it no longer claims is one
+ * nothing downstream is written to notice.
+ */
+describe("correcting a Quote", () => {
+  it("writes down what the supplier actually said", async () => {
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(store);
+
+    const result = await updateQuote(
+      {
+        quoteId,
+        ...aCorrection({
+          supplierName: "Ace Medical Supplies",
+          unitPrice: 118.25,
+          quotedUnit: "box of 100",
+          leadTimeDays: 21,
+          detailNotes: "He misread his own sheet; 118.25 is the real one.",
+        }),
+      },
+      store,
+    );
+
+    expect(result.ok).toBe(true);
+
+    const [quote] = await listQuotes(itemId, store);
+
+    expect(quote).toMatchObject({
+      supplierName: "Ace Medical Supplies",
+      unitPrice: 118.25,
+      quotedUnit: "box of 100",
+      leadTimeDays: 21,
+      detailNotes: "He misread his own sheet; 118.25 is the real one.",
+      // Never reassigned by an edit. It is who rang the supplier, and with the same
+      // supplier legitimately quoted twice it is the only thing telling two rows apart.
+      sourcedByUserId: assignee.id,
+    });
+  });
+
+  it("recomputes the THB figure from the corrected price", async () => {
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(
+      store,
+      { currency: "CNY", unitPrice: 100 },
+      rates(5, "2026-08-18"),
+    );
+
+    expect((await updateQuote({ quoteId, ...aCorrection({ unitPrice: 200 }) }, store)).ok)
+      .toBe(true);
+
+    const [quote] = await listQuotes(itemId, store);
+
+    // Generated by the database from `unit_price * fx_rate_applied`, never by hand.
+    expect(quote.unitPriceThb).toBeCloseTo(200 * quote.fxRateApplied, 6);
+  });
+
+  it("can turn an exact match into an Alternative, which then carries its own name", async () => {
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(store);
+
+    const result = await updateQuote(
+      {
+        quoteId,
+        ...aCorrection({
+          matchType: "alternative",
+          alternativeProductName: "Vinyl gloves, powder-free",
+        }),
+      },
+      store,
+    );
+
+    expect(result.ok).toBe(true);
+    expect((await listQuotes(itemId, store))[0]).toMatchObject({
+      matchType: "alternative",
+      alternativeProductName: "Vinyl gloves, powder-free",
+    });
+  });
+
+  it("drops the substitute's name when a correction makes it an exact match again", async () => {
+    // Otherwise the row keeps a product name for a Quote that no longer offers one, and
+    // the comparison view's QUOTED PRODUCT column names a substitute nobody offered.
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(store, {
+      matchType: "alternative",
+      alternativeProductName: "Vinyl gloves, powder-free",
+    });
+
+    expect((await updateQuote({ quoteId, ...aCorrection() }, store)).ok).toBe(true);
+    expect((await listQuotes(itemId, store))[0]).toMatchObject({
+      matchType: "exact",
+      alternativeProductName: null,
+    });
+  });
+
+  it("moves `updated_at`, which until now meant `created_at`", async () => {
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(store);
+    const before = (await storedQuote(quoteId))!;
+
+    // The column shipped with a default and no trigger. Nothing wrote a Quote after the
+    // insert, so it was inert rather than lying — and it would start lying here.
+    expect(before.updated_at).toBe(before.created_at);
+
+    expect((await updateQuote({ quoteId, ...aCorrection({ unitPrice: 130 }) }, store)).ok)
+      .toBe(true);
+
+    const after = (await storedQuote(quoteId))!;
+
+    expect(new Date(after.updated_at).getTime()).toBeGreaterThan(
+      new Date(after.created_at).getTime(),
+    );
+  });
+});
+
+describe("the frozen rate under a correction", () => {
+  it("is left exactly as it was when the date does not move", async () => {
+    // ADR-0018: a correction to a digit is not a claim about a currency. Re-fetching
+    // could only introduce a difference — a later ECB revision, or a stale rate where the
+    // original was live.
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(
+      store,
+      { currency: "CNY", unitPrice: 100 },
+      rates(4.9138, "2026-08-18"),
+    );
+
+    const before = frozenRateOf((await storedQuote(quoteId))!);
+
+    // Answering, and with a different rate on purpose: had the edit re-frozen, the mid
+    // would now be 9.99 and the stub would have been asked. Both staying put is proof no
+    // freeze was attempted rather than proof one happened to agree.
+    const stub = respondingRates(9.99);
+    const result = await updateQuote(
+      { quoteId, ...aCorrection({ unitPrice: 175, supplierName: "Ace Medical" }) },
+      store,
+      stub,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(frozenRateOf((await storedQuote(quoteId))!)).toEqual(before);
+    expect(stub.asked).toEqual([]);
+  });
+
+  it("is re-frozen against the new date when `quoted_at` moves", async () => {
+    // The sharp case. `fx_rate_as_of` has never meant "the day somebody typed this in" —
+    // it means the rate for the day the Quote claims. A date edit that left the rate
+    // alone would produce a row the create path could not produce.
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(
+      store,
+      { currency: "CNY", unitPrice: 100, quotedAt: "2026-08-18" },
+      rates(4.9138, "2026-08-18"),
+    );
+
+    const result = await updateQuote(
+      { quoteId, ...aCorrection({ unitPrice: 100, quotedAt: "2026-08-19" }) },
+      store,
+      rates(5.25, "2026-08-19"),
+    );
+
+    expect(result.ok).toBe(true);
+
+    const after = (await storedQuote(quoteId))!;
+
+    expect(after.quoted_at).toBe("2026-08-19");
+    expect(Number(after.fx_rate_mid)).toBeCloseTo(5.25, 8);
+    expect(after.fx_rate_as_of).toBe("2026-08-19");
+    expect(after.fx_rate_is_stale).toBe(false);
+    // All four move together, the applied rate included — it is the mid with the org's
+    // buffer on it, and a mid rewritten under an old applied is the buffer applied to
+    // nothing.
+    expect(Number(after.fx_rate_applied)).toBeCloseTo(5.25 * 1.02, 8);
+  });
+
+  it("records a re-freeze that fell back to a last-known rate as stale, rather than refusing", async () => {
+    // An Assignee fixing a date must no more be stopped by a service in Frankfurt than
+    // one entering a price was.
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(
+      store,
+      { currency: "CNY", quotedAt: "2026-08-18" },
+      rates(4.9138, "2026-08-18"),
+    );
+
+    const result = await updateQuote(
+      { quoteId, ...aCorrection({ quotedAt: "2026-08-19" }) },
+      store,
+      unreachableRates(),
+    );
+
+    expect(result.ok).toBe(true);
+
+    const after = (await storedQuote(quoteId))!;
+
+    expect(after.quoted_at).toBe("2026-08-19");
+    expect(after.fx_rate_is_stale).toBe(true);
+    // The day the rate really came from, not the day it was asked for.
+    expect(after.fx_rate_as_of).toBe("2026-08-18");
+  });
+
+  it("refuses a date it can find no rate for at all, and leaves the row untouched", async () => {
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(
+      store,
+      { currency: "CNY", unitPrice: 100 },
+      rates(4.9138, "2026-08-18"),
+    );
+
+    const before = (await storedQuote(quoteId))!;
+
+    // No cached rate to fall back on, and nothing answering: the one case the create
+    // path refuses, for the reason it refuses it — `fx_rate_mid` is `not null` and every
+    // total is built on it.
+    await service.from("fx_rates").delete().eq("currency", "CNY");
+
+    const result = await updateQuote(
+      { quoteId, ...aCorrection({ unitPrice: 999, quotedAt: "2026-08-19" }) },
+      store,
+      unreachableRates(),
+    );
+
+    expect(result).toEqual({ ok: false, reason: "no_rate" });
+
+    // Every field, not just the rate. A refused edit is not a partial one: the price
+    // moved in the same submit and must not have landed on its own.
+    expect(await storedQuote(quoteId)).toEqual(before);
+  });
+
+  it("does not convert a THB Quote whose date was corrected, or go near a rate service", async () => {
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(store, { currency: "THB", unitPrice: 125.5 });
+    const stub = respondingRates(4.9138);
+
+    const result = await updateQuote(
+      { quoteId, ...aCorrection({ quotedAt: "2026-08-19" }) },
+      store,
+      stub,
+    );
+
+    expect(result.ok).toBe(true);
+
+    const after = (await storedQuote(quoteId))!;
+
+    expect(Number(after.fx_rate_mid)).toBe(1);
+    expect(Number(after.fx_rate_applied)).toBe(1);
+    expect(after.fx_rate_as_of).toBe("2026-08-19");
+    expect(after.fx_rate_is_stale).toBe(false);
+    expect(stub.asked).toEqual([]);
+  });
+
+  it("keeps the currency the Quote was given in, which no correction may change", async () => {
+    // Changing the currency changes what the stored price *means*, which is a different
+    // Quote rather than a correction to this one. There is deliberately no field for it.
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(
+      store,
+      { currency: "CNY", unitPrice: 100 },
+      rates(4.9138, "2026-08-18"),
+    );
+
+    const result = await updateQuote(
+      // @ts-expect-error currency is not a correctable field, and this is the assertion.
+      { quoteId, ...aCorrection({ currency: "EUR" }) },
+      store,
+      rates(38, "2026-08-18", "EUR"),
+    );
+
+    expect(result.ok).toBe(true);
+    expect((await storedQuote(quoteId))!.currency).toBe("CNY");
+  });
+});
+
+describe("who may correct a Quote", () => {
+  it("lets the Assignee who sourced it", async () => {
+    const theirs = await signedInAs(rival.email);
+    const quoteId = await aWrittenQuote(theirs);
+
+    expect((await updateQuote({ quoteId, ...aCorrection({ unitPrice: 99 }) }, theirs)).ok)
+      .toBe(true);
+  });
+
+  it("refuses another Assignee on the same Tender, and says which problem it is", async () => {
+    // Sourced-by is load-bearing: there is no unique index on (Item, supplier) because
+    // two Assignees ringing the same supplier is expected and informative, and
+    // `created_by_user_id` is the only field telling two otherwise identical rows apart.
+    // If any Assignee could edit any Quote, the comparison view's duplicate banner would
+    // stop reporting what it claims.
+    const theirs = await signedInAs(rival.email);
+    const quoteId = await aWrittenQuote(theirs);
+
+    const result = await updateQuote(
+      { quoteId, ...aCorrection({ unitPrice: 1 }) },
+      await signedInAs(colleague.email),
+    );
+
+    expect(result).toEqual({ ok: false, reason: "not_sourced_by_you" });
+    expect((await listQuotes(itemId, theirs))[0].unitPrice).toBe(125.5);
+  });
+
+  it("lets the Tender's Owner correct a Quote they did not source", async () => {
+    const theirs = await signedInAs(rival.email);
+    const quoteId = await aWrittenQuote(theirs);
+
+    const result = await updateQuote(
+      { quoteId, ...aCorrection({ unitPrice: 99 }) },
+      // `assignee` owns this Tender; `rival` rang the supplier.
+      await signedInAs(assignee.email),
+    );
+
+    expect(result.ok).toBe(true);
+    expect((await listQuotes(itemId, theirs))[0]).toMatchObject({
+      unitPrice: 99,
+      // Corrected by the Owner, still sourced by the person who made the call.
+      sourcedByUserId: rival.id,
+    });
+  });
+
+  it("refuses an Org Admin who is neither the sourcer nor the Owner", async () => {
+    // An Org Admin has no extra visibility and no say over Tenders they do not own.
+    // Being on this Tender as an Assignee does not change that.
+    const theirs = await signedInAs(rival.email);
+    const quoteId = await aWrittenQuote(theirs);
+
+    expect(
+      await updateQuote(
+        { quoteId, ...aCorrection({ unitPrice: 1 }) },
+        await signedInAs(admin.email),
+      ),
+    ).toEqual({ ok: false, reason: "not_sourced_by_you" });
+  });
+
+  it("gives another org's Quote the same answer as a deleted one", async () => {
+    const quoteId = await aWrittenQuote(await signedInAs(assignee.email));
+
+    expect(
+      await updateQuote(
+        { quoteId, ...aCorrection() },
+        await signedInAs(outsider.email),
+      ),
+    ).toEqual({ ok: false, reason: "not_found" });
+  });
+
+  it("refuses a signed-out caller", async () => {
+    const quoteId = await aWrittenQuote(await signedInAs(assignee.email));
+
+    expect(await updateQuote({ quoteId, ...aCorrection() }, memoryCookieStore())).toEqual(
+      { ok: false, reason: "forbidden" },
+    );
+  });
+});
+
+describe("what a correction will not accept", () => {
+  it("refuses exactly what entry refuses", async () => {
+    // The same validation, not a second copy of it that can drift: a form that accepts
+    // on edit what it refused on entry is one that launders a bad Quote through the
+    // correction path.
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(store);
+
+    const refusals: [Partial<Omit<QuoteCorrection, "quoteId">>, string][] = [
+      [{ unitPrice: 0 }, "invalid_price"],
+      [{ supplierName: "  " }, "incomplete"],
+      [{ quotedUnit: "" }, "incomplete"],
+      [{ quotedAt: "2026-02-31" }, "invalid_date"],
+      [{ leadTimeDays: 2.5 }, "invalid_lead_time"],
+      [{ matchType: "alternative", alternativeProductName: null }, "alternative_unnamed"],
+    ];
+
+    for (const [override, reason] of refusals) {
+      expect(await updateQuote({ quoteId, ...aCorrection(override) }, store)).toEqual({
+        ok: false,
+        reason,
+      });
+    }
+
+    // Untouched by every one of them.
+    expect((await listQuotes(itemId, store))[0].unitPrice).toBe(125.5);
+  });
+});
+
+describe("taking a Quote back", () => {
+  it("is done by the Assignee who sourced it", async () => {
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(store);
+
+    expect(await deleteQuote({ quoteId }, store)).toEqual({ ok: true });
+    expect(await listQuotes(itemId, store)).toEqual([]);
+  });
+
+  it("refuses another Assignee on the same Tender", async () => {
+    const theirs = await signedInAs(rival.email);
+    const quoteId = await aWrittenQuote(theirs);
+
+    expect(
+      await deleteQuote({ quoteId }, await signedInAs(colleague.email)),
+    ).toEqual({ ok: false, reason: "not_sourced_by_you" });
+    expect(await listQuotes(itemId, theirs)).toHaveLength(1);
+  });
+
+  it("is done by the Tender's Owner on a Quote they did not source", async () => {
+    const theirs = await signedInAs(rival.email);
+    const quoteId = await aWrittenQuote(theirs);
+
+    expect(await deleteQuote({ quoteId }, await signedInAs(assignee.email))).toEqual({
+      ok: true,
+    });
+    expect(await listQuotes(itemId, theirs)).toEqual([]);
+  });
+
+  it("refuses an Org Admin who is neither the sourcer nor the Owner", async () => {
+    const theirs = await signedInAs(rival.email);
+    const quoteId = await aWrittenQuote(theirs);
+
+    expect(await deleteQuote({ quoteId }, await signedInAs(admin.email))).toEqual({
+      ok: false,
+      reason: "not_sourced_by_you",
+    });
+  });
+
+  it("refuses a signed-out caller", async () => {
+    const quoteId = await aWrittenQuote(await signedInAs(assignee.email));
+
+    expect(await deleteQuote({ quoteId }, memoryCookieStore())).toEqual({
+      ok: false,
+      reason: "forbidden",
+    });
+  });
+
+  it("gives another org's Quote the same answer as a deleted one", async () => {
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(store);
+
+    expect(await deleteQuote({ quoteId }, await signedInAs(outsider.email))).toEqual({
+      ok: false,
+      reason: "not_found",
+    });
+    expect(await listQuotes(itemId, store)).toHaveLength(1);
+  });
+
+  it("will not quietly drop an Item's Selected Quote", async () => {
+    // The foreign key is composite and clears the selection safely on its own, so nothing
+    // dangles. What is missing is not integrity — it is that the Item would lose the one
+    // decision anybody made about it with nothing said to anyone.
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(store);
+
+    await service
+      .from("tender_items")
+      .update({ selected_quote_id: quoteId })
+      .eq("id", itemId);
+
+    expect(await deleteQuote({ quoteId }, store)).toEqual({
+      ok: false,
+      reason: "clears_selection",
+    });
+    expect(await listQuotes(itemId, store)).toHaveLength(1);
+  });
+
+  it("goes ahead once the Selected Quote's deletion is confirmed, clearing the selection", async () => {
+    const store = await signedInAs(assignee.email);
+    const quoteId = await aWrittenQuote(store);
+
+    await service
+      .from("tender_items")
+      .update({ selected_quote_id: quoteId })
+      .eq("id", itemId);
+
+    expect(await deleteQuote({ quoteId, clearingSelection: true }, store)).toEqual({
+      ok: true,
+    });
+    expect(await listQuotes(itemId, store)).toEqual([]);
+
+    const { data } = await service
+      .from("tender_items")
+      .select("selected_quote_id")
+      .eq("id", itemId)
+      .single();
+
+    expect(data?.selected_quote_id).toBeNull();
+  });
+
+  it("asks for no confirmation when the Quote is not the Selected one", async () => {
+    const store = await signedInAs(assignee.email);
+    const selected = await aWrittenQuote(store, { supplierName: "Ace Medical" });
+    const other = await aWrittenQuote(store, { supplierName: "Beta Surgical" });
+
+    await service
+      .from("tender_items")
+      .update({ selected_quote_id: selected })
+      .eq("id", itemId);
+
+    expect(await deleteQuote({ quoteId: other }, store)).toEqual({ ok: true });
+
+    const { data } = await service
+      .from("tender_items")
+      .select("selected_quote_id")
+      .eq("id", itemId)
+      .single();
+
+    // The surviving selection is still the one that was made.
+    expect(data?.selected_quote_id).toBe(selected);
+  });
+
+  it("takes the Item's last Quote back to Not Yet Sourced, which regresses the Tender", async () => {
+    // The derivation already handles this and nothing new is needed for it — but a Tender
+    // that went on reading `quoted` with an Item nobody has a price for is exactly the
+    // failure a delete path can introduce, so it is pinned end to end rather than at the
+    // count that feeds it.
+    //
+    // Two Items, because that is what makes the regression `sourcing` rather than `new`:
+    // one Item still has a price, so the Tender is being worked rather than untouched.
+    const store = await signedInAs(assignee.email);
+    const built = await createTender(
+      {
+        clientName: "Bangkok General Hospital",
+        title: `Two-item regression ${run}`,
+        dateReceived: "2026-08-01",
+        internalQuoteDeadline: "2026-08-20",
+        clientSubmissionDeadline: "2026-08-28",
+        expectedDecisionDate: null,
+        ownerUserId: assignee.id,
+        notes: null,
+        items: [
+          {
+            productName: "Nitrile gloves, powder-free",
+            description: null,
+            quantity: 500,
+            unit: "box of 50",
+          },
+          {
+            productName: "Surgical masks, type IIR",
+            description: null,
+            quantity: 200,
+            unit: "box of 50",
+          },
+        ],
+      },
+      store,
+    );
+
+    if (!built.ok) throw new Error(`could not create a Tender: ${built.reason}`);
+
+    const added = await addAssignee(
+      { tenderId: built.tenderId, userId: assignee.id },
+      store,
+    );
+
+    if (!added.ok) throw new Error(`could not assign: ${added.reason}`);
+
+    const items = (await getTender(built.tenderId, store))!.items.map((item) => item.id);
+
+    /** The Tender as `tenderProgress` needs it, built from what the database now says. */
+    const progressNow = async () => {
+      const counts = await countItemSourcing(items, store);
+
+      return tenderProgress({
+        submittedAt: null,
+        internalQuoteDeadline: "2026-08-20",
+        clientSubmissionDeadline: "2026-08-28",
+        items: items.map((id) => ({
+          outcome: null,
+          quoteCount: counts.get(id)?.quoteCount ?? 0,
+          noSupplierFoundCount: counts.get(id)?.noSupplierFoundCount ?? 0,
+        })),
+      });
+    };
+
+    await aWrittenQuote(store, { tenderItemId: items[0] });
+
+    const doomed = await aWrittenQuote(store, { tenderItemId: items[1] });
+
+    // Every Item has a price, so the Bid could be built today.
+    expect(await progressNow()).toBe("quoted");
+
+    expect(await deleteQuote({ quoteId: doomed }, store)).toEqual({ ok: true });
+
+    // Absent, not zeroed: Not Yet Sourced is an absence, and `tenderProgress` reads a
+    // missing entry as an Item with no Quote.
+    expect((await countItemSourcing(items, store)).get(items[1])).toBeUndefined();
+    expect(await progressNow()).toBe("sourcing");
   });
 });

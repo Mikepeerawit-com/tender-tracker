@@ -13,7 +13,7 @@ import {
 // Not `server-only`, unlike this module: the add-quote form renders the radio group in
 // the browser. Re-exported below so server-side callers keep reading it from the module
 // that owns Quotes.
-import { matchTypes, type MatchType } from "./quote-form";
+import { mayCorrectQuote, matchTypes, type MatchType } from "./quote-form";
 
 /**
  * Recording what a supplier said, and recording that nobody would say anything.
@@ -39,7 +39,7 @@ import { matchTypes, type MatchType } from "./quote-form";
  * out of another's Quotes; the checks in this file are the ones RLS cannot express.
  */
 
-export { matchTypes, type MatchType };
+export { mayCorrectQuote, matchTypes, type MatchType };
 
 export type QuoteFields = {
   tenderItemId: string;
@@ -60,6 +60,24 @@ export type QuoteFields = {
 };
 
 /**
+ * A correction to a Quote that already exists: every field of it that may be changed.
+ *
+ * Derived from {@link QuoteFields} rather than written out beside it, so a field added to
+ * entry is a field this has to decide about rather than one it silently omits. Two are
+ * subtracted, for different reasons:
+ *
+ * **`tenderItemId`** — moving a Quote to another Item is not a correction to this Quote.
+ * The Item it was entered against is what it is a price *for*.
+ *
+ * **`currency`** — changing it changes what the stored `unit_price` means, which is a
+ * different Quote rather than a correction to this one (ADR-0018). Delete and re-enter is
+ * the honest path, and this module provides it.
+ */
+export type QuoteCorrection = Omit<QuoteFields, "tenderItemId" | "currency"> & {
+  quoteId: string;
+};
+
+/**
  * Every way a write here can be refused, as a list rather than a bare union: the wording
  * lives in the message files, and a reason with none renders to the user as its own key.
  * `messages.test.ts` walks this to hold both locales to it.
@@ -68,6 +86,8 @@ export const quoteProblems = [
   "forbidden",
   "not_found",
   "not_assignee",
+  "not_sourced_by_you",
+  "clears_selection",
   "incomplete",
   "invalid_price",
   "invalid_lead_time",
@@ -154,7 +174,7 @@ export async function createQuote(
 
   if (standing) return { ok: false, reason: standing };
 
-  const problem = fieldProblem(input);
+  const problem = fieldProblem(input, input.currency);
 
   if (problem) return { ok: false, reason: problem };
 
@@ -217,6 +237,161 @@ export async function createQuote(
     .eq("user_id", caller.id);
 
   return { ok: true, quoteId: data.id };
+}
+
+/**
+ * Correct a Quote that is already written down.
+ *
+ * A Quote used to be written once and never touched again, which mattered more than a
+ * typo usually does: a wrong Quote is not inert. It feeds the comparison working sheet,
+ * it can be an Item's Selected Quote, and a wrong price that happens to be the lowest is
+ * the one most likely to be picked.
+ *
+ * ## The rate follows the date the Quote claims (ADR-0018)
+ *
+ * `createQuote` freezes against `quotedAt`, not against today, so `fx_rate_as_of` has
+ * never meant "the day somebody typed this in" — it means the rate for the day this Quote
+ * claims the supplier gave the price. Two rules follow, and both are here:
+ *
+ * - **`quotedAt` moved**, so the freeze is re-run against the new date and all four rate
+ *   fields are rewritten together. Rewriting some but not others would leave the buffer
+ *   applied to a mid it was not computed from.
+ * - **Anything else moved**, so the rate is left exactly as it is — the price included. A
+ *   correction to a digit is not a claim about a currency, and re-fetching could only
+ *   introduce a later ECB revision or a Stale Rate where the original was live.
+ *
+ * A re-freeze can fail the way the first one can, and is refused the same way: the row is
+ * left as it was, in every field, rather than half-corrected around a price nothing can
+ * convert. A re-freeze that falls back to a last-known rate is recorded as stale rather
+ * than refused — an Assignee fixing a date must no more be stopped by a service in
+ * Frankfurt than one entering a price was.
+ */
+export async function updateQuote(
+  input: QuoteCorrection,
+  store: SessionCookieStore,
+  boundary: FxBoundary = {},
+): Promise<QuoteResult> {
+  const caller = await currentUser(store);
+
+  if (!caller) return { ok: false, reason: "forbidden" };
+
+  const supabase = createSessionClient(store);
+  const standing = await correctableQuote(input.quoteId, caller.id, supabase);
+
+  if ("reason" in standing) return { ok: false, reason: standing.reason };
+
+  const problem = fieldProblem(input, null);
+
+  if (problem) return { ok: false, reason: problem };
+
+  // The stored currency, never one from the caller: `QuoteCorrection` has no field for it
+  // and this is the only place the value could otherwise come from.
+  const rate =
+    input.quotedAt === standing.quote.quoted_at
+      ? null
+      : await freezeRate(
+          {
+            currency: standing.quote.currency,
+            on: input.quotedAt,
+            bufferPct: (await getOrgSettings(store)).fxBufferPct,
+          },
+          supabase,
+          boundary,
+        );
+
+  // Refused before anything is written, which is what makes "the row is left as it was"
+  // true of the price as well as of the rate — they moved in the same submit.
+  if (input.quotedAt !== standing.quote.quoted_at && rate === null) {
+    return { ok: false, reason: "no_rate" };
+  }
+
+  const supplierId = await findOrCreateSupplier(
+    input.supplierName,
+    caller.orgId,
+    supabase,
+  );
+
+  if (supplierId === null) return { ok: false, reason: "failed" };
+
+  const { error } = await supabase
+    .from("quotes")
+    .update({
+      supplier_id: supplierId,
+      unit_price: input.unitPrice,
+      quoted_unit: input.quotedUnit.trim(),
+      lead_time_days: input.leadTimeDays,
+      match_type: input.matchType,
+      // Cleared when a correction takes the Quote back to an exact match. Left behind, it
+      // is a substitute's name on a row that no longer offers one — and the comparison
+      // view's QUOTED PRODUCT column reads this and nothing else.
+      alternative_product_name:
+        input.matchType === "alternative"
+          ? (input.alternativeProductName?.trim() ?? null)
+          : null,
+      detail_notes: blankToNull(input.detailNotes),
+      quoted_at: input.quotedAt,
+      // All four together or none of them, which is why this is one spread rather than
+      // four assignments guarded separately.
+      ...(rate === null
+        ? {}
+        : {
+            fx_rate_mid: rate.mid,
+            fx_rate_applied: rate.applied,
+            fx_rate_as_of: rate.asOf,
+            fx_rate_is_stale: rate.isStale,
+          }),
+    })
+    .eq("id", input.quoteId);
+
+  return error === null ? { ok: true } : { ok: false, reason: "failed" };
+}
+
+/**
+ * Take a Quote back.
+ *
+ * The path for the corrections an edit cannot make — a Quote entered against the wrong
+ * Item, or in the wrong currency, both of which change what the row *is* rather than what
+ * it says.
+ *
+ * **Deleting an Item's Selected Quote is refused until it is asked for twice.** Nothing
+ * dangles either way: `tender_items.selected_quote_id` has a composite foreign key with
+ * `on delete set null`, so the selection clears itself and no orphan is possible. The
+ * refusal is not about integrity. It is that the Item would otherwise lose the one
+ * decision anybody made about it with nothing said to anyone — so the first attempt
+ * reports what the delete would cost, and `clearingSelection` is the caller having been
+ * told and come back.
+ *
+ * Deleting the last Quote on an Item takes it back to **Not Yet Sourced**, which regresses
+ * the Tender's derived Progress. That needs nothing here: the derivation counts Quote
+ * rows, and there is one fewer.
+ */
+export async function deleteQuote(
+  {
+    quoteId,
+    clearingSelection = false,
+  }: {
+    quoteId: string;
+    /** The caller has been told this clears the Item's selection, and means it. */
+    clearingSelection?: boolean;
+  },
+  store: SessionCookieStore,
+): Promise<QuoteResult> {
+  const caller = await currentUser(store);
+
+  if (!caller) return { ok: false, reason: "forbidden" };
+
+  const supabase = createSessionClient(store);
+  const standing = await correctableQuote(quoteId, caller.id, supabase);
+
+  if ("reason" in standing) return { ok: false, reason: standing.reason };
+
+  if (standing.quote.isSelected && !clearingSelection) {
+    return { ok: false, reason: "clears_selection" };
+  }
+
+  const { error } = await supabase.from("quotes").delete().eq("id", quoteId);
+
+  return error === null ? { ok: true } : { ok: false, reason: "failed" };
 }
 
 /**
@@ -400,6 +575,31 @@ export async function listItemSourcing(
   return sourcing;
 }
 
+/**
+ * Which Quote an Item has been **Selected** from, or null when nobody has chosen yet.
+ *
+ * A fact about the Item rather than about any Quote — a Quote does not know it was picked,
+ * which is why this cannot be read off {@link listQuotes}. `tender_items.selected_quote_id`
+ * is the single column A8 chose over a `quotes.is_selected` boolean, so that "one Selected
+ * Quote per Item" is structural rather than a rule the app has to remember.
+ *
+ * Named here rather than issued inline by the screen that wants it: every other read the
+ * sourcing screen makes is a function in this module, and a raw table query in a loader is
+ * how the next one comes to be written there too.
+ */
+export async function selectedQuoteId(
+  tenderItemId: string,
+  store: SessionCookieStore,
+): Promise<string | null> {
+  const { data } = await createSessionClient(store)
+    .from("tender_items")
+    .select("selected_quote_id")
+    .eq("id", tenderItemId)
+    .maybeSingle();
+
+  return data?.selected_quote_id ?? null;
+}
+
 /** How one Item's sourcing stands, counted rather than read. */
 export type ItemSourcingCount = { quoteCount: number; noSupplierFoundCount: number };
 
@@ -541,7 +741,84 @@ async function assigneeProblem(
   return assignees.some((row) => row.user_id === callerId) ? null : "not_assignee";
 }
 
-function fieldProblem(input: QuoteFields): QuoteProblem | null {
+/**
+ * May the caller correct this Quote, and what does correcting it need to know?
+ *
+ * A narrower question than {@link assigneeProblem}, and deliberately not that one. Being
+ * an Assignee is what earns you the right to *enter* a Quote; changing one somebody else
+ * entered is a different act.
+ *
+ * **Only the Assignee who sourced it, with the Tender's Owner as the override.**
+ * `created_by_user_id` is
+ * "sourced by" and it is load-bearing: there is deliberately no unique index on (Item,
+ * supplier) because two Assignees ringing the same supplier is expected and informative
+ * (ADR-0004), which makes that column the only thing distinguishing two otherwise
+ * identical rows. If any Assignee could edit any Quote, the duplicate banner in the
+ * comparison view would stop reporting what it claims.
+ *
+ * **The Org Admin is not an override.** An Org Admin has no extra visibility and no say
+ * over Tenders they do not own, so there is nothing to read here about them — which is
+ * why this asks only two questions and neither of them is about a role.
+ *
+ * One embedded read rather than three. RLS turns another org's Quote into no row, which
+ * is the same answer as a Quote already deleted, and is the right answer to give.
+ */
+async function correctableQuote(
+  quoteId: string,
+  callerId: string,
+  supabase: ReturnType<typeof createSessionClient>,
+): Promise<
+  | { reason: QuoteProblem }
+  | { quote: { currency: string; quoted_at: string; isSelected: boolean } }
+> {
+  if (!quoteId) return { reason: "not_found" };
+
+  const { data } = await supabase
+    .from("quotes")
+    .select(
+      // Named rather than inferred: `quotes` and `tender_items` reference each other —
+      // this Quote's Item, and that Item's Selected Quote — so an unqualified embed is
+      // ambiguous and PostgREST refuses it, which arrives here as no row at all.
+      "id, currency, quoted_at, created_by_user_id, " +
+        "item:tender_items!quotes_tender_item_id_fkey(" +
+        "selected_quote_id, tender:tenders(owner_user_id))",
+    )
+    .eq("id", quoteId)
+    .maybeSingle()
+    .overrideTypes<CorrectableQuoteDbRow, { merge: false }>();
+
+  if (!data) return { reason: "not_found" };
+
+  const permitted = mayCorrectQuote({
+    sourcedByUserId: data.created_by_user_id,
+    callerId,
+    ownerUserId: data.item?.tender?.owner_user_id ?? null,
+  });
+
+  if (!permitted) return { reason: "not_sourced_by_you" };
+
+  return {
+    quote: {
+      currency: data.currency,
+      quoted_at: data.quoted_at,
+      isSelected: data.item?.selected_quote_id === quoteId,
+    },
+  };
+}
+
+/**
+ * What both write paths refuse, and the one thing only entry can.
+ *
+ * `currency` is null on a correction — there is no field for it there, so there is
+ * nothing to check — and a string on entry, where it is checked in the position it has
+ * always been checked in: before the rate is fetched, so a currency ECB does not publish
+ * is refused with a sentence about the currency rather than after a round trip that could
+ * not have helped.
+ */
+function fieldProblem(
+  input: Omit<QuoteFields, "tenderItemId" | "currency">,
+  currency: string | null,
+): QuoteProblem | null {
   if (!input.supplierName.trim() || !input.quotedUnit.trim()) return "incomplete";
 
   // `Number("")` is 0, which this refuses: a Quote *is* a price, and the absence of one
@@ -557,10 +834,10 @@ function fieldProblem(input: QuoteFields): QuoteProblem | null {
 
   if (!isCalendarDate(input.quotedAt)) return "invalid_date";
 
-  // Checked before the rate is fetched, so a currency ECB does not publish is refused
-  // with a sentence about the currency rather than after a round trip that could not
-  // have helped. THB is in the set and never fetched — it is not converted at all.
-  if (!isConvertibleCurrency(input.currency)) return "unsupported_currency";
+  // THB is in the set and never fetched — it is not converted at all.
+  if (currency !== null && !isConvertibleCurrency(currency)) {
+    return "unsupported_currency";
+  }
 
   // An Alternative carries the substitute's own name, in its own column. Buried in the
   // notes it is invisible to the comparison view's `QUOTED PRODUCT` column, which is the
@@ -627,6 +904,18 @@ type QuoteDbRow = {
   supplier: { name: string } | null;
   sourcedBy: { name: string } | null;
 };
+
+/** What {@link correctableQuote} reads: the permission facts, and the two an edit needs. */
+type CorrectableQuoteDbRow = {
+  id: string;
+  currency: string;
+  quoted_at: string;
+  created_by_user_id: string;
+  item: {
+    selected_quote_id: string | null;
+    tender: { owner_user_id: string } | null;
+  } | null;
+} | null;
 
 type NoSupplierFoundDbRow = {
   tender_item_id: string;

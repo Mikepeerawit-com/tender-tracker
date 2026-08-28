@@ -1,12 +1,17 @@
 import { useFormatter, useTranslations } from "next-intl";
 
 import { QuotePhotoControls } from "@/components/quotes/quote-photos";
+import { QuoteRowControls } from "@/components/quotes/quote-row-controls";
 import { calendarDate, calendarDateFormat } from "@/lib/calendar-date";
 import type { QuotePhoto } from "@/lib/images/quote-photos";
 // `reportingCurrency` from its own module, not the re-export on `@/lib/quotes/quotes`:
 // that module is `server-only`, and a value import from it is what made this component
 // unrenderable in a browser test. The type still comes from there — types are erased.
 import { reportingCurrency } from "@/lib/fx/currencies";
+// The predicate from `@/lib/quotes/quote-form`, not the re-export on
+// `@/lib/quotes/quotes`: that module is `server-only`, and a value import from it is what
+// made this component unrenderable in a browser test.
+import { mayCorrectQuote } from "@/lib/quotes/quote-form";
 import type { Quote } from "@/lib/quotes/quotes";
 
 /**
@@ -31,13 +36,24 @@ import type { Quote } from "@/lib/quotes/quotes";
  */
 export function QuoteList({
   tenderId,
+  tenderItemId,
   quotes,
   photos,
+  callerId,
+  ownerUserId,
+  selectedQuoteId,
 }: {
   tenderId: string;
+  tenderItemId: string;
   quotes: Quote[];
   /** Every Quote's photos, keyed by Quote — one query for the whole Item. */
   photos: Map<string, QuotePhoto[]>;
+  /** Who is reading. A Quote is correctable by whoever sourced it, and by nobody else. */
+  callerId: string;
+  /** Who owns the Tender — the one override on sourced-by, and never a role. */
+  ownerUserId: string;
+  /** The Item's Selected Quote, whose deletion costs a decision and so asks twice. */
+  selectedQuoteId: string | null;
 }) {
   const t = useTranslations("quotes");
   const format = useFormatter();
@@ -153,6 +169,24 @@ export function QuoteList({
             quoteId={quote.id}
             photos={photos.get(quote.id) ?? []}
           />
+
+          {/* Correcting belongs to the Assignee who sourced it, with the Owner
+              as the override. Everybody else
+              sees the Quote and no controls — the server refuses them either way, and an
+              Edit button that leads to a refusal is worse than no button. */}
+          {mayCorrectQuote({
+            sourcedByUserId: quote.sourcedByUserId,
+            callerId,
+            ownerUserId,
+          }) ? (
+            <QuoteRowControls
+              tenderId={tenderId}
+              tenderItemId={tenderItemId}
+              quoteId={quote.id}
+              supplierName={quote.supplierName}
+              isSelected={quote.id === selectedQuoteId}
+            />
+          ) : null}
         </li>
       ))}
     </ul>

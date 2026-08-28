@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 import {
   refusedQuote,
@@ -12,8 +13,11 @@ import {
 import {
   clearNoSupplierFound,
   createQuote,
+  deleteQuote,
   recordNoSupplierFound,
+  updateQuote,
   type MatchType,
+  type QuoteCorrection,
   type QuoteFields,
   type QuoteProblem,
 } from "@/lib/quotes/quotes";
@@ -53,6 +57,57 @@ export async function createQuoteAction(
   // One or the other, never both: `redirect()` throws, so an action that redirects has no
   // return value for a caller to read an id out of.
   return savedQuote(result.quoteId);
+}
+
+/**
+ * A correction to a Quote already written, ending back on the Item's sourcing screen.
+ *
+ * A redirect rather than an id, which is the opposite of what the create action does and
+ * for the opposite reason: this form is a page of its own, opened from a Quote's row, so
+ * the thing to do after a correction lands is to put somebody back where they pressed
+ * Edit. Nothing is uploaded against the result, so there is no id for a caller to need.
+ */
+export async function updateQuoteAction(
+  _previous: QuoteFormState,
+  formData: FormData,
+): Promise<QuoteFormState> {
+  const tenderId = text(formData, "tenderId");
+  const tenderItemId = text(formData, "tenderItemId");
+  const result = await updateQuote(
+    { quoteId: text(formData, "quoteId"), ...correctableFields(formData) },
+    await cookies(),
+  );
+
+  if (!result.ok) return refusedQuote(result.reason, submittedQuote(formData));
+
+  revalidatePath(`/tenders/${tenderId}`, "layout");
+  revalidatePath("/tenders");
+
+  redirect(`/tenders/${tenderId}/items/${tenderItemId}/quote`);
+}
+
+/**
+ * Take a Quote back, from its own row on the sourcing screen.
+ *
+ * Stays where it is rather than redirecting: the row simply goes, and the person deleting
+ * it is usually part-way through a run of supplier calls on that Item.
+ *
+ * `clearingSelection` is the second press. The module refuses the first one when the Quote
+ * is its Item's Selected Quote, and this carries back the confirmation that answers it.
+ */
+export async function deleteQuoteAction(
+  _previous: QuoteFormState,
+  formData: FormData,
+): Promise<QuoteFormState> {
+  const result = await deleteQuote(
+    {
+      quoteId: text(formData, "quoteId"),
+      clearingSelection: formData.get("clearingSelection") === "true",
+    },
+    await cookies(),
+  );
+
+  return afterQuoteWrite(result, text(formData, "tenderId"));
 }
 
 export async function recordNoSupplierFoundAction(
@@ -104,11 +159,21 @@ function afterQuoteWrite(
 function quoteFields(formData: FormData, tenderItemId: string): QuoteFields {
   return {
     tenderItemId,
+    // Read here and nowhere else. A correction has no currency field, because changing it
+    // changes what the stored price means (ADR-0018) — and a shared reader that pulled it
+    // out of the form anyway is how a hidden input would come to be honoured.
+    currency: text(formData, "currency"),
+    ...correctableFields(formData),
+  };
+}
+
+/** Everything both forms post, read once so entry and correction cannot drift apart. */
+function correctableFields(formData: FormData): Omit<QuoteCorrection, "quoteId"> {
+  return {
     supplierName: text(formData, "supplierName"),
     // `Number("")` is 0, which the price check refuses: a Quote is a price, and not
     // having one is recorded as No Supplier Found rather than as free.
     unitPrice: Number(text(formData, "unitPrice")),
-    currency: text(formData, "currency"),
     quotedUnit: text(formData, "quotedUnit"),
     leadTimeDays: optionalNumber(formData, "leadTimeDays"),
     // Anything that is not the word `alternative` is an exact match. The toggle only ever

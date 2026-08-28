@@ -5,19 +5,17 @@ import { useTranslations } from "next-intl";
 
 import { createQuoteAction, type QuoteFormState } from "@/app/actions/quotes";
 import { useImageUpload } from "@/components/images/use-image-upload";
+import { Field, QuoteFieldInputs } from "@/components/quotes/quote-fields";
 import { QuotePhotoPicker } from "@/components/quotes/quote-photo-picker";
 import { quotePhotoDestination } from "@/components/quotes/quote-photo-uploads";
 import { QuoteProblemNotice } from "@/components/quotes/quote-problem";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Textarea } from "@/components/ui/textarea";
 import { currencyOptions } from "@/lib/fx/currencies";
 import { maxImagesAtOnce, type ImageProblem } from "@/lib/images/images";
 // From `@/lib/quotes/quote-form` rather than from `@/lib/quotes/quotes`, which
 // re-exports it: this runs in the browser, and that module is `server-only`.
-import { matchTypes, type MatchType, type SubmittedQuote } from "@/lib/quotes/quote-form";
+import { type MatchType, type SubmittedQuote } from "@/lib/quotes/quote-form";
 import { saveQuoteThenPhotos } from "@/lib/quotes/quote-with-photos";
 
 /**
@@ -226,134 +224,27 @@ export function QuoteForm({
 
         <QuoteProblemNotice error={state.error} />
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field id="supplierName" label={t("supplier")} hint={t("supplierHint")}>
-            <Input
-              id="supplierName"
-              name="supplierName"
-              defaultValue={fields.supplierName}
-              autoComplete="off"
-              className="h-11"
-            />
-          </Field>
-
-          <Field id="quotedAt" label={t("quotedAt")} hint={t("quotedAtHint")}>
-            <Input
-              id="quotedAt"
-              name="quotedAt"
-              type="date"
-              defaultValue={fields.quotedAt}
-              className="h-11"
-            />
-          </Field>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field id="unitPrice" label={t("unitPrice")}>
-            <Input
-              id="unitPrice"
-              name="unitPrice"
-              type="number"
-              // `decimal` rather than `numeric`: a price has a decimal point in it, and the
-              // numeric keypad on iOS does not offer one.
-              inputMode="decimal"
-              min="0"
-              step="any"
-              defaultValue={fields.unitPrice}
-              className="h-11"
-            />
-          </Field>
-
-          <Field id="currency" label={t("currency")}>
-            <NativeSelect
-              id="currency"
-              name="currency"
-              defaultValue={fields.currency}
-              className="h-11"
-            >
-              {currencyOptions.map((currency) => (
-                <option key={currency} value={currency}>
-                  {currency}
-                </option>
-              ))}
-            </NativeSelect>
-          </Field>
-
-          <Field id="quotedUnit" label={t("quotedUnit")} hint={t("quotedUnitHint")}>
-            <Input
-              id="quotedUnit"
-              name="quotedUnit"
-              defaultValue={fields.quotedUnit}
-              className="h-11"
-            />
-          </Field>
-        </div>
-
-        <fieldset className="flex flex-col gap-2">
-          <legend className="text-sm font-medium">{t("matchType.label")}</legend>
-          <p className="text-muted-foreground text-xs">{t("matchType.hint")}</p>
-
-          <div className="flex flex-wrap gap-2">
-            {matchTypes.map((option) => (
-              <label
-                key={option}
-                className="border-input has-checked:border-ring has-checked:bg-muted focus-within:ring-ring/50 flex h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm focus-within:ring-3"
+        <QuoteFieldInputs
+          fields={fields}
+          matchType={matchType}
+          onMatchType={setMatchType}
+          currency={
+            <Field id="currency" label={t("currency")}>
+              <NativeSelect
+                id="currency"
+                name="currency"
+                defaultValue={fields.currency}
+                className="h-11"
               >
-                <input
-                  type="radio"
-                  name="matchType"
-                  value={option}
-                  checked={matchType === option}
-                  onChange={() => setMatchType(option)}
-                />
-                {t(`matchType.${option}`)}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
-        {/* Revealed, and required once revealed. An Alternative that does not say what was
-            actually offered is the one Quote nobody can judge: the comparison view's
-            QUOTED PRODUCT column is where a reviewer finds out they are being shown a
-            different product, and it reads this column and nothing else. */}
-        {matchType === "alternative" ? (
-          <Field
-            id="alternativeProductName"
-            label={t("alternativeProductName")}
-            hint={t("alternativeProductHint")}
-          >
-            <Input
-              id="alternativeProductName"
-              name="alternativeProductName"
-              required
-              defaultValue={fields.alternativeProductName}
-              className="h-11"
-            />
-          </Field>
-        ) : null}
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field id="leadTimeDays" label={t("leadTimeDays")} hint={t("leadTimeHint")}>
-            <Input
-              id="leadTimeDays"
-              name="leadTimeDays"
-              type="number"
-              inputMode="numeric"
-              min="0"
-              step="1"
-              defaultValue={fields.leadTimeDays}
-              className="h-11"
-            />
-          </Field>
-
-          <Field id="detailNotes" label={t("detailNotes")} hint={t("detailNotesHint")}>
-            <Textarea
-              id="detailNotes"
-              name="detailNotes"
-              defaultValue={fields.detailNotes}
-            />
-          </Field>
-        </div>
+                {currencyOptions.map((currency) => (
+                  <option key={currency} value={currency}>
+                    {currency}
+                  </option>
+                ))}
+              </NativeSelect>
+            </Field>
+          }
+        />
 
         {/* The file inputs carry no `name`, so nothing about a photo is posted with the
             price. They are held in this component and uploaded afterwards, against the id
@@ -465,25 +356,5 @@ export function QuoteForm({
       ))}
 
     </>
-  );
-}
-
-function Field({
-  id,
-  label,
-  hint,
-  children,
-}: {
-  id: string;
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>{label}</Label>
-      {children}
-      {hint ? <p className="text-muted-foreground text-xs">{hint}</p> : null}
-    </div>
   );
 }

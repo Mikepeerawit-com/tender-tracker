@@ -7,6 +7,7 @@ import "@/app/globals.css";
 
 import { AppHeader } from "@/components/app-header";
 import { QuoteForm } from "@/components/quotes/quote-form";
+import { EditQuoteForm } from "@/components/quotes/edit-quote-form";
 import { QuoteList } from "@/components/quotes/quote-list";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { TenderFacts } from "@/components/tenders/tender-facts";
@@ -16,7 +17,7 @@ import { ScreenError } from "@/components/ui/screen-error";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { ScreenSkeleton } from "@/components/ui/screen-skeleton";
 import type { Member } from "@/lib/org/members";
-import { blankQuote } from "@/lib/quotes/quote-form";
+import { blankQuote, quoteAsSubmitted } from "@/lib/quotes/quote-form";
 import type { Quote } from "@/lib/quotes/quotes";
 import type { Tender } from "@/lib/tenders/tenders";
 import type { WorklistRow } from "@/lib/tenders/worklist";
@@ -56,6 +57,7 @@ vi.mock("@/app/actions/tenders", () => ({
 }));
 vi.mock("@/app/actions/quotes", () => ({
   createQuoteAction: async () => ({}),
+  updateQuoteAction: async () => ({}),
   deleteQuoteAction: async () => ({}),
 }));
 // `QuoteList` draws each Quote's photo controls, which reach for these.
@@ -139,11 +141,42 @@ function screens(m: typeof en) {
         >
           <p className="text-muted-foreground text-sm break-words">40,000 piece</p>
         </ScreenHeader>
-        <QuoteList tenderId={tender.id} quotes={quotes} photos={new Map()} />
+        <QuoteList
+          tenderId={tender.id}
+          tenderItemId="item-gloves"
+          quotes={quotes}
+          photos={new Map()}
+          // The reader sourced these, so the row draws its edit and delete controls —
+          // which is the crowded case, and the one worth measuring at 390px.
+          callerId={quotes[0].sourcedByUserId}
+          ownerUserId="user-somchai"
+          selectedQuoteId={quotes[0].id}
+        />
         <QuoteForm
           tenderId={tender.id}
           tenderItemId="item-gloves"
           defaults={blankQuote({ unit: "piece", today: "2026-08-12" })}
+        />
+      </Body>
+    ),
+    "correcting a quote": (
+      <Body width="max-w-3xl">
+        <header className="flex flex-col gap-2">
+          <span className="text-muted-foreground text-xs break-words">
+            {`${tender.reference} · Nitrile examination glove, powder-free, size M`}
+          </span>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {m.quotes.editTitle}
+          </h1>
+        </header>
+        <EditQuoteForm
+          tenderId={tender.id}
+          tenderItemId="item-gloves"
+          quoteId={quotes[0].id}
+          // A non-THB Quote, so the read-only currency cell is drawn carrying a real
+          // currency rather than the reporting one it would default to.
+          currency={quotes[0].currency}
+          defaults={quoteAsSubmitted(quotes[0])}
         />
       </Body>
     ),

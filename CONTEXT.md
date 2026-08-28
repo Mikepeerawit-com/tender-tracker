@@ -190,9 +190,15 @@ _Avoid_: base currency, home currency, display currency
 **Frozen Rate**:
 The pair of exchange rates a Quote stores at the moment it is entered — ECB mid-market
 and the buffered rate actually applied — together with the day ECB published them. Never
-re-fetched, so a ranking somebody saw is reproducible from the row a year later and no
-dashboard total moves because a currency did. Both are kept so the buffer stays visible
-and cannot be applied twice. A THB Quote's are both 1 and it is not converted at all.
+re-fetched by a clock, a cron or a backfill, so a ranking somebody saw is reproducible
+from the row a year later and no dashboard total moves because a currency did. Both are
+kept so the buffer stays visible and cannot be applied twice. A THB Quote's are both 1
+and it is not converted at all.
+
+The one thing that re-freezes it is a human correcting the day the Quote *claims*: the
+rate has always belonged to the quoted date rather than to the day somebody typed it in,
+so a corrected `quoted_at` gets the rate for the new date and a corrected price keeps the
+rate it had (ADR-0018).
 _Avoid_: exchange rate, fx rate, conversion rate
 
 **Stale Rate**:
