@@ -194,7 +194,13 @@ TOTAL_STAGES=8
 # persisted, never echoed, and never recorded.
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ENV_FILE="${ENV_FILE:-$REPO_ROOT/.env.production}"
+# Assigned unconditionally, and this is the whole reason why: the library above
+# already did `ENV_FILE="${ENV_FILE:-.env}"`, so a `${ENV_FILE:-…}` here would
+# quietly keep `.env` — which on this repo holds four WeCom keys and no Supabase
+# ones. The seeder would then be handed a file that exists and says nothing, and
+# would fail three stages later with "must both be set". Override with
+# PROD_ENV_FILE, not ENV_FILE.
+ENV_FILE="${PROD_ENV_FILE:-$REPO_ROOT/.env.production}"
 FINDINGS="${FINDINGS:-$REPO_ROOT/.wizard/48-phone-checks.md}"
 
 mkdir -p "$(dirname "$FINDINGS")"
@@ -269,15 +275,43 @@ say "of #59. If APP_ORIGIN is not configured in production, every link comes bac
 say "null and check 2 is un-runnable again — exactly the way it was last time."
 printf '\n'
 
-if [[ ! -f "$ENV_FILE" ]]; then
+# Four keys carry this whole run: two the seeder writes past RLS with, one the
+# links are built from, one the cron is authorised by. Test for the keys rather
+# than for the file — a file that exists is not the same as a file that answers.
+REQUIRED_KEYS=(NEXT_PUBLIC_SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY APP_ORIGIN CRON_SECRET)
+
+missing_keys() {
+  local key out=""
+  for key in "${REQUIRED_KEYS[@]}"; do
+    [[ -n "$(env_value "$key" || true)" ]] || out="$out $key"
+  done
+  printf '%s' "${out# }"
+}
+
+MISSING="$(missing_keys)"
+
+if [[ -n "$MISSING" ]]; then
+  note "Not yet in $ENV_FILE: $MISSING"
   step "Pulling the production environment (you may be asked to log in)."
   vercel env pull "$ENV_FILE" --environment=production || \
-    warn "vercel env pull failed — put APP_ORIGIN and CRON_SECRET in $ENV_FILE by hand"
+    warn "vercel env pull failed"
+  MISSING="$(missing_keys)"
 fi
 
-APP_URL="$(env_value APP_ORIGIN || true)"
-[[ -n "$APP_URL" ]] || ask_note APP_URL "Production origin (e.g. https://tenders.mikepeerawit.com):"
+if [[ -n "$MISSING" ]]; then
+  printf '\n'
+  warn "still missing from $ENV_FILE: $MISSING"
+  warn "Every one of them is set on Vercel Production, so the pull is the fix:"
+  note "  vercel env pull $ENV_FILE --environment=production"
+  printf '\n'
+  warn "Stopping here rather than three stages in, where the seeder would fail"
+  warn "with 'must both be set' and the reason would be this."
+  exit 1
+fi
+
+APP_URL="$(env_value APP_ORIGIN)"
 APP_URL="${APP_URL%/}"
+note "Origin: $APP_URL"
 
 step "Asking the deployment what it thinks of its own configuration."
 HEALTH="$(curl -sS --max-time 20 "$APP_URL/api/health" || echo '{"status":"unreachable"}')"
@@ -398,8 +432,8 @@ if confirm "Seed the due-soon Tender and fire the cron?"; then
   node --env-file="$ENV_FILE" "$REPO_ROOT/scripts/seed-mock-tender.mjs" --due-soon || \
     warn "the seeder failed — read the output above"
 
-  CRON_SECRET_VALUE="$(env_value CRON_SECRET || true)"
-  [[ -n "$CRON_SECRET_VALUE" ]] || ask_secret CRON_SECRET_VALUE "CRON_SECRET (not found in $ENV_FILE):"
+  # Guaranteed by the preflight, which refuses to start without it.
+  CRON_SECRET_VALUE="$(env_value CRON_SECRET)"
 
   step "Calling the daily cron."
   CRON_RESP="$(curl -sS --max-time 60 -H "Authorization: Bearer $CRON_SECRET_VALUE" \
