@@ -201,9 +201,16 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # would fail three stages later with "must both be set". Override with
 # PROD_ENV_FILE, not ENV_FILE.
 ENV_FILE="${PROD_ENV_FILE:-$REPO_ROOT/.env.production}"
-FINDINGS="${FINDINGS:-$REPO_ROOT/.wizard/48-phone-checks.md}"
+# One file per run, stamped. `record` appends, so a shared filename stacks every
+# attempt into one document — four aborted runs produced four preambles and no
+# verdicts, and that pile is what would have been posted to #48. A run that did
+# not finish must not be able to contaminate one that did.
+FINDINGS="${FINDINGS:-$REPO_ROOT/.wizard/48-phone-checks-$(date +%Y%m%d-%H%M%S).md}"
 
 mkdir -p "$(dirname "$FINDINGS")"
+
+# An abandoned run leaves a stamped file with a preamble and no verdicts. That is
+# a readable record of "attempted, got nowhere", which is worth more than silence.
 
 # record "text" — append a line to the findings file.
 record() { printf '%s\n' "$1" >> "$FINDINGS"; }
