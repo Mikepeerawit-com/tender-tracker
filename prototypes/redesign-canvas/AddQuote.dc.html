@@ -1,0 +1,282 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <style>
+    :root{
+      --ground:oklch(0.986 0.004 200); --surface:oklch(1 0 0);
+      --ink:oklch(0.20 0.014 235); --ink-muted:oklch(0.52 0.016 235); --ink-faint:oklch(0.66 0.012 235);
+      --hairline:oklch(0.905 0.008 215); --hairline-soft:oklch(0.945 0.006 215);
+      --signal:oklch(0.55 0.15 195); --signal-ink:oklch(0.42 0.13 195); --signal-wash:oklch(0.55 0.15 195 / 0.09);
+      --alarm:oklch(0.55 0.15 28); --alarm-ink:oklch(0.46 0.16 28);
+      --flag:oklch(0.62 0.13 75); --flag-ink:oklch(0.48 0.12 75); --flag-wash:oklch(0.62 0.13 75 / 0.15);
+      --radius:10px;
+      --sans:"IBM Plex Sans","PingFang SC","Hiragino Sans GB","Source Han Sans SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+      --mono:"IBM Plex Mono","SF Mono",ui-monospace,monospace;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:var(--sans);color:var(--ink);background:oklch(0.955 0.006 215);-webkit-font-smoothing:antialiased;}
+    a{color:var(--signal-ink);} a:hover{color:var(--signal);}
+    .board{display:flex;gap:40px;padding:24px 20px 28px;align-items:flex-start;}
+    .col{display:flex;flex-direction:column;gap:10px;}
+    .caption{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--ink-faint);text-transform:uppercase;}
+    .phone{width:390px;background:var(--ground);border:1px solid var(--hairline);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;}
+
+    .bar{display:flex;align-items:center;gap:4px;height:52px;padding:0 10px 0 4px;background:var(--surface);border-bottom:1px solid var(--hairline);}
+    .iconbtn{width:44px;height:44px;display:grid;place-items:center;border-radius:var(--radius);border:0;background:transparent;color:var(--ink-muted);cursor:pointer;flex:0 0 auto;}
+    .iconbtn:hover{background:var(--hairline-soft);}
+    .where{display:flex;flex-direction:column;gap:0;min-width:0;flex:1;}
+    .where .r{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--ink-faint);letter-spacing:.02em;}
+    .where .n{font-size:14px;font-weight:600;letter-spacing:-.008em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+    .pad{padding:16px 14px 22px;display:flex;flex-direction:column;gap:16px;}
+
+    .asked{border:1px solid var(--hairline);border-radius:var(--radius);background:var(--surface);padding:12px 13px;display:flex;flex-direction:column;gap:9px;}
+    .lbl{font-size:10.5px;font-weight:500;letter-spacing:.055em;text-transform:uppercase;color:var(--ink-faint);}
+    .lbl.cjk{letter-spacing:0;text-transform:none;font-size:11.5px;}
+    .askedname{font-size:15px;font-weight:600;letter-spacing:-.008em;}
+    .askedmeta{font-size:12.5px;color:var(--ink-muted);}
+    .refimgs{display:flex;gap:7px;}
+    .thumb{width:56px;height:56px;border-radius:7px;border:1px solid var(--hairline);background:linear-gradient(135deg,oklch(0.93 0.01 215),oklch(0.88 0.012 205));display:grid;place-items:center;color:var(--ink-faint);cursor:pointer;flex:0 0 auto;}
+
+    .recorded{display:flex;align-items:center;gap:9px;padding:12px 13px;border:1px solid var(--hairline);border-radius:var(--radius);background:var(--surface);cursor:pointer;text-decoration:none;color:inherit;}
+    .recorded:hover{background:oklch(0.55 0.15 195 / 0.035);}
+    .recorded .t{font-size:13.5px;font-weight:500;flex:1;}
+    .recorded .g{color:var(--hairline);}
+
+    .form{border:1px solid var(--hairline);border-radius:var(--radius);background:var(--surface);padding:14px 13px;display:flex;flex-direction:column;gap:14px;}
+    .formhead{display:flex;flex-direction:column;gap:3px;}
+    .formhead .t{font-size:15px;font-weight:600;letter-spacing:-.008em;}
+    .formhead .s{font-size:12.5px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty;}
+    .field{display:flex;flex-direction:column;gap:5px;}
+    .fieldrow{display:flex;gap:9px;}
+    .fieldrow .field{flex:1;min-width:0;}
+    .input{height:44px;border:1px solid var(--hairline);border-radius:8px;background:var(--surface);padding:0 11px;display:flex;align-items:center;font-family:var(--sans);font-size:14.5px;color:var(--ink);}
+    .input.num{font-family:var(--mono);font-weight:500;font-variant-numeric:tabular-nums;font-size:16px;}
+    .input.empty{color:var(--ink-faint);}
+    .sel{height:44px;border:1px solid var(--hairline);border-radius:8px;background:var(--surface);padding:0 11px;display:flex;align-items:center;justify-content:space-between;font-size:14.5px;}
+    .hint{font-size:11.5px;line-height:1.5;color:var(--ink-faint);text-wrap:pretty;}
+    .seg{display:flex;gap:0;border:1px solid var(--hairline);border-radius:8px;overflow:hidden;}
+    .segbtn{flex:1;height:44px;display:grid;place-items:center;font-family:var(--sans);font-size:13px;font-weight:500;background:var(--surface);color:var(--ink-muted);border:0;cursor:pointer;text-align:center;padding:0 8px;}
+    .segbtn + .segbtn{border-left:1px solid var(--hairline);}
+    .segbtn.on{background:var(--signal-wash);color:var(--signal-ink);}
+    .photorow{display:flex;gap:8px;}
+    .photobtn{flex:1;height:44px;display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--hairline);border-radius:8px;background:var(--surface);font-family:var(--sans);font-size:13px;font-weight:500;color:var(--ink-muted);cursor:pointer;}
+    .photobtn:hover{background:var(--hairline-soft);color:var(--ink);}
+    .primary{height:48px;display:flex;align-items:center;justify-content:center;gap:7px;background:var(--signal);color:oklch(0.99 0.005 195);border:0;border-radius:var(--radius);font-family:var(--sans);font-size:15px;font-weight:500;cursor:pointer;width:100%;}
+    .primary:hover{background:var(--signal-ink);}
+    .divider{display:flex;align-items:center;gap:10px;color:var(--ink-faint);font-size:11.5px;}
+    .divider::before,.divider::after{content:"";height:1px;background:var(--hairline);flex:1;}
+    .nosup{height:44px;width:100%;display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--hairline);border-radius:var(--radius);background:var(--surface);font-family:var(--sans);font-size:13.5px;font-weight:500;color:var(--ink-muted);cursor:pointer;}
+    .nosup:hover{background:var(--hairline-soft);color:var(--ink);}
+    .note{font-size:11.5px;line-height:1.55;color:var(--ink-faint);margin:0;text-wrap:pretty;}
+  </style>
+</helmet>
+
+<div class="board">
+
+  <!-- ============ ENGLISH ============ -->
+  <div class="col">
+    <div class="caption">Add a quote · 390 · en — where the reminder link now lands</div>
+    <div class="phone">
+
+      <div class="bar">
+        <button class="iconbtn" type="button" aria-label="Back to tender"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+        <div class="where"><span class="r">T-18 · Bumrungrad</span><span class="n">IV infusion set</span></div>
+        <button class="iconbtn" type="button" aria-label="Menu"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg></button>
+      </div>
+
+      <div class="pad">
+
+        <div class="asked">
+          <span class="lbl">What the client asked for</span>
+          <span class="askedname">IV infusion set, 20 drops/ml</span>
+          <span class="askedmeta">2,000 sets · quotes were due yesterday</span>
+          <div class="refimgs">
+            <span class="thumb"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"></rect><path d="M3 15l4.5-4 4 3.5 3.5-3L21 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+            <span class="thumb"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"></rect><path d="M3 15l4.5-4 4 3.5 3.5-3L21 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+          </div>
+        </div>
+
+        <a class="recorded" href="#">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" style="color:var(--ink-faint)" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg>
+          <span class="t">6 quotes recorded by the team</span>
+          <span class="g"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+        </a>
+
+        <div class="form">
+          <div class="formhead">
+            <span class="t">Add your quote</span>
+            <span class="s">In the currency and the unit the supplier actually gave you. The conversion is ours to do, not yours.</span>
+          </div>
+
+          <div class="field">
+            <span class="lbl">Supplier</span>
+            <div class="input">Thonburi Medical Supply</div>
+          </div>
+
+          <div class="field">
+            <span class="lbl">Quoted on</span>
+            <div class="input">27 Aug 2026</div>
+            <span class="hint">The day the supplier gave you the price. It decides which rate gets frozen.</span>
+          </div>
+
+          <div class="fieldrow">
+            <div class="field" style="flex:1.35">
+              <span class="lbl">Price per unit</span>
+              <div class="input num">0.36</div>
+            </div>
+            <div class="field">
+              <span class="lbl">Currency</span>
+              <div class="sel">USD<svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:var(--ink-faint)" aria-hidden="true"><path d="M5 9l7 7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+            </div>
+          </div>
+
+          <div class="field">
+            <span class="lbl">Priced per</span>
+            <div class="sel">set<svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:var(--ink-faint)" aria-hidden="true"><path d="M5 9l7 7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+            <span class="hint">The supplier's unit, even when it differs from ours — a mismatch stops the item being ranked, which is the point.</span>
+          </div>
+
+          <div class="field">
+            <span class="lbl">What was priced</span>
+            <div class="seg">
+              <button class="segbtn on" type="button">Exactly what was asked for</button>
+              <button class="segbtn" type="button">Alternative</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <span class="lbl">Supplier photos</span>
+            <div class="photorow">
+              <button class="photobtn" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4V8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.6"></circle></svg>Take a photo</button>
+              <button class="photobtn" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"></rect><path d="M3 15l4.5-4 4 3.5 3.5-3L21 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>Choose</button>
+            </div>
+            <span class="hint">On an alternative this is often the only way to judge how far the substitute is from what was asked for.</span>
+          </div>
+
+          <button class="primary" type="button">Save quote</button>
+        </div>
+
+        <div class="divider">or</div>
+
+        <button class="nosup" type="button">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"></circle><path d="M5.6 8h4.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+          No supplier found for this item
+        </button>
+        <p class="note">Recording that stops the reminders for you and tells the owner nobody could source it — which is a different answer from silence.</p>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 简体中文 ============ -->
+  <div class="col">
+    <div class="caption">Add a quote · 390 · zh-Hans — where the reminder link now lands</div>
+    <div class="phone">
+
+      <div class="bar">
+        <button class="iconbtn" type="button" aria-label="返回标书"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+        <div class="where"><span class="r">T-18 · 康民国际</span><span class="n">输液器</span></div>
+        <button class="iconbtn" type="button" aria-label="菜单"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg></button>
+      </div>
+
+      <div class="pad">
+
+        <div class="asked">
+          <span class="lbl cjk">客户要求的产品</span>
+          <span class="askedname">输液器，20 滴/毫升</span>
+          <span class="askedmeta">2,000 套 · 报价昨天已截止</span>
+          <div class="refimgs">
+            <span class="thumb"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"></rect><path d="M3 15l4.5-4 4 3.5 3.5-3L21 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+            <span class="thumb"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"></rect><path d="M3 15l4.5-4 4 3.5 3.5-3L21 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+          </div>
+        </div>
+
+        <a class="recorded" href="#">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" style="color:var(--ink-faint)" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg>
+          <span class="t">团队已记录 6 条报价</span>
+          <span class="g"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+        </a>
+
+        <div class="form">
+          <div class="formhead">
+            <span class="t">录入你的报价</span>
+            <span class="s">按供应商实际给出的币种和计价单位填写。换算由系统负责，不需要你算。</span>
+          </div>
+
+          <div class="field">
+            <span class="lbl cjk">供应商</span>
+            <div class="input">吞武里医疗器材</div>
+          </div>
+
+          <div class="field">
+            <span class="lbl cjk">报价日期</span>
+            <div class="input">2026 年 8 月 27 日</div>
+            <span class="hint">供应商给出价格的那一天。冻结哪一天的汇率由它决定。</span>
+          </div>
+
+          <div class="fieldrow">
+            <div class="field" style="flex:1.35">
+              <span class="lbl cjk">单价</span>
+              <div class="input num">0.36</div>
+            </div>
+            <div class="field">
+              <span class="lbl cjk">币种</span>
+              <div class="sel">USD<svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:var(--ink-faint)" aria-hidden="true"><path d="M5 9l7 7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+            </div>
+          </div>
+
+          <div class="field">
+            <span class="lbl cjk">计价单位</span>
+            <div class="sel">套<svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:var(--ink-faint)" aria-hidden="true"><path d="M5 9l7 7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+            <span class="hint">填供应商的单位，即使与我方不同——单位不一致会使该产品无法排名，这正是要点所在。</span>
+          </div>
+
+          <div class="field">
+            <span class="lbl cjk">报的是什么</span>
+            <div class="seg">
+              <button class="segbtn on" type="button">与要求完全一致</button>
+              <button class="segbtn" type="button">替代品</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <span class="lbl cjk">供应商照片</span>
+            <div class="photorow">
+              <button class="photobtn" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4V8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.6"></circle></svg>拍照</button>
+              <button class="photobtn" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"></rect><path d="M3 15l4.5-4 4 3.5 3.5-3L21 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>从相册选择</button>
+            </div>
+            <span class="hint">如果报的是替代品，照片往往是判断它与客户要求差多远的唯一依据。</span>
+          </div>
+
+          <button class="primary" type="button">保存报价</button>
+        </div>
+
+        <div class="divider">或者</div>
+
+        <button class="nosup" type="button">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"></circle><path d="M5.6 8h4.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+          这项找不到供应商
+        </button>
+        <p class="note">记下之后，你这边的催办提醒会停止，负责人也会知道确实没人能供货——这和一直没有回应是两回事。</p>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":880,"height":1380}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
