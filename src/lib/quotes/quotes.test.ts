@@ -382,10 +382,15 @@ describe("entering a Quote", () => {
       theirs,
     );
 
+    // Scoped to the two orgs under test: other test files seed their own "Ace Medical"
+    // in orgs of their own, and an unscoped query would sweep those up when the files
+    // run alongside each other. Two rows, one per org, is the thing being asserted --
+    // a shared supplier would show up as a single row.
     const { data } = await service
       .from("suppliers")
       .select("org_id")
-      .ilike("name", "Ace Medical");
+      .ilike("name", "Ace Medical")
+      .in("org_id", [orgId, otherOrgId]);
 
     expect((data ?? []).map((row) => row.org_id).sort()).toEqual(
       [orgId, otherOrgId].sort(),
