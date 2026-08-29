@@ -116,7 +116,6 @@
     "recordDescription": "客户要什么、什么时候必须回复，以及其中包含的每一项产品。",
     "edit": "编辑招标",
     "editDescription": "编号一经生成不再更改。下方的招标明细逐条添加、修改和删除。",
-    "backToList": "全部招标",
     "notSet": "未填写",
     "client": "客户",
     "tenderTitle": "标题",
@@ -284,7 +283,7 @@
     }
   },
   "quotes": {
-    "backToTender": "返回标书",
+    "asked": "客户的需求",
     "recorded": "{count, plural, other {已记录 # 条报价}}",
     "none": "该产品项下尚未记录任何内容。",
     "add": "新增报价",

@@ -65,22 +65,20 @@ export default async function TenderPage({ params }: PageProps<"/tenders/[id]">)
       />
       <div className="flex flex-1 flex-col gap-8 p-6">
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-8">
+        {/* No reference in the eyebrow and no way back in the actions: the app bar
+            carries both on every screen about one record (#73), and drawing the same
+            journey twice spends a row of a 390px phone on something already on screen. */}
         <ScreenHeader
-          eyebrow={tender.reference}
           heading={tender.clientName}
           actions={
-            <>
-              <Button variant="ghost" className="h-11" nativeButton={false} render={<Link href="/tenders" />}>
-                {t("backToList")}
-              </Button>
-              <Button
-                variant="outline"
-                className="h-11"
-                nativeButton={false} render={<Link href={`/tenders/${tender.id}/edit`} />}
-              >
-                {t("edit")}
-              </Button>
-            </>
+            <Button
+              variant="outline"
+              className="h-11"
+              nativeButton={false}
+              render={<Link href={`/tenders/${tender.id}/edit`} />}
+            >
+              {t("edit")}
+            </Button>
           }
         >
           <p className="text-muted-foreground text-sm break-words">{tender.title}</p>

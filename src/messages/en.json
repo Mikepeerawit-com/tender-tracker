@@ -116,7 +116,6 @@
     "recordDescription": "What the client asked for, when it has to be back with them, and every product it asks for.",
     "edit": "Edit tender",
     "editDescription": "The reference stays as issued. Items are added, changed and removed one at a time below.",
-    "backToList": "All tenders",
     "notSet": "Not set",
     "client": "Client",
     "tenderTitle": "Title",
@@ -284,7 +283,7 @@
     }
   },
   "quotes": {
-    "backToTender": "Back to tender",
+    "asked": "What the client asked for",
     "recorded": "{count, plural, =1 {# quote recorded} other {# quotes recorded}}",
     "none": "Nothing recorded against this item yet.",
     "add": "Add a quote",

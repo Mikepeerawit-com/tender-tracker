@@ -8,6 +8,7 @@ import "@/app/globals.css";
 import { AppHeader } from "@/components/app-header";
 import { QuoteForm } from "@/components/quotes/quote-form";
 import { EditQuoteForm } from "@/components/quotes/edit-quote-form";
+import { ItemBrief } from "@/components/quotes/item-brief";
 import { QuoteList } from "@/components/quotes/quote-list";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { TenderFacts } from "@/components/tenders/tender-facts";
@@ -105,17 +106,11 @@ function screens(m: typeof en) {
     "a tender": (
       <Body width="max-w-7xl" bar={<AppHeader isOrgAdmin location={tenderBar} />}>
         <ScreenHeader
-          eyebrow={tender.reference}
           heading={tender.clientName}
           actions={
-            <>
-              <Button variant="ghost" className="h-11">
-                {m.tenders.backToList}
-              </Button>
-              <Button variant="outline" className="h-11">
-                {m.tenders.edit}
-              </Button>
-            </>
+            <Button variant="outline" className="h-11">
+              {m.tenders.edit}
+            </Button>
           }
         >
           <p className="text-muted-foreground text-sm break-words">{tender.title}</p>
@@ -135,17 +130,15 @@ function screens(m: typeof en) {
     ),
     "sourcing an item": (
       <Body width="max-w-3xl" bar={<AppHeader isOrgAdmin location={itemBar} />}>
-        <ScreenHeader
-          eyebrow={`${tender.reference} · ${tender.clientName}`}
-          heading="Nitrile examination glove, powder-free, size M"
-          actions={
-            <Button variant="outline" className="h-11">
-              {m.quotes.backToTender}
-            </Button>
-          }
-        >
-          <p className="text-muted-foreground text-sm break-words">40,000 piece</p>
-        </ScreenHeader>
+        {/* The brief, with the client's pictures in it — the block #75 put above the
+            form so an Assignee can check they are pricing the right thing. */}
+        <ItemBrief
+          productName="NitrileExaminationGlovesPowderFreeSizeMediumNonSterile"
+          quantity={40000}
+          unit="piece"
+          description="Non-sterile, TFDA registration number to be quoted alongside every line."
+          internalQuoteDeadline="2026-08-20"
+        />
         <QuoteList
           tenderId={tender.id}
           tenderItemId="item-gloves"
