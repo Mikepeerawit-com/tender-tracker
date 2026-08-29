@@ -4,7 +4,7 @@ import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
 
 import { migrationsOnDiskEnv } from "./src/lib/schema/migrations-on-disk.mts";
-import { phone } from "./src/test/phone.mts";
+import { captureWindow, phone } from "./src/test/phone.mts";
 
 /**
  * Two seams, told apart by the file extension.
@@ -38,6 +38,12 @@ import { phone } from "./src/test/phone.mts";
  * so those assertions pass there on a page overflowing by a mile. They run in headless
  * Chromium instead, which is why this project alone needs
  * `npx playwright install chromium`.
+ *
+ * **`.contact-sheet.tsx` — not a test at all.** #78: the same screens the `layout`
+ * project measures, photographed into a contact sheet for a person to look at. It has no
+ * baseline and asserts nothing about appearance, so it is excluded from `npm test` by the
+ * project filter in `package.json` and never runs in CI — under ADR-0019 the CJK face is
+ * drawn by the device, so only a developer's own machine renders what a reader sees.
  *
  * It began as one file guarding the comparison sheet, and #56 was what that cost: the app
  * shell's header overflowed on every screen for an org admin and no test could see it.
@@ -102,6 +108,28 @@ export default defineConfig({
           include: ["src/**/*.test.tsx"],
           exclude: ["src/**/*.layout.test.tsx"],
           setupFiles: ["./vitest.setup.dom.ts"],
+        },
+      },
+      {
+        resolve: { tsconfigPaths: true },
+        test: {
+          name: "contact-sheet",
+          include: ["src/**/*.contact-sheet.tsx"],
+          setupFiles: ["./vitest.setup.layout.ts"],
+          browser: {
+            enabled: true,
+            // A window with room for the tallest screen at full size. Vitest scales the
+            // test iframe down to fit the window, and a scaled screenshot is a picture of
+            // the wrong pixels — 390px of layout reported as 333.
+            provider: playwright({
+              contextOptions: { viewport: captureWindow },
+            }),
+            headless: true,
+            instances: [{ browser: "chromium", viewport: phone }],
+            // Not `__screenshots__`, which is where a *failed* assertion drops an image
+            // and is gitignored as such. The sheet is the output here, not wreckage.
+            screenshotDirectory: ".contact-sheet",
+          },
         },
       },
       {
