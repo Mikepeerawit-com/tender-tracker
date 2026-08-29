@@ -51,6 +51,7 @@ export default async function ItemSourcingPage({
 
   const t = await getTranslations("quotes");
   const tenders = await getTranslations("tenders");
+  const nav = await getTranslations("nav");
 
   // Only an Assignee may enter a Quote on a Tender: they are the one who actually rang
   // the supplier, and every Quote records which of them it was. Nothing is wrong with
@@ -83,7 +84,13 @@ export default async function ItemSourcingPage({
           kind: "record",
           backHref: `/tenders/${tender.id}`,
           reference: tender.reference,
-          detail: `${tender.clientName} · ${item.productName}`,
+          // Through a message, not composed here: the separator is punctuation, and
+          // Chinese wants a full-width one. A `·` written into JSX is a string no
+          // translator can reach.
+          detail: nav("itemLocation", {
+            client: tender.clientName,
+            item: item.productName,
+          }),
         }}
       />
       <div className="flex flex-1 flex-col gap-8 p-6">

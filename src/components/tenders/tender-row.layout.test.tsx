@@ -40,6 +40,7 @@ describe(`a tender row at ${phone.width}×${phone.height}`, () => {
         ["a client whose name and reference have nowhere to wrap", unbroken],
         ["a row whose sourcing is overdue, so the lamp is lit", overdue],
         ["a row whose submission was missed, the longest sentence there is", dead],
+        ["a row whose Bid is with the client, which dates an instant", awaiting],
       ].map(
         ([who, tender]) =>
           [`${who}, in ${locale}`, locale, messages, tender as WorklistRow] as const,
@@ -56,7 +57,7 @@ describe(`a tender row at ${phone.width}×${phone.height}`, () => {
             <div className="border-hairline bg-card overflow-hidden rounded-lg border">
               <ul className="flex flex-col">
                 <li>
-                  <TenderRow tender={tender} />
+                  <TenderRow tender={tender} timezone="Asia/Bangkok" />
                 </li>
               </ul>
             </div>
@@ -122,6 +123,15 @@ const overdue: WorklistRow = {
   ...unbroken,
   status: { kind: "unsourced", tone: "alarm", count: 11, total: 12 },
   notYetSourced: 11,
+  dueDeadlines: [],
+};
+
+/** The Bid is out, so the row dates the day it went rather than a spent deadline. */
+const awaiting: WorklistRow = {
+  ...unbroken,
+  progress: "submitted",
+  submittedAt: "2026-08-19T16:30:00Z",
+  status: { kind: "awaiting_decision", tone: "calm" },
   dueDeadlines: [],
 };
 

@@ -2,7 +2,7 @@ import { useTranslations } from "next-intl";
 
 import { TenderRow } from "@/components/tenders/tender-row";
 import { IndicatorLamp } from "@/components/ui/indicator-lamp";
-import { tenderProgresses, type WorklistGroup } from "@/lib/tenders/progress";
+import { tenderProgresses, type TenderProgress } from "@/lib/tenders/progress";
 import type { WorklistSection } from "@/lib/tenders/worklist";
 
 /**
@@ -15,6 +15,11 @@ import type { WorklistSection } from "@/lib/tenders/worklist";
  * small red mark is precisely the outcome the old block was invented to stop, and it
  * would be exactly that if the pinned group looked like the others.
  *
+ * **The pinned group carries no journey scale**, and its absence is the point: Submission
+ * Missed is not one of the four values of Progress, so there is no position on the scale
+ * that would be honest for it. A scale drawn there would claim it sits somewhere in a
+ * journey it has fallen out of.
+ *
  * An empty group draws nothing. `listWorklist` returns all five in order regardless —
  * the ordering is its decision and a caller reassembling it could get it wrong — but four
  * empty headings on a 390px phone is a third of the screen spent saying nothing.
@@ -23,7 +28,14 @@ import type { WorklistSection } from "@/lib/tenders/worklist";
  * is an `async` Server Component behind `currentUser` and is reachable by no browser test,
  * so this is the seam `screens.layout.test.tsx` measures instead.
  */
-export function TenderGroup({ section }: { section: WorklistSection }) {
+export function TenderGroup({
+  section,
+  timezone,
+}: {
+  section: WorklistSection;
+  /** The org's, passed down for the one row that dates an instant. */
+  timezone: string;
+}) {
   const t = useTranslations("tenders");
 
   if (section.tenders.length === 0) return null;
@@ -37,7 +49,7 @@ export function TenderGroup({ section }: { section: WorklistSection }) {
           key={tender.id}
           className={index === 0 ? "min-w-0" : "border-hairline-soft min-w-0 border-t"}
         >
-          <TenderRow tender={tender} />
+          <TenderRow tender={tender} timezone={timezone} />
         </li>
       ))}
     </ul>
@@ -70,7 +82,7 @@ export function TenderGroup({ section }: { section: WorklistSection }) {
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex min-w-0 items-center gap-2.5 px-0.5">
           <h2 className="min-w-0 text-[13px] font-semibold break-words">{heading}</h2>
-          <ProgressScale group={section.group} />
+          <ProgressScale progress={section.group} />
           <span className="text-ink-faint ml-auto shrink-0 font-mono text-[13px] font-medium">
             {section.tenders.length}
           </span>
@@ -101,14 +113,14 @@ export function TenderGroup({ section }: { section: WorklistSection }) {
  * `aria-hidden`, because the heading beside it already names the Progress in words. The
  * scale is emphasis, not a second copy of the fact.
  */
-function ProgressScale({ group }: { group: WorklistGroup }) {
-  const reached = tenderProgresses.indexOf(group as (typeof tenderProgresses)[number]);
+function ProgressScale({ progress }: { progress: TenderProgress }) {
+  const reached = tenderProgresses.indexOf(progress);
 
   return (
     <span className="flex shrink-0 gap-0.5" aria-hidden="true">
-      {tenderProgresses.map((progress, index) => (
+      {tenderProgresses.map((value, index) => (
         <span
-          key={progress}
+          key={value}
           className={`h-[3px] w-[11px] rounded-[1px] ${
             index <= reached ? "bg-signal" : "bg-border"
           }`}

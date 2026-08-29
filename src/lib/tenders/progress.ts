@@ -248,7 +248,7 @@ export type RowStatus =
   | { kind: "submission_missed"; tone: "alarm"; days: number }
   | { kind: "unsourced"; tone: "alarm"; count: number; total: number }
   | { kind: "due"; tone: LampTone; deadline: DeadlineKind; days: number }
-  | { kind: "with_client"; tone: "calm" };
+  | { kind: "awaiting_decision"; tone: "calm" };
 
 /**
  * The one sentence a row states, read top-down in the order the reader needs them.
@@ -272,8 +272,11 @@ export function rowStatus(tender: ClassifiedTender, today: string): RowStatus {
   }
 
   // Both deadlines are spent once the Bid is out, so there is no next date to name. What
-  // is left is a person to chase, which is what the row says instead.
-  if (tender.submittedAt !== null) return { kind: "with_client", tone: "calm" };
+  // is left is a person to chase, which is what the row says instead. This is exactly
+  // `isAwaitingDecision` — a Tender with an Outcome has already left the list — and it
+  // carries that name because `CONTEXT.md` defines the term and ADR-0007's amendment
+  // keeps it. Only the *heading* was retired, never the word.
+  if (isAwaitingDecision(tender)) return { kind: "awaiting_decision", tone: "calm" };
 
   if (isSourcingOverdue(tender, today)) {
     return {

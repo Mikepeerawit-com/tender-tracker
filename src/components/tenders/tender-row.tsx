@@ -2,8 +2,12 @@ import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { IndicatorLamp } from "@/components/ui/indicator-lamp";
-import { calendarDate, calendarDateFormat } from "@/lib/calendar-date";
-import type { DeadlineKind, RowStatus } from "@/lib/tenders/progress";
+import {
+  calendarDate,
+  calendarDateFormat,
+  instantDayFormat,
+} from "@/lib/calendar-date";
+import type { DeadlineKind } from "@/lib/tenders/progress";
 import type { WorklistRow } from "@/lib/tenders/worklist";
 
 /**
@@ -41,11 +45,24 @@ import type { WorklistRow } from "@/lib/tenders/worklist";
  * `tender-row.layout.test.tsx` measure it in a real browser at 390px. The page it sits on
  * is `async` and unreachable from a browser test; this is the seam that is not.
  */
-export function TenderRow({ tender }: { tender: WorklistRow }) {
+export function TenderRow({
+  tender,
+  timezone,
+}: {
+  tender: WorklistRow;
+  /**
+   * The org's, never the server's. `submittedAt` is an instant, and the day it lands on
+   * is the day it was in Bangkok — Vercel runs UTC and would date a Bid sent on a
+   * Bangkok evening to the day before (ADR-0010).
+   */
+  timezone: string;
+}) {
   const t = useTranslations("tenders");
   const format = useFormatter();
   const day = (value: string) =>
     format.dateTime(calendarDate(value), calendarDateFormat);
+  const instantDay = (instant: string) =>
+    format.dateTime(new Date(instant), instantDayFormat(timezone));
   const deadlines: Record<DeadlineKind, string> = {
     internal_quote: tender.internalQuoteDeadline,
     client_submission: tender.clientSubmissionDeadline,
@@ -88,7 +105,7 @@ export function TenderRow({ tender }: { tender: WorklistRow }) {
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px]">
           <IndicatorLamp tone={tender.status.tone} />
           <span className={`min-w-0 break-words ${tone}`}>
-            {statusSentence(t, day, deadlines, tender.status)}
+            {statusSentence(t, day, instantDay, deadlines, tender)}
           </span>
           <span className="text-ink-faint min-w-0 break-words">
             {t("itemCount", { count: tender.itemCount })}
@@ -137,9 +154,12 @@ export function TenderRow({ tender }: { tender: WorklistRow }) {
 function statusSentence(
   t: ReturnType<typeof useTranslations<"tenders">>,
   day: (value: string) => string,
+  instantDay: (instant: string) => string,
   deadlines: Record<DeadlineKind, string>,
-  status: RowStatus,
+  tender: WorklistRow,
 ): string {
+  const status = tender.status;
+
   if (status.kind === "submission_missed") {
     return t("row.submissionMissed", { days: status.days });
   }
@@ -148,7 +168,11 @@ function statusSentence(
     return t("row.unsourced", { count: status.count, total: status.total });
   }
 
-  if (status.kind === "with_client") return t("row.withClient");
+  if (status.kind === "awaiting_decision") {
+    // Never null on this branch: `awaiting_decision` is what `rowStatus` answers for a
+    // Tender whose Bid has gone out, which is exactly `submittedAt !== null`.
+    return t("row.awaitingDecision", { date: instantDay(tender.submittedAt!) });
+  }
 
   const when =
     status.days < 0

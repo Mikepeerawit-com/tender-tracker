@@ -53,6 +53,12 @@ export type WorklistRow = TenderSummary & {
    * **Populated for every row**, where it used to be filled only for the one block called
    * "Coming up". Every row states its own next date now rather than inheriting one from
    * the pile it landed in, so there is no longer a group this is meaningless for.
+   *
+   * Nothing draws it today: {@link status} carries the sentence the row actually says,
+   * and that sentence replaced the chips this used to fill. It stays because it is the
+   * row's own answer to *what falls inside the window*, which is a different question
+   * from *what does the row say* — and because a caller that wanted the first would
+   * otherwise have to re-derive it from two dates and a `today` it does not hold.
    */
   dueDeadlines: DeadlineKind[];
   /** The one sentence the row states, and how loudly. See {@link rowStatus}. */

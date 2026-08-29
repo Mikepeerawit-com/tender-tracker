@@ -97,9 +97,13 @@ function screens(m: typeof en) {
             shapes the list has. The band is the wider of the two — it carries a hint
             paragraph and a count inside a bordered box — so measuring only the plain
             group would miss the case that actually pushes. */}
-        <TenderGroup section={{ group: "submission_missed", tenders: [deadRow] }} />
+        <TenderGroup
+          section={{ group: "submission_missed", tenders: [deadRow] }}
+          timezone="Asia/Bangkok"
+        />
         <TenderGroup
           section={{ group: "sourcing", tenders: [ordinaryRow, unbrokenRow] }}
+          timezone="Asia/Bangkok"
         />
       </Body>
     ),

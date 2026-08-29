@@ -200,8 +200,10 @@ function PriceField({
     <form ref={form} action={formAction} className="flex min-w-0 flex-col gap-1">
       {children}
 
-      <span className="text-muted-foreground flex flex-wrap items-baseline gap-1.5 text-xs">
-        <span aria-hidden>{caption}</span>
+      <span className="flex flex-wrap items-baseline gap-1.5">
+        <span className="field-label" aria-hidden>
+          {caption}
+        </span>
         {unconfirmed ? (
           // In words as well as in flag, so the marking survives greyscale and sunlight.
           // Not `aria-hidden`: this one is a fact about the figure, not a repeat of the
@@ -269,7 +271,7 @@ function MarginFigure({
 }) {
   return (
     <div className="flex min-w-0 items-baseline gap-1.5">
-      <dt className="text-muted-foreground text-xs">{label}</dt>
+      <dt className="field-label">{label}</dt>
       <dd>
         <Margin value={value} provisional={provisional} />
       </dd>

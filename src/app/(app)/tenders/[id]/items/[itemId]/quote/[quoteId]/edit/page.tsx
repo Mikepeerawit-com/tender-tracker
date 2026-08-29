@@ -63,6 +63,7 @@ export default async function EditQuotePage({
   }
 
   const t = await getTranslations("quotes");
+  const nav = await getTranslations("nav");
 
   return (
     <>
@@ -72,7 +73,13 @@ export default async function EditQuotePage({
           kind: "record",
           backHref: sourcing,
           reference: tender.reference,
-          detail: `${tender.clientName} · ${item.productName}`,
+          // Through a message, not composed here: the separator is punctuation, and
+          // Chinese wants a full-width one. A `·` written into JSX is a string no
+          // translator can reach.
+          detail: nav("itemLocation", {
+            client: tender.clientName,
+            item: item.productName,
+          }),
         }}
       />
       <div className="flex flex-1 flex-col gap-8 p-6">

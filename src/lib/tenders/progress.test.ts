@@ -439,7 +439,7 @@ describe("rowStatus", () => {
       clientSubmissionDeadline: "2026-08-09",
     });
 
-    expect(rowStatus(sent, today)).toEqual({ kind: "with_client", tone: "calm" });
+    expect(rowStatus(sent, today)).toEqual({ kind: "awaiting_decision", tone: "calm" });
   });
 
   it("counts down to the soonest deadline still ahead", () => {
@@ -542,10 +542,10 @@ describe("rowStatus", () => {
 
     // Every reading is genuinely reachable from a real combination, not just declared.
     expect([...kinds].sort()).toEqual([
+      "awaiting_decision",
       "due",
       "submission_missed",
       "unsourced",
-      "with_client",
     ]);
   });
 });

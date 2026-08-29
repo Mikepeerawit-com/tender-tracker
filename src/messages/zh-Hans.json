@@ -87,7 +87,8 @@
     "people": "成员",
     "groupRobot": "群机器人",
     "menu": "菜单",
-    "back": "返回"
+    "back": "返回",
+    "itemLocation": "{client}·{item}"
   },
   "images": {
     "viewing": "第 {position} 张，共 {total} 张",
@@ -163,8 +164,8 @@
     },
     "row": {
       "submissionMissed": "截止日期已过 {days} 天",
-      "unsourced": "{total} 项中有 {count} 项尚无报价",
-      "withClient": "等待客户答复",
+      "unsourced": "{total} 项中有 {count} 项尚未询价",
+      "awaitingDecision": "{date} 起等待客户答复",
       "due": {
         "internal_quote": {
           "today": "报价今天截止",
@@ -183,10 +184,6 @@
     "outstanding": {
       "title": "等你处理",
       "hint": "以下明细你既没有录入报价，也没有记为找不到供应商。"
-    },
-    "due": {
-      "internal_quote": "内部报价 {date} 截止",
-      "client_submission": "提交客户 {date} 截止"
     },
     "item": {
       "plural": "招标明细",

@@ -192,7 +192,7 @@ function Total({
 }) {
   return (
     <div className="flex items-baseline gap-2">
-      <dt className="text-muted-foreground text-xs">{label}</dt>
+      <dt className="field-label">{label}</dt>
       {/* Never toned by sign. A negative total is negative because it has a minus in
           front of it, which is a copy of the meaning no colour convention can invert. */}
       <dd
@@ -259,7 +259,7 @@ function ItemSummary({ tenderId, item }: { tenderId: string; item: SheetItem }) 
       </div>
 
       <div className="flex min-w-0 flex-[1_1_11rem] flex-col gap-0.5">
-        <span className="text-muted-foreground text-xs">{t("label.selectedQuote")}</span>
+        <span className="field-label">{t("label.selectedQuote")}</span>
 
         {selected ? (
           <>
@@ -513,7 +513,7 @@ function QuoteRow({
       <Cell>
         {isAlternative ? (
           <div className="flex flex-col gap-1 max-md:rounded-lg max-md:border max-md:border-flag/40 max-md:bg-flag/10 max-md:p-2">
-            <span className="bg-flag-wash text-flag-ink w-fit max-w-full rounded px-1.5 py-0.5 text-[0.7rem] font-medium tracking-wide uppercase">
+            <span className="field-label bg-flag-wash text-flag-ink w-fit max-w-full rounded px-1.5 py-0.5 text-[0.7rem] font-medium">
               {tq("matchType.alternative")}
             </span>
             <span className="font-medium">{quote.alternativeProductName}</span>

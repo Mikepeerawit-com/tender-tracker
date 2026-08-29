@@ -81,7 +81,7 @@ export default async function TendersPage() {
           // read in. Empty ones are dropped here rather than there: the ordering is the
           // assembly's decision and drawing it is the screen's.
           filled.map((section) => (
-            <TenderGroup key={section.group} section={section} />
+            <TenderGroup key={section.group} section={section} timezone={timezone} />
           ))
         )}
       </main>

@@ -89,7 +89,7 @@ export function QuoteList({
 
           {quote.matchType === "alternative" ? (
             <p className="text-sm">
-              <span className="bg-flag-wash text-flag-ink mr-2 rounded px-1.5 py-0.5 text-[0.7rem] font-medium tracking-wide uppercase">
+              <span className="field-label bg-flag-wash text-flag-ink mr-2 rounded px-1.5 py-0.5 text-[0.7rem] font-medium">
                 {t("matchType.alternative")}
               </span>
               <span className="font-medium">{quote.alternativeProductName}</span>

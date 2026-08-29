@@ -143,8 +143,17 @@
   --muted-foreground: oklch(0.52 0.016 235);
   --accent: oklch(0.955 0.006 215);
   --accent-foreground: var(--foreground);
-  /* Destructive is alarm. Both mean *this has gone wrong*, and one hue is enough. */
-  --destructive: var(--alarm);
+  /*
+   * The refusal hue: a write that was rejected, a control that destroys something, a
+   * banner saying the sheet cannot rank this Item. Red, and the same red as alarm today.
+   *
+   * **Deliberately its own token rather than `var(--alarm)`.** ADR-0019 reserves alarm for
+   * *time, and only time*, and none of these is time — so aliasing them would make a
+   * future change to alarm silently repaint every error surface in the app, and would
+   * leave the ADR's rule looking broken in the token file. They are two meanings that
+   * happen to share a value; a reader changing one should have to decide about the other.
+   */
+  --destructive: oklch(0.55 0.15 28);
   --border: oklch(0.905 0.008 215);
   --input: oklch(0.905 0.008 215);
   --ring: var(--signal);
