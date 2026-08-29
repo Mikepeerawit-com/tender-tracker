@@ -30,6 +30,9 @@ supabase/.temp/
 coverage/
 # what vitest saves when a browser assertion fails, next to the test that failed
 __screenshots__/
+# the contact sheet (#78): every screen photographed for somebody to look at, drawn by
+# whichever machine ran it, so never a baseline and never committed
+.contact-sheet/
 .vitest-attachments/
 
 # typescript

@@ -34,6 +34,7 @@ accounts along with everything else.
 | `npm run dev`       | Development server                                        |
 | `npm run build`     | Production build                                          |
 | `npm test`          | The test suite — needs the local Supabase stack running   |
+| `npm run contact-sheet` | Photograph every screen in both locales, to look at   |
 | `npm run typecheck` | `next typegen && tsc --noEmit`                            |
 | `npm run lint`      | ESLint                                                    |
 | `npm run db:start`  | Start local Supabase                                      |
@@ -63,7 +64,30 @@ project runs in a later group, when nothing else is in flight. Nothing is destro
 so: withheld rows are moved to a `withheld` schema and put back, and a run killed
 mid-test is repaired by the next one.
 
-`vitest run` runs them all.
+`npm test` runs them all. Plain `vitest run` additionally picks up the contact sheet
+below, which is not a test.
+
+**The contact sheet is not a check — it is something to look at.** `npm run contact-sheet`
+draws every screen in both locales at 390×844 and writes them, plus an index page, to a
+gitignored `.contact-sheet/`. There is no baseline, no diff, and nothing it can fail;
+open `.contact-sheet/index.html` and judge with your own eyes. It exists because the
+#68 redesign merged with no image anybody could compare against anything.
+
+It renders the same screens the `layout` project measures, from one shared module, so
+what you look at and what CI guards cannot drift apart.
+
+**It runs on your machine and never in CI, deliberately.** Under ADR-0019 the CJK face is
+drawn by the device with no webfont, so a screenshot of this app is a fact about the
+machine that took it: a Linux runner resolves at best Noto Sans SC and may carry no CJK
+face at all, which would render `zh-Hans` — the locale to judge first — as a wall of
+tofu. macOS resolves PingFang SC, what an iPhone reader actually sees. The index page
+names which faces really resolved, so a sheet from one machine can be read safely on
+another. Note that `next/font` supplies IBM Plex Sans in the real app and not in this
+harness, so unless you have it installed the Latin text is drawn by the CJK face behind
+it.
+
+The phone in your hand is still the only fully honest renderer; see
+`scripts/prelaunch-phone-checks.sh`.
 
 ## Conventions
 

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run",
+    "test": "vitest run --project=!contact-sheet",
+    "contact-sheet": "VITE_CONTACT_SHEET_AT=\"$(date -u '+%Y-%m-%d %H:%M UTC')\" vitest run --project=contact-sheet && node -e \"console.log('\\n  open .contact-sheet/index.html\\n')\"",
     "typecheck": "next typegen && tsc --noEmit",
     "db:start": "supabase start",
     "db:reset": "supabase db reset"
