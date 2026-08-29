@@ -108,7 +108,16 @@ export function ItemPricing({
           // nothing added for shipping, duty or handling — so it is marked where it is
           // read, not only inferred from the Margin beneath it. Writing a Landed Cost is
           // what confirms it (ADR-0014), so this clears the moment somebody saves one.
-          unconfirmed={!editedHere && item.landedCostConfirmedAt === null}
+          //
+          // It takes a figure to be provisional. An Item with no Selected Quote yet has
+          // nothing pre-filled and renders an empty field, and ADR-0014 defines
+          // Unconfirmed as a Landed Cost *still at its pre-filled value* — so flagging
+          // that would put an amber chip beside a number that does not exist.
+          unconfirmed={
+            !editedHere &&
+            item.landedCostPerUnit !== null &&
+            item.landedCostConfirmedAt === null
+          }
           label={t("pricing.landedCost", { item: item.productName })}
           // What this field is for, and what saving it does. On the field rather than
           // under it, and repeated into the accessible name the way the quote table

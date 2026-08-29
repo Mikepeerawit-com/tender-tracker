@@ -27,8 +27,10 @@ import { ScreenHeader } from "@/components/ui/screen-header";
  * header the bars sit in blocks whose width is already settled, and there `w-full` is
  * safe.
  *
- * The app bar is deliberately absent: it lives in the `(app)` layout, so it is already on
- * screen and stays interactive while this renders underneath it.
+ * The app bar is deliberately absent *from here*, but not from the fallback. Since #73 the
+ * bar states where the reader is, so it belongs to the page rather than the layout — and a
+ * page being replaced by this takes its bar with it. `(app)/loading.tsx` draws one itself
+ * above this, which is where the reasoning for the shape it draws lives.
  */
 export function ScreenSkeleton() {
   const t = useTranslations("app");

@@ -19,8 +19,8 @@ export type TenderScreenData = {
   /**
    * The Items **this reader** has neither Quoted nor recorded No Supplier Found on.
    *
-   * Empty for a reader who owes nothing, and empty for anybody who is not an Assignee on
-   * this Tender — see {@link outstandingFor}.
+   * Empty for a reader who owes nothing, for anybody who is not an Assignee on this
+   * Tender, and for a Tender whose Bid has gone out — see {@link outstandingFor}.
    */
   outstandingForYou: OutstandingItem[];
 };
@@ -109,6 +109,20 @@ export async function loadTenderScreen(
  * an Assignee may enter a Quote and Assignees enrol themselves, so every Item would
  * otherwise read as outstanding for an Owner who never took one on — nagging them about
  * work they cannot do, with links to a screen that would refuse them.
+ *
+ * **Nothing is owed on work that is over**, which is two conditions and not one:
+ *
+ * 1. **The Bid has gone out.** Sourcing a price for a Tender already with the client
+ *    changes nothing, so a submitted Tender owes nobody anything — the same reading
+ *    ADR-0005 takes when it stops nagging one, and the same one `worklistGroup` takes when
+ *    it refuses to call a submitted Tender "coming up".
+ * 2. **The Item has an Outcome.** An Item marked `no_bid` is one somebody decided not to
+ *    price; `won`, `lost` and `cancelled` are all likewise finished. Naming any of them
+ *    would link an Assignee to a sourcing screen for work that will never be done.
+ *
+ * Both are what keeps the band's *emptiness* meaningful, which is the whole of why it is
+ * personal: a band that outlived the work it described would be back to being a status
+ * report, and one that nagged forever about a Tender lost in March would be worse.
  */
 function outstandingFor(
   callerId: string,
@@ -116,11 +130,19 @@ function outstandingFor(
   sheet: ComparisonSheet,
 ): OutstandingItem[] {
   if (tender === null) return [];
+  if (tender.submittedAt !== null) return [];
   if (!tender.assignees.some((assignee) => assignee.id === callerId)) return [];
+
+  // The Outcome is on the Tender's Items and the sourcing is on the sheet's, so the two
+  // are matched by id rather than one being read off the other. Both are already in hand.
+  const decided = new Set(
+    tender.items.filter((item) => item.outcome !== null).map((item) => item.id),
+  );
 
   return sheet.items
     .filter(
       (item) =>
+        !decided.has(item.id) &&
         !item.quotes.some((quote) => quote.sourcedByUserId === callerId) &&
         !item.sourcing.noSupplierFound.some((refusal) => refusal.userId === callerId),
     )

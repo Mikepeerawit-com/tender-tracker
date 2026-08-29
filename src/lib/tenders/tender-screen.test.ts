@@ -16,7 +16,13 @@ import {
 import { createStorageClient } from "@/lib/supabase/storage-client";
 import { respondingRates } from "@/lib/fx/rate-stub";
 import { createQuote, recordNoSupplierFound } from "@/lib/quotes/quotes";
-import { addAssignee, createTender, getTender } from "@/lib/tenders/tenders";
+import {
+  addAssignee,
+  createTender,
+  getTender,
+  recordSubmission,
+  setItemOutcome,
+} from "@/lib/tenders/tenders";
 
 import { loadTenderScreen } from "./tender-screen";
 
@@ -359,5 +365,43 @@ describe("loading the tender screen", () => {
     expect(screen.tender).toBeNull();
     expect(screen.sheet.items).toEqual([]);
     expect(screen.referenceImages).toEqual([]);
+  });
+
+  // The two below are read through the colleague, who has answered for neither Item and
+  // so still owes both. They are the only reader on this fixture with anything left to
+  // owe, which is what makes a band that empties visible at all.
+
+  it("drops an Item somebody has recorded an Outcome on", async () => {
+    // Nobody is going to price an Item the Owner decided not to bid. Naming it would link
+    // an Assignee to a sourcing screen for work that will never be done.
+    const decided = await setItemOutcome(
+      { itemId, outcome: "no_bid", decidedAt: new Date("2026-08-22T03:00:00Z") },
+      store,
+    );
+
+    expect(decided.ok).toBe(true);
+
+    const theirs = await loadTenderScreen(tenderId, mate.id, mateStore);
+
+    expect(theirs.outstandingForYou.map((item) => item.id)).toEqual([otherItemId]);
+  });
+
+  it("owes nothing once the Bid has gone out", async () => {
+    // Sourcing a price for a Tender already with the client changes nothing — the same
+    // reading ADR-0005 takes when it stops nagging one. The colleague still owes the
+    // second Item by every other measure, and the band goes quiet anyway.
+    const submitted = await recordSubmission(
+      { tenderId, submittedAt: new Date("2026-08-27T09:00:00Z") },
+      store,
+    );
+
+    expect(submitted.ok).toBe(true);
+
+    const theirs = await loadTenderScreen(tenderId, mate.id, mateStore);
+
+    expect(theirs.outstandingForYou).toEqual([]);
+    // Still the Tender, still the sheet — it is the band that emptied, not the screen.
+    expect(theirs.tender?.id).toBe(tenderId);
+    expect(theirs.sheet.items).toHaveLength(2);
   });
 });
