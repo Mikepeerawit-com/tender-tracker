@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
+import { ScreenBody } from "@/components/ui/screen-body";
 import { ScreenHeader } from "@/components/ui/screen-header";
 
 /**
@@ -22,6 +23,12 @@ import { ScreenHeader } from "@/components/ui/screen-header";
  * plus a digest — the real one is in the server log under that same digest — so logging
  * it again would print nothing new, into a console that nobody can open inside the WeCom
  * webview this is read in. The digest is on the screen instead, where it can be quoted.
+ *
+ * It composes {@link ScreenBody} rather than `Screen`, for two reasons that each hold on
+ * their own. `Screen` draws the app bar, and `(app)/error.tsx` draws its own above this —
+ * a screen that threw is exactly where the way back to the list must still be there. And
+ * `Screen` reaches for the session, which a Client Component cannot do. What is shared is
+ * the wrapper, at the same default width every page gets.
  */
 export function ScreenError({
   digest,
@@ -35,24 +42,22 @@ export function ScreenError({
   const t = useTranslations("app.error");
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-6">
-      <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-        <ScreenHeader
-          heading={t("title")}
-          actions={
-            <Button className="h-11" onClick={() => retry()}>
-              {t("retry")}
-            </Button>
-          }
-        >
-          <p className="text-muted-foreground text-sm break-words">{t("explain")}</p>
-          {digest ? (
-            <p className="text-muted-foreground font-mono text-xs break-all">
-              {t("reference", { digest })}
-            </p>
-          ) : null}
-        </ScreenHeader>
-      </main>
-    </div>
+    <ScreenBody>
+      <ScreenHeader
+        heading={t("title")}
+        actions={
+          <Button className="h-11" onClick={() => retry()}>
+            {t("retry")}
+          </Button>
+        }
+      >
+        <p className="text-muted-foreground text-sm break-words">{t("explain")}</p>
+        {digest ? (
+          <p className="text-muted-foreground font-mono text-xs break-all">
+            {t("reference", { digest })}
+          </p>
+        ) : null}
+      </ScreenHeader>
+    </ScreenBody>
   );
 }

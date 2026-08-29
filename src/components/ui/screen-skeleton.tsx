@@ -1,5 +1,6 @@
 import { useTranslations } from "next-intl";
 
+import { ScreenBody } from "@/components/ui/screen-body";
 import { ScreenHeader } from "@/components/ui/screen-header";
 
 /**
@@ -31,41 +32,45 @@ import { ScreenHeader } from "@/components/ui/screen-header";
  * bar states where the reader is, so it belongs to the page rather than the layout — and a
  * page being replaced by this takes its bar with it. `(app)/loading.tsx` draws one itself
  * above this, which is where the reasoning for the shape it draws lives.
+ *
+ * That is also why this composes {@link ScreenBody} rather than `Screen`: `Screen` draws
+ * the bar, and a fallback that used it would put a second one under `loading.tsx`'s. The
+ * wrapper below it is the same wrapper every page gets, at the same default width, which
+ * is what keeps the fallback and the screen it stands in for from disagreeing about where
+ * the page starts.
  */
 export function ScreenSkeleton() {
   const t = useTranslations("app");
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-6">
-      <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-        {/* The only thing here with anything to say. Everything below is shape. */}
-        <p role="status" className="sr-only">
-          {t("loading")}
-        </p>
+    <ScreenBody>
+      {/* The only thing here with anything to say. Everything below is shape. */}
+      <p role="status" className="sr-only">
+        {t("loading")}
+      </p>
 
-        <div aria-hidden className="contents">
-          <ScreenHeader
-            heading={<Bar className="h-7 w-48" />}
-            actions={<Bar className="h-11 w-24" />}
-          >
-            <Bar className="h-4 w-40" />
-            <Bar className="h-4 w-32" />
-          </ScreenHeader>
+      <div aria-hidden className="contents">
+        <ScreenHeader
+          heading={<Bar className="h-7 w-48" />}
+          actions={<Bar className="h-11 w-24" />}
+        >
+          <Bar className="h-4 w-40" />
+          <Bar className="h-4 w-32" />
+        </ScreenHeader>
 
-          <div className="flex flex-col gap-3">
-            {[0, 1, 2].map((row) => (
-              <div
-                key={row}
-                className="border-border flex flex-col gap-3 rounded-lg border p-4"
-              >
-                <Bar className="h-4 w-full" />
-                <Bar className="h-4 w-1/2" />
-              </div>
-            ))}
-          </div>
+        <div className="flex flex-col gap-3">
+          {[0, 1, 2].map((row) => (
+            <div
+              key={row}
+              className="border-border flex flex-col gap-3 rounded-lg border p-4"
+            >
+              <Bar className="h-4 w-full" />
+              <Bar className="h-4 w-1/2" />
+            </div>
+          ))}
         </div>
-      </main>
-    </div>
+      </div>
+    </ScreenBody>
   );
 }
 

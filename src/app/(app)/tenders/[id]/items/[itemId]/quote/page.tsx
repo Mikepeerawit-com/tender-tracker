@@ -2,12 +2,12 @@ import { cookies, headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { AppHeader } from "@/components/app-header";
 import { ImageCountBadge } from "@/components/images/image-count-badge";
 import { ItemBrief } from "@/components/quotes/item-brief";
 import { NoSupplierFoundForm } from "@/components/quotes/no-supplier-found-form";
 import { QuoteForm } from "@/components/quotes/quote-form";
 import { QuoteList } from "@/components/quotes/quote-list";
+import { Screen } from "@/components/screen";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { currentUser } from "@/lib/auth/session";
 import { todayIn } from "@/lib/calendar-date";
@@ -77,104 +77,98 @@ export default async function ItemSourcingPage({
   const today = todayIn(timezone, runInstantFromHeaders(await headers()));
 
   return (
-    <>
-      <AppHeader
-        isOrgAdmin={user.isOrgAdmin}
-        location={{
-          kind: "record",
-          backHref: `/tenders/${tender.id}`,
-          reference: tender.reference,
-          // Through a message, not composed here: the separator is punctuation, and
-          // Chinese wants a full-width one. A `·` written into JSX is a string no
-          // translator can reach.
-          detail: nav("itemLocation", {
-            client: tender.clientName,
-            item: item.productName,
-          }),
-        }}
+    <Screen
+      location={{
+        kind: "record",
+        backHref: `/tenders/${tender.id}`,
+        reference: tender.reference,
+        // Through a message, not composed here: the separator is punctuation, and
+        // Chinese wants a full-width one. A `·` written into JSX is a string no
+        // translator can reach.
+        detail: nav("itemLocation", {
+          client: tender.clientName,
+          item: item.productName,
+        }),
+      }}
+    >
+      {/* The brief the Assignee checks themselves against before typing a number, with
+          the client's own pictures inside it. The reference and the client name are not
+          repeated here — the app bar carries them (#73). */}
+      <ItemBrief
+        productName={item.productName}
+        quantity={item.quantity}
+        unit={item.unit}
+        description={item.description}
+        internalQuoteDeadline={tender.internalQuoteDeadline}
+        images={
+          referenceImages.length > 0 ? (
+            <ImageCountBadge
+              openLabel={tenders("referenceImages.openCount", {
+                label: item.productName,
+                count: referenceImages.length,
+              })}
+              images={referenceImages}
+            />
+          ) : null
+        }
       />
-      <div className="flex flex-1 flex-col gap-8 p-6">
-      <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-        {/* The brief the Assignee checks themselves against before typing a number, with
-            the client's own pictures inside it. The reference and the client name are not
-            repeated here — the app bar carries them (#73). */}
-        <ItemBrief
-          productName={item.productName}
-          quantity={item.quantity}
-          unit={item.unit}
-          description={item.description}
-          internalQuoteDeadline={tender.internalQuoteDeadline}
-          images={
-            referenceImages.length > 0 ? (
-              <ImageCountBadge
-                openLabel={tenders("referenceImages.openCount", {
-                  label: item.productName,
-                  count: referenceImages.length,
-                })}
-                images={referenceImages}
-              />
-            ) : null
-          }
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-sm font-medium">
+          {t("recorded", { count: quotes.length })}
+        </h2>
+        <QuoteList
+          tenderId={tender.id}
+          tenderItemId={item.id}
+          quotes={quotes}
+          photos={photos}
+          callerId={user.id}
+          ownerUserId={tender.ownerUserId}
+          selectedQuoteId={selectedQuoteId}
         />
+      </section>
 
-        <section className="flex flex-col gap-4">
-          <h2 className="text-sm font-medium">
-            {t("recorded", { count: quotes.length })}
-          </h2>
-          <QuoteList
-            tenderId={tender.id}
-            tenderItemId={item.id}
-            quotes={quotes}
-            photos={photos}
-            callerId={user.id}
-            ownerUserId={tender.ownerUserId}
-            selectedQuoteId={selectedQuoteId}
-          />
-        </section>
-
-        {isAssignee ? (
-          <>
-            <section className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1">
-                <h2 className="text-sm font-medium">{t("add")}</h2>
-                <p className="text-muted-foreground text-xs">{t("addHint")}</p>
-              </div>
-
-              <QuoteForm
-                tenderId={tender.id}
-                tenderItemId={item.id}
-                defaults={blankQuote({ unit: item.unit, today })}
-              />
-            </section>
-
-            <section className="border-border rounded-lg border border-dashed p-4">
-              <NoSupplierFoundForm
-                tenderId={tender.id}
-                tenderItemId={item.id}
-                mine={refusals.find((row) => row.userId === user.id) ?? null}
-                others={refusals.filter((row) => row.userId !== user.id)}
-              />
-            </section>
-          </>
-        ) : (
+      {isAssignee ? (
+        <>
           <section className="flex flex-col gap-4">
-            <p className="border-border rounded-lg border px-3 py-2 text-sm">
-              {t("notAssignee")}
-            </p>
+            <div className="flex flex-col gap-1">
+              <h2 className="text-sm font-medium">{t("add")}</h2>
+              <p className="text-muted-foreground text-xs">{t("addHint")}</p>
+            </div>
 
-            {/* The way in, on the page that just said no — rather than a sentence sending
-                somebody back to a screen to find a control they have not seen. */}
-            <AssigneeControls
+            <QuoteForm
               tenderId={tender.id}
-              assignees={tender.assignees}
-              members={members ?? []}
-              callerId={user.id}
-              isOwner={tender.ownerUserId === user.id}
+              tenderItemId={item.id}
+              defaults={blankQuote({ unit: item.unit, today })}
             />
           </section>
-        )}
-      </main>
-      </div>
-    </>
+
+          <section className="border-border rounded-lg border border-dashed p-4">
+            <NoSupplierFoundForm
+              tenderId={tender.id}
+              tenderItemId={item.id}
+              mine={refusals.find((row) => row.userId === user.id) ?? null}
+              others={refusals.filter((row) => row.userId !== user.id)}
+            />
+          </section>
+        </>
+      ) : (
+        <section className="flex flex-col gap-4">
+          <p className="border-border rounded-lg border px-3 py-2 text-sm">
+            {t("notAssignee")}
+          </p>
+
+          {/* The way in, on the page that just said no — rather than a sentence sending
+              somebody back to a screen to find a control they have not seen. */}
+          <AssigneeControls
+            tenderId={tender.id}
+            assignees={tender.assignees}
+            members={members ?? []}
+            callerId={user.id}
+            isOwner={tender.ownerUserId === user.id}
+          />
+        </section>
+      )}
+    </Screen>
   );
 }
