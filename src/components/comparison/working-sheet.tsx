@@ -164,7 +164,7 @@ function TotalsBar({ items }: { items: SheetItem[] }) {
         {t("coverage", { priced: totals.pricedCount, total: totals.itemCount })}
       </span>
 
-      <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2 tabular-nums">
+      <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
         <Total label={t("bidTotal")} value={thb(totals.bidTotal)} />
         <Total label={t("landedCost")} value={thb(totals.landedCostTotal)} />
         <Total
@@ -192,8 +192,16 @@ function Total({
 }) {
   return (
     <div className="flex items-baseline gap-2">
-      <dt className="text-muted-foreground text-xs">{label}</dt>
-      <dd className={muted ? "text-muted-foreground text-sm" : "text-sm font-semibold"}>
+      <dt className="field-label">{label}</dt>
+      {/* Never toned by sign. A negative total is negative because it has a minus in
+          front of it, which is a copy of the meaning no colour convention can invert. */}
+      <dd
+        className={
+          muted
+            ? "text-flag-ink text-xs font-medium"
+            : "money text-base font-medium"
+        }
+      >
         {value}
       </dd>
     </div>
@@ -251,16 +259,18 @@ function ItemSummary({ tenderId, item }: { tenderId: string; item: SheetItem }) 
       </div>
 
       <div className="flex min-w-0 flex-[1_1_11rem] flex-col gap-0.5">
-        <span className="text-muted-foreground text-xs">{t("label.selectedQuote")}</span>
+        <span className="field-label">{t("label.selectedQuote")}</span>
 
         {selected ? (
           <>
             <span className="text-foreground font-medium">{selected.supplierName}</span>
             <span className="text-muted-foreground text-xs">
-              {format.number(selected.unitPrice, {
-                style: "currency",
-                currency: selected.currency,
-              })}{" "}
+              <span className="money text-foreground text-base font-medium">
+                {format.number(selected.unitPrice, {
+                  style: "currency",
+                  currency: selected.currency,
+                })}
+              </span>{" "}
               {tq("perUnit", { unit: selected.quotedUnit })}
             </span>
             <span className="text-muted-foreground text-xs">
@@ -268,7 +278,7 @@ function ItemSummary({ tenderId, item }: { tenderId: string; item: SheetItem }) 
             </span>
           </>
         ) : (
-          <span className="font-medium text-amber-700 dark:text-amber-400">
+          <span className="font-medium text-flag-ink">
             {t("needsDecision")}
           </span>
         )}
@@ -457,16 +467,30 @@ function QuoteRow({
         // Below the breakpoint the row is a card: a bordered box with the rank pill down
         // its left-hand side and everything else stacked beside it.
         "max-md:border-border max-md:grid max-md:grid-cols-[1.75rem_minmax(0,1fr)] max-md:gap-x-3 max-md:rounded-lg max-md:border max-md:p-3",
-        // Amber, because this row is not a price for what was asked for.
-        isAlternative ? "bg-amber-500/5 max-md:border-amber-500/50" : "",
-        isSelected ? "bg-primary/5 max-md:border-primary/60" : "",
+        // Flag, because this row is a *property* of the Quote — the supplier offered a
+        // substitute — and not something that has gone wrong. Alarm would read as the
+        // second thing, which is exactly the misreading ADR-0019 keeps it away from.
+        isAlternative ? "bg-flag/5 max-md:border-flag/50" : "",
+        // Signal: this is the one we chose, which is what signal says.
+        isSelected ? "bg-signal/5 max-md:border-signal/60" : "",
       ].join(" ")}
     >
-      <td className="text-muted-foreground px-2 py-3 tabular-nums max-md:col-start-1 max-md:row-start-1 max-md:p-0">
+      <td className="text-muted-foreground money px-2 py-3 max-md:col-start-1 max-md:row-start-1 max-md:p-0">
         <CardLabel>{t("quote.rank")}</CardLabel>
         {/* No number at all on an Item something refuses to rank — not a greyed one, not
-            a dash pretending to be one. */}
-        <span className="max-md:bg-muted max-md:inline-grid max-md:size-7 max-md:place-items-center max-md:rounded-full max-md:text-xs max-md:font-semibold">
+            a dash pretending to be one.
+
+            Rank 1 is filled in signal because *cheapest first* is the default reading,
+            not because it is the right answer — the too-close-to-call banner above exists
+            to argue with it. Colour is not the only copy: the number itself says 1. */}
+        <span
+          className={[
+            "max-md:inline-grid max-md:size-7 max-md:place-items-center max-md:rounded-full max-md:text-xs max-md:font-semibold",
+            row.rank === 1
+              ? "text-signal-ink font-semibold max-md:bg-signal max-md:text-primary-foreground"
+              : "max-md:bg-muted",
+          ].join(" ")}
+        >
           {row.rank ?? "·"}
         </span>
       </td>
@@ -475,16 +499,21 @@ function QuoteRow({
 
       <Cell className="text-muted-foreground text-xs">
         <CardLabel>{t("quote.sourcedBy")}</CardLabel>
-        <span className="inline-flex items-center gap-1.5">
+        {/* `flex` with `min-w-0`, not `inline-flex`: an inline-flex refuses to shrink
+            below its content, so the avatar and the name together held this column open
+            and pushed the table sideways at 768px — the width ADR-0009 says the table
+            comes back at. Sourced-by is never dropped (it is the attribution the whole
+            compete-not-divide model rests on), so it wraps instead. */}
+        <span className="flex min-w-0 items-center gap-1.5">
           <InitialsAvatar name={quote.sourcedByName} />
-          {quote.sourcedByName}
+          <span className="min-w-0 break-words">{quote.sourcedByName}</span>
         </span>
       </Cell>
 
       <Cell>
         {isAlternative ? (
-          <div className="flex flex-col gap-1 max-md:rounded-lg max-md:border max-md:border-amber-500/40 max-md:bg-amber-500/10 max-md:p-2">
-            <span className="w-fit max-w-full rounded bg-amber-500/20 px-1.5 py-0.5 text-[0.7rem] font-medium tracking-wide uppercase">
+          <div className="flex flex-col gap-1 max-md:rounded-lg max-md:border max-md:border-flag/40 max-md:bg-flag/10 max-md:p-2">
+            <span className="field-label bg-flag-wash text-flag-ink w-fit max-w-full rounded px-1.5 py-0.5 text-[0.7rem] font-medium">
               {tq("matchType.alternative")}
             </span>
             <span className="font-medium">{quote.alternativeProductName}</span>
@@ -501,9 +530,12 @@ function QuoteRow({
         <div className="flex flex-col items-end gap-0.5 max-md:items-start">
           <CardLabel>{t("quote.unitPrice")}</CardLabel>
 
-          {/* The supplier's own amount is the real one and is primary and bold. The THB
-              figure beneath it is ours, derived, and says so with an `≈`. */}
-          <span className="font-semibold max-md:text-base">
+          {/* The supplier's own amount is the real one, and on this screen it is the
+              loudest thing there is: mono, tabular, display size. Eight competing offers
+              for the same goods have to read as a column of numbers rather than as eight
+              paragraphs, and tabular figures are what make the digits line up down it.
+              The THB figure beneath it is ours, derived, and says so with an `≈`. */}
+          <span className="money text-xl leading-tight font-medium md:text-base lg:text-xl">
             {format.number(quote.unitPrice, {
               style: "currency",
               currency: quote.currency,
@@ -520,7 +552,7 @@ function QuoteRow({
                 }),
               })}
               {quote.fxRateIsStale ? (
-                <span className="ml-1 rounded bg-amber-500/20 px-1 py-0.5 text-[0.65rem]">
+                <span className="bg-flag-wash text-flag-ink ml-1 rounded px-1 py-0.5 text-[0.65rem] font-medium">
                   {tq("staleRate")}
                 </span>
               ) : null}
@@ -534,7 +566,7 @@ function QuoteRow({
           {/* "lowest", never "cheapest": the row is highlighted, not stamped. Absent
               entirely from an Item that cannot be ranked. */}
           {row.isLowest ? (
-            <span className="w-fit max-w-full rounded bg-emerald-500/20 px-1.5 py-0.5 text-[0.7rem] font-medium">
+            <span className="bg-signal-wash text-signal-ink w-fit max-w-full rounded px-1.5 py-0.5 text-[0.7rem] font-medium">
               {t("quote.lowest")}
             </span>
           ) : null}
@@ -550,7 +582,7 @@ function QuoteRow({
           // be out by whatever the pack size is.
           <span className="text-muted-foreground text-xs">{t("quote.notComparable")}</span>
         ) : (
-          <span>
+          <span className="money text-base font-medium md:text-sm lg:text-base">
             {format.number(row.lineTotalThb, {
               style: "currency",
               currency: reportingCurrency,
@@ -696,7 +728,7 @@ function Notice({
 }) {
   const tones = {
     stop: "border-destructive/40 bg-destructive/10 text-destructive",
-    warn: "border-amber-500/40 bg-amber-500/10",
+    warn: "border-flag/40 bg-flag/10",
     info: "border-border bg-background",
   };
 
@@ -734,7 +766,7 @@ function SourcingChips({ sourcing }: { sourcing: ItemSourcing }) {
         </span>
       ) : null}
       {refusals > 0 ? (
-        <span className="text-foreground w-fit max-w-full rounded bg-amber-500/20 px-2 py-0.5 text-xs">
+        <span className="text-foreground w-fit max-w-full rounded bg-flag/20 px-2 py-0.5 text-xs">
           {t("noSupplierFound", { count: refusals })}
         </span>
       ) : null}

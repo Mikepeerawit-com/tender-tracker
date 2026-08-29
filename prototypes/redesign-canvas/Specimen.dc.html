@@ -1,0 +1,263 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <style>
+    :root{
+      --ground:oklch(0.986 0.004 200); --surface:oklch(1 0 0);
+      --ink:oklch(0.20 0.014 235); --ink-muted:oklch(0.52 0.016 235); --ink-faint:oklch(0.66 0.012 235);
+      --hairline:oklch(0.905 0.008 215); --hairline-soft:oklch(0.945 0.006 215);
+      --signal:oklch(0.55 0.15 195); --signal-ink:oklch(0.42 0.13 195); --signal-wash:oklch(0.55 0.15 195 / 0.09);
+      --alarm:oklch(0.55 0.15 28); --alarm-ink:oklch(0.46 0.16 28); --alarm-wash:oklch(0.55 0.15 28 / 0.08);
+      --flag:oklch(0.62 0.13 75); --flag-ink:oklch(0.48 0.12 75); --flag-wash:oklch(0.62 0.13 75 / 0.15);
+      --radius:10px;
+      --sans:"IBM Plex Sans","PingFang SC","Hiragino Sans GB","Source Han Sans SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+      --mono:"IBM Plex Mono","SF Mono",ui-monospace,monospace;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--ground);-webkit-font-smoothing:antialiased;}
+    a{color:var(--signal-ink);} a:hover{color:var(--signal);}
+    .sheet{width:1040px;padding:34px 38px 42px;display:flex;flex-direction:column;gap:34px;}
+    .top{display:flex;flex-direction:column;gap:7px;padding-bottom:20px;border-bottom:2px solid var(--ink);}
+    .top h1{font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0;}
+    .top p{margin:0;font-size:14px;line-height:1.6;color:var(--ink-muted);max-width:62ch;text-wrap:pretty;}
+    .sec{display:flex;flex-direction:column;gap:15px;}
+    .sechead{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--hairline);padding-bottom:7px;}
+    .sechead h2{font-size:14px;font-weight:600;margin:0;letter-spacing:-.005em;}
+    .sechead span{font-size:12.5px;color:var(--ink-faint);}
+    .lbl{font-size:10.5px;font-weight:500;letter-spacing:.055em;text-transform:uppercase;color:var(--ink-faint);}
+    .lbl.cjk{letter-spacing:0;text-transform:none;font-size:11.5px;}
+
+    .swatches{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;}
+    .sw{display:flex;flex-direction:column;gap:8px;}
+    .chipbig{height:64px;border-radius:8px;border:1px solid oklch(0 0 0 / .07);}
+    .swname{font-size:13px;font-weight:600;}
+    .swval{font-family:var(--mono);font-size:11px;color:var(--ink-faint);}
+    .swrule{font-size:12px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty;}
+
+    .typerows{display:flex;flex-direction:column;gap:0;border:1px solid var(--hairline);border-radius:var(--radius);overflow:hidden;background:var(--surface);}
+    .trow{display:flex;gap:20px;align-items:baseline;padding:13px 16px;border-bottom:1px solid var(--hairline-soft);}
+    .trow:last-child{border-bottom:0;}
+    .tmeta{width:210px;flex:0 0 auto;display:flex;flex-direction:column;gap:2px;}
+    .tname{font-size:12px;font-weight:600;}
+    .tspec{font-family:var(--mono);font-size:11px;color:var(--ink-faint);}
+    .tsample{flex:1;display:flex;gap:26px;align-items:baseline;flex-wrap:wrap;}
+
+    .t-money{font-family:var(--mono);font-size:27px;font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
+    .t-h1{font-size:21px;font-weight:600;letter-spacing:-.015em;}
+    .t-row{font-size:15px;font-weight:600;letter-spacing:-.008em;}
+    .t-body{font-size:14px;}
+    .t-meta{font-size:12.5px;color:var(--ink-muted);}
+    .t-mono{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--ink-faint);letter-spacing:.02em;}
+
+    .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
+    .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;}
+    .card{border:1px solid var(--hairline);border-radius:var(--radius);background:var(--surface);padding:14px 15px;display:flex;flex-direction:column;gap:10px;}
+    .cardtitle{font-size:13px;font-weight:600;}
+    .cardnote{font-size:12px;line-height:1.55;color:var(--ink-muted);text-wrap:pretty;}
+    .lamprow{display:flex;align-items:center;gap:9px;}
+    .lampname{font-size:13px;font-weight:500;}
+    .lampname.alarm{color:var(--alarm-ink);}
+    .lampname.signal{color:var(--signal-ink);}
+    .lampname.calm{color:var(--ink-faint);font-weight:400;}
+
+    .track{display:flex;gap:2px;}
+    .seg{width:14px;height:4px;border-radius:1px;background:var(--hairline);}
+    .seg.on{background:var(--signal);}
+    .trackrow{display:flex;align-items:center;gap:11px;}
+    .tracklabel{font-size:13px;font-weight:500;min-width:104px;}
+    .trackcjk{font-size:12.5px;color:var(--ink-faint);}
+
+    .chips{display:flex;flex-wrap:wrap;gap:8px;}
+    .chip{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;border-radius:6px;background:oklch(0.955 0.006 215);font-size:11.5px;font-weight:500;color:var(--ink-muted);border:1px solid var(--hairline-soft);}
+    .chip.needs{background:var(--signal-wash);color:var(--signal-ink);border-color:oklch(0.55 0.15 195 / 0.28);}
+    .chip.prov{background:var(--flag-wash);color:var(--flag-ink);border-color:oklch(0.62 0.13 75 / 0.3);}
+    .chip.alt{background:var(--flag-wash);color:var(--flag-ink);border-color:oklch(0.62 0.13 75 / 0.3);letter-spacing:.06em;text-transform:uppercase;font-size:10px;font-weight:600;}
+
+    .btns{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
+    .primary{height:44px;padding:0 18px;display:flex;align-items:center;gap:7px;background:var(--signal);color:oklch(0.99 0.005 195);border:0;border-radius:var(--radius);font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;}
+    .select{height:44px;padding:0 18px;border:1px solid var(--signal);background:var(--surface);color:var(--signal-ink);border-radius:8px;font-family:var(--sans);font-size:13.5px;font-weight:500;cursor:pointer;}
+    .neutral{height:44px;padding:0 16px;border:1px solid var(--hairline);background:var(--surface);color:var(--ink-muted);border-radius:8px;font-family:var(--sans);font-size:13.5px;font-weight:500;cursor:pointer;}
+    .ranks{display:flex;gap:9px;align-items:center;}
+    .rank{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:12.5px;font-weight:500;background:oklch(0.955 0.006 215);color:var(--ink-muted);border:1px solid var(--hairline);}
+    .rank.first{background:var(--signal);color:oklch(0.99 0.005 195);border-color:var(--signal);}
+    .measure{position:relative;padding-left:0;}
+    .rulehint{font-family:var(--mono);font-size:11px;color:var(--ink-faint);}
+    .banned{border:1px solid oklch(0.55 0.15 28 / 0.3);background:var(--alarm-wash);border-radius:var(--radius);padding:13px 15px;display:flex;flex-direction:column;gap:6px;}
+    .banned .t{font-size:13px;font-weight:600;color:var(--alarm-ink);}
+    .banned p{margin:0;font-size:12.5px;line-height:1.6;color:var(--alarm-ink);opacity:.92;text-wrap:pretty;}
+  </style>
+</helmet>
+
+<div class="sheet">
+
+  <div class="top">
+    <h1>Tender Tracker — the system</h1>
+    <p>One signal colour, one alarm colour reserved for time, and one flag that describes a quote rather than a state. Everything else is ink. Nothing on any screen is told apart by colour alone.</p>
+  </div>
+
+  <div class="sec">
+    <div class="sechead"><h2>Colour</h2><span>Four hues, and what each one is allowed to say</span></div>
+    <div class="swatches">
+      <div class="sw">
+        <div class="chipbig" style="background:oklch(0.55 0.15 195)"></div>
+        <span class="swname">Signal</span>
+        <span class="swval">oklch(0.55 0.15 195)</span>
+        <span class="swrule">This needs you, or this is the one we chose. Primary actions, the selected quote, rank 1, the outstanding-for-you band.</span>
+      </div>
+      <div class="sw">
+        <div class="chipbig" style="background:oklch(0.55 0.15 28)"></div>
+        <span class="swname">Alarm</span>
+        <span class="swval">oklch(0.55 0.15 28)</span>
+        <span class="swrule">Time, and only time. A missed submission, a passed deadline, an unsourced item after the internal date. It never touches a money figure.</span>
+      </div>
+      <div class="sw">
+        <div class="chipbig" style="background:oklch(0.62 0.13 75)"></div>
+        <span class="swname">Flag</span>
+        <span class="swval">oklch(0.62 0.13 75)</span>
+        <span class="swrule">A property of a quote or a figure, not a state: Alternative, a provisional landed cost, a too-close-to-call ranking.</span>
+      </div>
+      <div class="sw">
+        <div class="chipbig" style="background:oklch(0.20 0.014 235)"></div>
+        <span class="swname">Ink</span>
+        <span class="swval">oklch(0.20 0.014 235)</span>
+        <span class="swrule">Everything else. Ground is oklch(0.986 0.004 200) — a cool near-white, not cream — with hairlines at 0.905.</span>
+      </div>
+    </div>
+    <div class="banned">
+      <span class="t">Why alarm never lands on money</span>
+      <p>In Chinese financial convention red is up and green is down — the inverse of the Western reading. A red negative margin would be read as a gain by half the people using this. Keeping alarm to deadlines sidesteps the inversion rather than picking a side of it.</p>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sechead"><h2>Type</h2><span>IBM Plex Sans · IBM Plex Mono · the system CJK stack</span></div>
+    <div class="typerows">
+      <div class="trow">
+        <div class="tmeta"><span class="tname">Money</span><span class="tspec">Mono 27 / 500 · tabular</span></div>
+        <div class="tsample"><span class="t-money">฿12.40</span><span class="t-money">฿24,800</span></div>
+      </div>
+      <div class="trow">
+        <div class="tmeta"><span class="tname">Screen title</span><span class="tspec">Sans 21 / 600 · -0.015em</span></div>
+        <div class="tsample"><span class="t-h1">Tenders</span><span class="t-h1">招标</span></div>
+      </div>
+      <div class="trow">
+        <div class="tmeta"><span class="tname">Row title</span><span class="tspec">Sans 15 / 600 · -0.008em</span></div>
+        <div class="tsample"><span class="t-row">Bumrungrad International</span><span class="t-row">康民国际医院</span></div>
+      </div>
+      <div class="trow">
+        <div class="tmeta"><span class="tname">Body</span><span class="tspec">Sans 14 / 400 · 1.5</span></div>
+        <div class="tsample"><span class="t-body">IV infusion set, 20 drops/ml</span><span class="t-body">输液器，20 滴/毫升</span></div>
+      </div>
+      <div class="trow">
+        <div class="tmeta"><span class="tname">Meta</span><span class="tspec">Sans 12.5 / 400 · muted</span></div>
+        <div class="tsample"><span class="t-meta">Quotes due tomorrow · 3 items</span><span class="t-meta">报价明天截止 · 3 项明细</span></div>
+      </div>
+      <div class="trow">
+        <div class="tmeta"><span class="tname">Field label</span><span class="tspec">Sans 10.5 / 500 · 0.055em caps</span></div>
+        <div class="tsample"><span class="lbl">Landed cost / unit</span><span class="lbl cjk">到岸成本 / 单位</span></div>
+      </div>
+      <div class="trow">
+        <div class="tmeta"><span class="tname">Reference</span><span class="tspec">Mono 12 / 500 · 0.02em</span></div>
+        <div class="tsample"><span class="t-mono">T-18</span><span class="t-mono">USD 0.36 / set</span></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <span class="cardtitle">Chinese is not English with different words</span>
+        <span class="cardnote">Latin labels are uppercase with 0.055em tracking. Chinese has no case and tracking hurts it, so the CJK label is sentence-case at 11.5px instead — one rule per script, not one rule stretched over both.</span>
+      </div>
+      <div class="card">
+        <span class="cardtitle">The CJK face is chosen, not inherited</span>
+        <span class="cardnote">PingFang SC, Hiragino Sans GB, Source Han Sans SC, Noto Sans SC, Microsoft YaHei — declared in the stack, drawn by the device. A web-loaded CJK face is megabytes over a phone network in a WeCom webview, so IBM Plex Sans was picked to sit beside PingFang rather than fight it.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sechead"><h2>The indicator lamp</h2><span>The one device this design is remembered by — same shape, same meaning, on every screen</span></div>
+    <div class="grid3">
+      <div class="card">
+        <div class="lamprow">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="oklch(0.55 0.15 28)" stroke-width="1.5"></circle><circle cx="8" cy="8" r="2.75" fill="oklch(0.55 0.15 28)"></circle></svg>
+          <span class="lampname alarm">Lit, alarm</span>
+        </div>
+        <span class="cardnote">A date has gone by. Submission missed, sourcing overdue. Always paired with the sentence that says which date and how long ago.</span>
+      </div>
+      <div class="card">
+        <div class="lamprow">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="oklch(0.55 0.15 195)" stroke-width="1.5"></circle><circle cx="8" cy="8" r="2.75" fill="oklch(0.55 0.15 195)"></circle></svg>
+          <span class="lampname signal">Lit, signal</span>
+        </div>
+        <span class="cardnote">Something is expected of the person reading. Quotes due tomorrow, pick a quote, chase the client today.</span>
+      </div>
+      <div class="card">
+        <div class="lamprow">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="oklch(0.66 0.012 235)" stroke-width="1.5"></circle></svg>
+          <span class="lampname calm">Unlit</span>
+        </div>
+        <span class="cardnote">Live, nothing due. The lamp is drawn hollow rather than omitted so that a calm row and an urgent row are the same shape.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sechead"><h2>Progress</h2><span>On the group header, never on the row — inside a group every row is the same progress</span></div>
+    <div class="card">
+      <div class="trackrow"><span class="tracklabel">Not started</span><span class="track"><span class="seg on"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span></span><span class="trackcjk">尚未开始</span></div>
+      <div class="trackrow"><span class="tracklabel">Sourcing</span><span class="track"><span class="seg on"></span><span class="seg on"></span><span class="seg"></span><span class="seg"></span></span><span class="trackcjk">询价中</span></div>
+      <div class="trackrow"><span class="tracklabel">Quoted</span><span class="track"><span class="seg on"></span><span class="seg on"></span><span class="seg on"></span><span class="seg"></span></span><span class="trackcjk">报价已齐</span></div>
+      <div class="trackrow"><span class="tracklabel">Submitted</span><span class="track"><span class="seg on"></span><span class="seg on"></span><span class="seg on"></span><span class="seg on"></span></span><span class="trackcjk">已提交</span></div>
+      <span class="cardnote">Four segments, matching the four values of Progress in CONTEXT.md. It is derived from the data and can never be dragged — which is exactly why it is drawn as a read-only scale and not as a board.</span>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sechead"><h2>Chips, ranks and controls</h2><span>Every tap target is at least 44px high</span></div>
+    <div class="grid2">
+      <div class="card">
+        <span class="cardtitle">Chips</span>
+        <div class="chips">
+          <span class="chip">6 quotes</span>
+          <span class="chip">2 client images</span>
+          <span class="chip needs">Needs a decision</span>
+          <span class="chip prov">Provisional</span>
+          <span class="chip alt">Alternative</span>
+        </div>
+        <span class="cardnote">Counts are neutral. Signal marks what is unresolved. Flag marks what a figure or a quote is, never how urgent it is.</span>
+      </div>
+      <div class="card">
+        <span class="cardtitle">Rank</span>
+        <div class="ranks">
+          <span class="rank first">1</span><span class="rank">2</span><span class="rank">3</span><span class="rank">4</span>
+          <span class="rulehint" style="margin-left:6px">cheapest first, in baht</span>
+        </div>
+        <span class="cardnote">Rank 1 is filled because cheapest is the default reading, not because it is the right answer — the too-close-to-call banner exists to argue with it.</span>
+      </div>
+    </div>
+    <div class="card">
+      <span class="cardtitle">Controls</span>
+      <div class="btns">
+        <button class="primary" type="button">Record a tender</button>
+        <button class="select" type="button">Select this quote</button>
+        <button class="neutral" type="button">No supplier found</button>
+        <span class="rulehint">44px floor · judged on a real phone, not a narrowed window</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1040,"height":1720}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

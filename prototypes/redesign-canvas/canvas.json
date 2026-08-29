@@ -1,0 +1,15 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 880, "h": 1500, "title": "Worklist — grouped by Progress" },
+    { "file": "TenderDetail.dc.html", "x": 940, "y": 0, "w": 880, "h": 2050, "title": "Tender detail — working sheet, phone" },
+    { "file": "AddQuote.dc.html", "x": 1880, "y": 0, "w": 880, "h": 1380, "title": "Add a quote — the assignee's screen" },
+    { "file": "SheetDesktop.dc.html", "x": 0, "y": 2160, "w": 1340, "h": 1180, "title": "Working sheet — 1280" },
+    { "file": "Specimen.dc.html", "x": 1420, "y": 2160, "w": 1040, "h": 1720, "title": "The system" }
+  ],
+  "annotations": [
+    { "id": "direction", "x": 0, "y": -150, "w": 560, "text": "Direction: clinical instrument.\nOne signal colour (teal) for \"this needs you\", one alarm colour (red) reserved for time only, one flag (amber) for what a quote IS rather than how urgent it is. The signature device is the indicator lamp — same shape and meaning on every screen.\n\nStart at The system, bottom right." },
+    { "id": "grouping", "x": 600, "y": -150, "w": 300, "text": "The worklist now groups by Progress — the term already in CONTEXT.md — with Submission missed pinned above it as the one exception. Urgency moved from the group headings onto the row, as a lamp." },
+    { "id": "deeplink", "x": 1880, "y": -150, "w": 320, "text": "The internal-quote reminder currently links to /tenders/{id}, the owner's comparison sheet. It should link here instead — app-links.ts already has tenderItem(), it is just unused by reminders." }
+  ],
+  "launch": { "view": "canvas" }
+}

@@ -104,6 +104,11 @@ export function ItemPricing({
           action={setLandedCostAction}
           name="landedCostPerUnit"
           caption={t("label.landedCost")}
+          // The cost is still sitting at whatever the Selected Quote pre-filled, with
+          // nothing added for shipping, duty or handling — so it is marked where it is
+          // read, not only inferred from the Margin beneath it. Writing a Landed Cost is
+          // what confirms it (ADR-0014), so this clears the moment somebody saves one.
+          unconfirmed={!editedHere && item.landedCostConfirmedAt === null}
           label={t("pricing.landedCost", { item: item.productName })}
           // What this field is for, and what saving it does. On the field rather than
           // under it, and repeated into the accessible name the way the quote table
@@ -130,7 +135,7 @@ export function ItemPricing({
       </div>
 
       {/* Below the fields, never beside them — see the note at the top. */}
-      <dl className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 tabular-nums">
+      <dl className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <MarginFigure
           label={t("label.marginPerUnit")}
           value={margin?.perUnit ?? null}
@@ -160,6 +165,7 @@ function PriceField({
   caption,
   label,
   hint,
+  unconfirmed = false,
   value,
   storedValue,
   onValueChange,
@@ -177,6 +183,8 @@ function PriceField({
   label: string;
   /** Said on hover and to a screen reader, never given a line of the row's width. */
   hint?: string;
+  /** Marks the figure as not yet confirmed by anybody. Only the Landed Cost can be. */
+  unconfirmed?: boolean;
   value: string;
   /** What the row was rendered with — what "changed" is measured against. */
   storedValue: string;
@@ -192,8 +200,19 @@ function PriceField({
     <form ref={form} action={formAction} className="flex min-w-0 flex-col gap-1">
       {children}
 
-      <span className="text-muted-foreground text-xs" aria-hidden>
-        {caption}
+      <span className="flex flex-wrap items-baseline gap-1.5">
+        <span className="field-label" aria-hidden>
+          {caption}
+        </span>
+        {unconfirmed ? (
+          // In words as well as in flag, so the marking survives greyscale and sunlight.
+          // Not `aria-hidden`: this one is a fact about the figure, not a repeat of the
+          // field's own name, and a screen reader that skipped it would read a pre-filled
+          // cost as a real one.
+          <span className="bg-flag-wash text-flag-ink rounded px-1.5 py-0.5 text-[0.7rem] font-medium">
+            {t("unconfirmed")}
+          </span>
+        ) : null}
       </span>
 
       <Input
@@ -252,7 +271,7 @@ function MarginFigure({
 }) {
   return (
     <div className="flex min-w-0 items-baseline gap-1.5">
-      <dt className="text-muted-foreground text-xs">{label}</dt>
+      <dt className="field-label">{label}</dt>
       <dd>
         <Margin value={value} provisional={provisional} />
       </dd>
@@ -274,16 +293,21 @@ function Margin({ value, provisional }: { value: number | null; provisional: boo
 
   if (value === null) return <span className="text-muted-foreground">{emDash}</span>;
 
+  // Flag, not ink: provisional is a property of the figure — what this Margin *is* —
+  // rather than a state of the Tender or a thing that has gone wrong.
   if (provisional) {
-    return <span className="text-muted-foreground text-xs">{t("provisional")}</span>;
+    return <span className="text-flag-ink text-xs font-medium">{t("provisional")}</span>;
   }
 
+  // **A negative Margin is never rendered in red**, nor in any alarm-toned treatment.
+  // In Chinese financial convention red is up and green is down — the inverse of the
+  // Western reading — so a red negative Margin is read as a *gain* by half the people
+  // using this daily. Keeping alarm to deadlines sidesteps the inversion rather than
+  // picking a side of it, which is the only move available in an app that ships `en` and
+  // `zh-Hans` from one component tree (ADR-0019). The minus sign the formatter puts in
+  // front of the figure is the copy of the meaning, and it inverts for nobody.
   return (
-    <span
-      className={
-        value < 0 ? "text-destructive text-sm font-medium" : "text-sm font-medium"
-      }
-    >
+    <span className="money text-base font-medium">
       {format.number(value, { style: "currency", currency: reportingCurrency })}
     </span>
   );

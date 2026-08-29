@@ -85,9 +85,10 @@
   "nav": {
     "signOut": "退出登录",
     "people": "成员",
-    "tenders": "招标",
     "groupRobot": "群机器人",
-    "menu": "菜单"
+    "menu": "菜单",
+    "back": "返回",
+    "itemLocation": "{client}·{item}"
   },
   "images": {
     "viewing": "第 {position} 张，共 {total} 张",
@@ -116,7 +117,6 @@
     "recordDescription": "客户要什么、什么时候必须回复，以及其中包含的每一项产品。",
     "edit": "编辑招标",
     "editDescription": "编号一经生成不再更改。下方的招标明细逐条添加、修改和删除。",
-    "backToList": "全部招标",
     "notSet": "未填写",
     "client": "客户",
     "tenderTitle": "标题",
@@ -134,26 +134,26 @@
     "expectedDecisionHint": "选填——客户很少给出明确日期。填写后，当天会提醒负责人跟进客户。",
     "notes": "备注",
     "itemCount": "{count, plural, other {# 项明细}}",
-    "block": {
+    "group": {
       "submission_missed": {
         "title": "已错过提交",
         "hint": "投标始终没有发出，客户的截止日期已过。在有人记录结果之前，它会一直留在这里。"
       },
-      "sourcing_overdue": {
-        "title": "询价已逾期",
-        "hint": "内部报价截止日期已过，仍有明细无人答复——既没有报价，也没有记为找不到供应商。"
+      "new": {
+        "title": "尚未开始",
+        "hint": "已录入，还没有人开始联系供应商。"
       },
-      "coming_up": {
-        "title": "即将到期",
-        "hint": "未来七天内有截止日期。每行上的标签会说明是哪一个。"
+      "sourcing": {
+        "title": "询价中",
+        "hint": "负责人正在收集价格。可能仍有明细无人认领。"
       },
-      "awaiting_decision": {
-        "title": "等待客户决定",
+      "quoted": {
+        "title": "报价已齐",
+        "hint": "每项明细都已有价格，等待有人选定报价并提交投标。"
+      },
+      "submitted": {
+        "title": "已提交",
         "hint": "投标已交到客户手上。这不是出了问题——在这里跟进他们。"
-      },
-      "everything_else": {
-        "title": "其余标书",
-        "hint": "仍在进行、时间还宽裕的标书。"
       }
     },
     "progress": {
@@ -162,9 +162,28 @@
       "quoted": "报价已齐",
       "submitted": "已提交"
     },
-    "due": {
-      "internal_quote": "内部报价 {date} 截止",
-      "client_submission": "提交客户 {date} 截止"
+    "row": {
+      "submissionMissed": "截止日期已过 {days} 天",
+      "unsourced": "{total} 项中有 {count} 项尚未询价",
+      "awaitingDecision": "{date} 起等待客户答复",
+      "due": {
+        "internal_quote": {
+          "today": "报价今天截止",
+          "tomorrow": "报价明天截止",
+          "on": "报价 {date} 截止",
+          "passed": "报价原定 {date} 截止"
+        },
+        "client_submission": {
+          "today": "今天须提交客户",
+          "tomorrow": "明天须提交客户",
+          "on": "{date} 须提交客户",
+          "passed": "原定 {date} 提交客户"
+        }
+      }
+    },
+    "outstanding": {
+      "title": "等你处理",
+      "hint": "以下明细你既没有录入报价，也没有记为找不到供应商。"
     },
     "item": {
       "plural": "招标明细",
@@ -261,7 +280,7 @@
     }
   },
   "quotes": {
-    "backToTender": "返回标书",
+    "asked": "客户的需求",
     "recorded": "{count, plural, other {已记录 # 条报价}}",
     "none": "该产品项下尚未记录任何内容。",
     "add": "新增报价",
@@ -382,6 +401,7 @@
       "landedCost": "到岸成本 / 单位 — {item}（泰铢）",
       "selling": "售价 / 单位 — {item}（泰铢）",
       "hint": "请加上运费、关税与手续费。保存即视为确认该成本。",
+      "unconfirmed": "未确认",
       "save": "保存",
       "saving": "保存中…",
       "error": {

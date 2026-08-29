@@ -1,0 +1,448 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <style>
+    :root{
+      --ground:oklch(0.986 0.004 200); --surface:oklch(1 0 0);
+      --ink:oklch(0.20 0.014 235); --ink-muted:oklch(0.52 0.016 235); --ink-faint:oklch(0.66 0.012 235);
+      --hairline:oklch(0.905 0.008 215); --hairline-soft:oklch(0.945 0.006 215);
+      --signal:oklch(0.55 0.15 195); --signal-ink:oklch(0.42 0.13 195); --signal-wash:oklch(0.55 0.15 195 / 0.09);
+      --alarm:oklch(0.55 0.15 28); --alarm-ink:oklch(0.46 0.16 28); --alarm-wash:oklch(0.55 0.15 28 / 0.08);
+      --flag:oklch(0.62 0.13 75); --flag-ink:oklch(0.48 0.12 75); --flag-wash:oklch(0.62 0.13 75 / 0.15);
+      --radius:10px;
+      --sans:"IBM Plex Sans","PingFang SC","Hiragino Sans GB","Source Han Sans SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+      --mono:"IBM Plex Mono","SF Mono",ui-monospace,monospace;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:var(--sans);color:var(--ink);background:oklch(0.955 0.006 215);-webkit-font-smoothing:antialiased;}
+    a{color:var(--signal-ink);} a:hover{color:var(--signal);}
+    .board{display:flex;gap:40px;padding:24px 20px 28px;align-items:flex-start;}
+    .col{display:flex;flex-direction:column;gap:10px;}
+    .caption{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--ink-faint);text-transform:uppercase;}
+    .phone{width:390px;background:var(--ground);border:1px solid var(--hairline);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;}
+
+    .bar{display:flex;align-items:center;gap:4px;height:52px;padding:0 10px 0 4px;background:var(--surface);border-bottom:1px solid var(--hairline);}
+    .iconbtn{width:44px;height:44px;display:grid;place-items:center;border-radius:var(--radius);border:0;background:transparent;color:var(--ink-muted);cursor:pointer;flex:0 0 auto;}
+    .iconbtn:hover{background:var(--hairline-soft);}
+    .where{display:flex;flex-direction:column;gap:0;min-width:0;flex:1;}
+    .where .r{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--ink-faint);letter-spacing:.02em;}
+    .where .n{font-size:14px;font-weight:600;letter-spacing:-.008em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+    .pad{padding:16px 14px;display:flex;flex-direction:column;gap:16px;}
+    .facts{display:flex;flex-wrap:wrap;gap:10px 18px;padding:12px 13px;border:1px solid var(--hairline);border-radius:var(--radius);background:var(--surface);}
+    .fact{display:flex;flex-direction:column;gap:2px;min-width:0;}
+    .lbl{font-size:10.5px;font-weight:500;letter-spacing:.055em;text-transform:uppercase;color:var(--ink-faint);}
+    .lbl.cjk{letter-spacing:0;text-transform:none;font-size:11.5px;}
+    .val{font-size:13px;font-weight:500;}
+    .val.mono{font-family:var(--mono);font-size:12.5px;}
+
+    .youband{border:1px solid oklch(0.55 0.15 195 / 0.32);border-top:2px solid var(--signal);border-radius:var(--radius);background:var(--signal-wash);padding:12px 13px;display:flex;flex-direction:column;gap:9px;}
+    .youhead{display:flex;align-items:center;gap:8px;}
+    .youhead .t{font-size:13px;font-weight:600;color:var(--signal-ink);}
+    .youband p{margin:0;font-size:12.5px;line-height:1.5;color:var(--signal-ink);opacity:.9;text-wrap:pretty;}
+    .youacts{display:flex;flex-direction:column;gap:6px;}
+    .youact{height:44px;display:flex;align-items:center;gap:9px;padding:0 11px;background:var(--surface);border:1px solid oklch(0.55 0.15 195 / 0.28);border-radius:8px;font-size:13px;font-weight:500;color:var(--ink);text-decoration:none;}
+    .youact:hover{background:oklch(0.55 0.15 195 / 0.06);color:var(--ink);}
+    .youact .g{margin-left:auto;color:var(--signal);}
+
+    .sheethead{display:flex;flex-direction:column;gap:3px;padding:0 2px;}
+    .sheethead .t{font-size:14px;font-weight:600;}
+    .sheethead .s{font-size:12.5px;color:var(--ink-muted);line-height:1.5;}
+
+    .item{border:1px solid var(--hairline);border-radius:var(--radius);background:var(--surface);overflow:hidden;}
+    .item.open{border-color:oklch(0.55 0.15 195 / 0.4);}
+    .itemhead{display:flex;align-items:flex-start;gap:10px;padding:12px 13px;cursor:pointer;}
+    .itemhead:hover{background:oklch(0.55 0.15 195 / 0.03);}
+    .twisty{width:22px;height:22px;display:grid;place-items:center;color:var(--ink-faint);flex:0 0 auto;margin-top:1px;}
+    .itembody{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;}
+    .itemname{font-size:14.5px;font-weight:600;letter-spacing:-.006em;overflow-wrap:break-word;}
+    .itemmeta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;color:var(--ink-muted);}
+    .chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:6px;background:oklch(0.955 0.006 215);font-size:11.5px;font-weight:500;color:var(--ink-muted);border:1px solid var(--hairline-soft);}
+    .chip.needs{background:var(--signal-wash);color:var(--signal-ink);border-color:oklch(0.55 0.15 195 / 0.28);}
+
+    .banner{margin:0 13px 12px;padding:9px 11px;border-radius:8px;font-size:12px;line-height:1.5;display:flex;gap:8px;align-items:flex-start;}
+    .banner.flag{background:var(--flag-wash);color:var(--flag-ink);border:1px solid oklch(0.62 0.13 75 / 0.3);}
+
+    .quotes{display:flex;flex-direction:column;gap:9px;padding:0 13px 13px;}
+    .q{border:1px solid var(--hairline);border-radius:var(--radius);padding:11px 12px;display:flex;flex-direction:column;gap:9px;background:var(--surface);}
+    .q.sel{border-color:var(--signal);background:var(--signal-wash);}
+    .qtop{display:flex;align-items:center;gap:9px;}
+    .rank{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:12px;font-weight:500;background:oklch(0.955 0.006 215);color:var(--ink-muted);flex:0 0 auto;border:1px solid var(--hairline);}
+    .rank.first{background:var(--signal);color:oklch(0.99 0.005 195);border-color:var(--signal);}
+    .supplier{font-size:14px;font-weight:600;letter-spacing:-.006em;min-width:0;overflow-wrap:break-word;}
+    .price{display:flex;flex-direction:column;gap:2px;}
+    .price .big{font-family:var(--mono);font-size:27px;font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.05;}
+    .price .orig{font-family:var(--mono);font-size:12px;color:var(--ink-muted);font-variant-numeric:tabular-nums;}
+    .price .rate{font-size:11.5px;color:var(--ink-faint);}
+    .qline{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding-top:2px;border-top:1px solid var(--hairline-soft);}
+    .qline .k{font-size:11.5px;color:var(--ink-faint);}
+    .qline .v{font-family:var(--mono);font-size:14px;font-weight:500;font-variant-numeric:tabular-nums;}
+    .qfoot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .who{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-muted);}
+    .av{width:21px;height:21px;border-radius:50%;display:grid;place-items:center;font-size:9.5px;font-weight:600;background:oklch(0.55 0.15 195 / 0.14);color:var(--signal-ink);letter-spacing:.02em;}
+    .photos{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 9px;border:1px solid var(--hairline);border-radius:7px;font-size:12px;color:var(--ink-muted);background:var(--surface);cursor:pointer;}
+    .altbox{border:1px solid oklch(0.62 0.13 75 / 0.35);background:var(--flag-wash);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:3px;}
+    .alttag{font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--flag-ink);}
+    .alttag.cjk{letter-spacing:.02em;text-transform:none;font-size:11px;}
+    .altname{font-size:13px;font-weight:500;}
+    .altasked{font-size:11.5px;color:var(--ink-muted);}
+    .select{height:44px;width:100%;border:1px solid var(--signal);background:var(--surface);color:var(--signal-ink);border-radius:8px;font-family:var(--sans);font-size:13.5px;font-weight:500;cursor:pointer;}
+    .select:hover{background:var(--signal-wash);}
+    .selected{height:44px;width:100%;display:flex;align-items:center;justify-content:center;gap:7px;background:var(--signal);color:oklch(0.99 0.005 195);border-radius:8px;font-size:13.5px;font-weight:500;}
+
+    .pricing{border-top:1px solid var(--hairline);padding:12px 13px;display:flex;flex-direction:column;gap:10px;background:oklch(0.978 0.004 205);}
+    .fieldrow{display:flex;gap:10px;}
+    .field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;}
+    .input{height:44px;border:1px solid var(--hairline);border-radius:8px;background:var(--surface);padding:0 10px;display:flex;align-items:center;font-family:var(--mono);font-size:15px;font-weight:500;font-variant-numeric:tabular-nums;}
+    .input.prov{border-color:oklch(0.62 0.13 75 / 0.5);background:var(--flag-wash);}
+    .marginline{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+    .marginline .k{font-size:11.5px;color:var(--ink-faint);}
+    .marginline .v{font-family:var(--mono);font-size:17px;font-weight:500;font-variant-numeric:tabular-nums;}
+    .prov-tag{font-size:11px;font-weight:500;color:var(--flag-ink);background:var(--flag-wash);border:1px solid oklch(0.62 0.13 75 / 0.3);border-radius:5px;padding:1px 6px;}
+
+    .folded{display:flex;align-items:center;gap:10px;padding:12px 13px;}
+    .foldedname{font-size:14px;font-weight:500;min-width:0;flex:1;overflow-wrap:break-word;}
+    .foldedv{font-family:var(--mono);font-size:13px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--ink-muted);}
+
+    .totals{border:1px solid var(--hairline);border-radius:var(--radius);background:var(--surface);padding:12px 13px;display:flex;flex-direction:column;gap:10px;}
+    .coverage{display:flex;align-items:center;gap:9px;}
+    .covbar{flex:1;height:5px;border-radius:3px;background:var(--hairline);overflow:hidden;}
+    .covfill{height:100%;background:var(--signal);border-radius:3px;}
+    .covtext{font-size:12px;color:var(--ink-muted);}
+    .totrow{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}
+    .totrow .k{font-size:12.5px;color:var(--ink-muted);}
+    .totrow .v{font-family:var(--mono);font-size:16px;font-weight:500;font-variant-numeric:tabular-nums;}
+    .note{font-size:11.5px;line-height:1.55;color:var(--ink-faint);text-wrap:pretty;margin:0;}
+  </style>
+</helmet>
+
+<div class="board">
+
+  <!-- ============ ENGLISH ============ -->
+  <div class="col">
+    <div class="caption">Tender detail · working sheet · 390 · en</div>
+    <div class="phone">
+
+      <div class="bar">
+        <button class="iconbtn" type="button" aria-label="All tenders"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+        <div class="where"><span class="r">T-18</span><span class="n">Bumrungrad International</span></div>
+        <button class="iconbtn" type="button" aria-label="Edit tender"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"></path></svg></button>
+        <button class="iconbtn" type="button" aria-label="Menu"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg></button>
+      </div>
+
+      <div class="pad">
+
+        <div class="youband">
+          <div class="youhead">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="oklch(0.55 0.15 195)" stroke-width="1.5"></circle><circle cx="8" cy="8" r="2.75" fill="oklch(0.55 0.15 195)"></circle></svg>
+            <span class="t">Two items are waiting on you</span>
+          </div>
+          <p>You have not entered a quote or marked no supplier found on these. Quotes were due yesterday.</p>
+          <div class="youacts">
+            <a class="youact" href="#">IV infusion set, 20 drops/ml<span class="g"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span></a>
+            <a class="youact" href="#">Extension line, 150 cm<span class="g"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span></a>
+          </div>
+        </div>
+
+        <div class="facts">
+          <div class="fact"><span class="lbl">Quotes due</span><span class="val">28 Aug 2026</span></div>
+          <div class="fact"><span class="lbl">Bid due</span><span class="val">3 Sep 2026</span></div>
+          <div class="fact"><span class="lbl">Owner</span><span class="val">Mint Prasert</span></div>
+        </div>
+
+        <div class="sheethead">
+          <span class="t">Items and quotes</span>
+          <span class="s">2 of 4 items still need a quote selected. They are open below; decided items are folded away.</span>
+        </div>
+
+        <div class="item open">
+          <div class="itemhead">
+            <span class="twisty"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 9l7 7 7-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+            <div class="itembody">
+              <span class="itemname">IV infusion set, 20 drops/ml</span>
+              <div class="itemmeta">
+                <span>2,000 × set</span>
+                <span class="chip">6 quotes</span>
+                <span class="chip">2 client images</span>
+                <span class="chip needs">Needs a decision</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="banner flag">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style="flex:0 0 auto;margin-top:1px" aria-hidden="true"><path d="M8 2.6l5.6 10.2H2.4L8 2.6z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M8 6.6v2.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path><circle cx="8" cy="11.1" r=".75" fill="currentColor"></circle></svg>
+            <span>Ranks 1 and 2 are within 2% on rates frozen nine days apart. Read them as a tie.</span>
+          </div>
+
+          <div class="quotes">
+
+            <div class="q sel">
+              <div class="qtop">
+                <span class="rank first">1</span>
+                <span class="supplier">Thonburi Medical Supply</span>
+              </div>
+              <div class="price">
+                <span class="big">฿12.40</span>
+                <span class="orig">USD 0.36 / set</span>
+                <span class="rate">Rate 34.12, frozen 20 Aug</span>
+              </div>
+              <div class="qline"><span class="k">Line total · 2,000 sets</span><span class="v">฿24,800</span></div>
+              <div class="qfoot">
+                <span class="who"><span class="av">MP</span>Mint Prasert</span>
+                <button class="photos" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"></rect><path d="M3 15l4.5-4 4 3.5 3.5-3L21 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>2 photos</button>
+              </div>
+              <div class="selected"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>Selected for the bid</div>
+            </div>
+
+            <div class="q">
+              <div class="qtop">
+                <span class="rank">2</span>
+                <span class="supplier">Siam Medico Co.</span>
+              </div>
+              <div class="price">
+                <span class="big">฿12.65</span>
+                <span class="orig">THB, no conversion</span>
+              </div>
+              <div class="altbox">
+                <span class="alttag">Alternative</span>
+                <span class="altname">Infuset-B, 20 drops/ml, latex-free</span>
+                <span class="altasked">Asked for: IV infusion set, 20 drops/ml</span>
+              </div>
+              <div class="qline"><span class="k">Line total · 2,000 sets</span><span class="v">฿25,300</span></div>
+              <div class="qfoot">
+                <span class="who"><span class="av">AK</span>Anan K.</span>
+                <button class="photos" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"></rect><path d="M3 15l4.5-4 4 3.5 3.5-3L21 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>3 photos</button>
+              </div>
+              <button class="select" type="button">Select this quote</button>
+            </div>
+
+            <div class="q">
+              <div class="qtop">
+                <span class="rank">3</span>
+                <span class="supplier">Nonthaburi Surgical</span>
+              </div>
+              <div class="price">
+                <span class="big">฿13.90</span>
+                <span class="orig">CNY 2.86 / set</span>
+                <span class="rate">Rate 4.86, frozen 11 Aug · not that day's</span>
+              </div>
+              <div class="qline"><span class="k">Line total · 2,000 sets</span><span class="v">฿27,800</span></div>
+              <div class="qfoot">
+                <span class="who"><span class="av">MP</span>Mint Prasert</span>
+                <button class="photos" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"></rect><path d="M3 15l4.5-4 4 3.5 3.5-3L21 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>1 photo</button>
+              </div>
+              <button class="select" type="button">Select this quote</button>
+            </div>
+
+            <p class="note">Three more quotes below, ranked by the baht figure. Baht is for comparison only, converted at the rate frozen when each quote was entered — the supplier is still paid in the currency they quoted.</p>
+          </div>
+
+          <div class="pricing">
+            <div class="fieldrow">
+              <div class="field"><span class="lbl">Landed cost / unit</span><div class="input prov">฿12.40</div></div>
+              <div class="field"><span class="lbl">Selling / unit</span><div class="input">฿16.50</div></div>
+            </div>
+            <div class="marginline">
+              <span class="k">Margin</span><span class="v">฿4.10 / unit</span>
+              <span class="k">·</span><span class="v">฿8,200 on the line</span>
+              <span class="prov-tag">Provisional</span>
+            </div>
+            <p class="note">Add shipping, duty and handling to the landed cost. Saving it is what confirms the figure.</p>
+          </div>
+        </div>
+
+        <div class="item">
+          <div class="folded">
+            <span class="twisty"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+            <span class="foldedname">Extension line, 150 cm</span>
+            <span class="foldedv">฿4.20</span>
+          </div>
+        </div>
+
+        <div class="totals">
+          <div class="coverage">
+            <span class="covtext">2 of 4 items priced</span>
+            <span class="covbar"><span class="covfill" style="width:50%"></span></span>
+          </div>
+          <div class="totrow"><span class="k">Bid total</span><span class="v">฿41,300</span></div>
+          <div class="totrow"><span class="k">Landed cost</span><span class="v">฿32,100</span></div>
+          <div class="totrow"><span class="k">Margin</span><span class="v">฿9,200</span></div>
+          <p class="note">Two items carry no selling price yet, so these three figures are not the tender's totals.</p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 简体中文 ============ -->
+  <div class="col">
+    <div class="caption">Tender detail · working sheet · 390 · zh-Hans</div>
+    <div class="phone">
+
+      <div class="bar">
+        <button class="iconbtn" type="button" aria-label="全部招标"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+        <div class="where"><span class="r">T-18</span><span class="n">康民国际医院</span></div>
+        <button class="iconbtn" type="button" aria-label="编辑招标"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"></path></svg></button>
+        <button class="iconbtn" type="button" aria-label="菜单"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg></button>
+      </div>
+
+      <div class="pad">
+
+        <div class="youband">
+          <div class="youhead">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="oklch(0.55 0.15 195)" stroke-width="1.5"></circle><circle cx="8" cy="8" r="2.75" fill="oklch(0.55 0.15 195)"></circle></svg>
+            <span class="t">有 2 项明细在等你</span>
+          </div>
+          <p>你还没有为这两项录入报价，也没有记为找不到供应商。报价昨天已经截止。</p>
+          <div class="youacts">
+            <a class="youact" href="#">输液器，20 滴/毫升<span class="g"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span></a>
+            <a class="youact" href="#">延长管，150 厘米<span class="g"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span></a>
+          </div>
+        </div>
+
+        <div class="facts">
+          <div class="fact"><span class="lbl cjk">报价截止</span><span class="val">2026 年 8 月 28 日</span></div>
+          <div class="fact"><span class="lbl cjk">投标截止</span><span class="val">2026 年 9 月 3 日</span></div>
+          <div class="fact"><span class="lbl cjk">负责人</span><span class="val">Mint Prasert</span></div>
+        </div>
+
+        <div class="sheethead">
+          <span class="t">明细与报价</span>
+          <span class="s">共 4 个产品项，还有 2 个尚未选定报价。它们已在下方展开；已定的产品项则收起。</span>
+        </div>
+
+        <div class="item open">
+          <div class="itemhead">
+            <span class="twisty"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 9l7 7 7-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+            <div class="itembody">
+              <span class="itemname">输液器，20 滴/毫升</span>
+              <div class="itemmeta">
+                <span>2,000 × 套</span>
+                <span class="chip">6 条报价</span>
+                <span class="chip">2 张客户参考图</span>
+                <span class="chip needs">待定</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="banner flag">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style="flex:0 0 auto;margin-top:1px" aria-hidden="true"><path d="M8 2.6l5.6 10.2H2.4L8 2.6z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M8 6.6v2.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path><circle cx="8" cy="11.1" r=".75" fill="currentColor"></circle></svg>
+            <span>第 1 名与第 2 名相差不到 2%，而两者冻结汇率的日期相隔九天。宜视为并列。</span>
+          </div>
+
+          <div class="quotes">
+
+            <div class="q sel">
+              <div class="qtop">
+                <span class="rank first">1</span>
+                <span class="supplier">吞武里医疗器材</span>
+              </div>
+              <div class="price">
+                <span class="big">฿12.40</span>
+                <span class="orig">USD 0.36 / 套</span>
+                <span class="rate">汇率 34.12，8 月 20 日冻结</span>
+              </div>
+              <div class="qline"><span class="k">行合计 · 2,000 套</span><span class="v">฿24,800</span></div>
+              <div class="qfoot">
+                <span class="who"><span class="av">MP</span>Mint Prasert</span>
+                <button class="photos" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"></rect><path d="M3 15l4.5-4 4 3.5 3.5-3L21 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>2 张照片</button>
+              </div>
+              <div class="selected"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>已选定用于投标</div>
+            </div>
+
+            <div class="q">
+              <div class="qtop">
+                <span class="rank">2</span>
+                <span class="supplier">暹罗美迪科</span>
+              </div>
+              <div class="price">
+                <span class="big">฿12.65</span>
+                <span class="orig">以泰铢报价，无需换算</span>
+              </div>
+              <div class="altbox">
+                <span class="alttag cjk">替代品</span>
+                <span class="altname">Infuset-B，20 滴/毫升，无乳胶</span>
+                <span class="altasked">客户要求：输液器，20 滴/毫升</span>
+              </div>
+              <div class="qline"><span class="k">行合计 · 2,000 套</span><span class="v">฿25,300</span></div>
+              <div class="qfoot">
+                <span class="who"><span class="av">AK</span>Anan K.</span>
+                <button class="photos" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"></rect><path d="M3 15l4.5-4 4 3.5 3.5-3L21 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>3 张照片</button>
+              </div>
+              <button class="select" type="button">选定这条报价</button>
+            </div>
+
+            <div class="q">
+              <div class="qtop">
+                <span class="rank">3</span>
+                <span class="supplier">暖武里外科用品</span>
+              </div>
+              <div class="price">
+                <span class="big">฿13.90</span>
+                <span class="orig">CNY 2.86 / 套</span>
+                <span class="rate">汇率 4.86，8 月 11 日冻结 · 非当日</span>
+              </div>
+              <div class="qline"><span class="k">行合计 · 2,000 套</span><span class="v">฿27,800</span></div>
+              <div class="qfoot">
+                <span class="who"><span class="av">MP</span>Mint Prasert</span>
+                <button class="photos" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"></rect><path d="M3 15l4.5-4 4 3.5 3.5-3L21 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>1 张照片</button>
+              </div>
+              <button class="select" type="button">选定这条报价</button>
+            </div>
+
+            <p class="note">下方还有 3 条报价，按泰铢金额排序。泰铢金额仅用于比价，按录入该报价时冻结的汇率换算得出；付给供应商的仍是他们报价的币种。</p>
+          </div>
+
+          <div class="pricing">
+            <div class="fieldrow">
+              <div class="field"><span class="lbl cjk">到岸成本 / 单位</span><div class="input prov">฿12.40</div></div>
+              <div class="field"><span class="lbl cjk">售价 / 单位</span><div class="input">฿16.50</div></div>
+            </div>
+            <div class="marginline">
+              <span class="k">毛利</span><span class="v">฿4.10 / 单位</span>
+              <span class="k">·</span><span class="v">฿8,200 该行</span>
+              <span class="prov-tag">暂估</span>
+            </div>
+            <p class="note">请把运费、关税与手续费加进到岸成本。保存即视为确认该成本。</p>
+          </div>
+        </div>
+
+        <div class="item">
+          <div class="folded">
+            <span class="twisty"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+            <span class="foldedname">延长管，150 厘米</span>
+            <span class="foldedv">฿4.20</span>
+          </div>
+        </div>
+
+        <div class="totals">
+          <div class="coverage">
+            <span class="covtext">共 4 个产品项，已定价 2 个</span>
+            <span class="covbar"><span class="covfill" style="width:50%"></span></span>
+          </div>
+          <div class="totrow"><span class="k">投标总额</span><span class="v">฿41,300</span></div>
+          <div class="totrow"><span class="k">到岸成本合计</span><span class="v">฿32,100</span></div>
+          <div class="totrow"><span class="k">毛利合计</span><span class="v">฿9,200</span></div>
+          <p class="note">还有 2 项没有填售价，因此这三个数字并不是整份标书的合计。</p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":880,"height":2050}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

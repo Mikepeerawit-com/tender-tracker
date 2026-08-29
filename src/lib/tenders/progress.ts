@@ -1,8 +1,9 @@
-import { plusDays } from "@/lib/calendar-date";
+import { daysBetween, plusDays } from "@/lib/calendar-date";
 import { tenderOutcome, type DecidedItem } from "@/lib/tenders/outcome";
 
 /**
- * What a Tender is *doing*, and which block of the worklist it belongs in.
+ * What a Tender is *doing*, which group of the worklist it belongs in, and what its row
+ * says about itself.
  *
  * Nothing here is stored. There is no `status` column and there deliberately never will
  * be (ADR-0001): a hand-maintained status drifts from reality inside a month and then
@@ -11,7 +12,7 @@ import { tenderOutcome, type DecidedItem } from "@/lib/tenders/outcome";
  * on an Item and the Tender is `sourcing` again, with no transition to police.
  *
  * **"Overdue" is three unrelated conditions**, and they are three functions here for the
- * same reason they are three blocks on the screen: collapsing them into one badge makes
+ * same reason the row says three different sentences: collapsing them into one badge makes
  * the app unable to say *which one you have*. Submission Missed is fatal and the Owner's;
  * Sourcing Overdue is ours, fixable, and an Assignee's; Awaiting Decision is not a
  * failure at all — it is the state the business spends most of its time in.
@@ -65,18 +66,25 @@ export const deadlineKinds = ["internal_quote", "client_submission"] as const;
 export type DeadlineKind = (typeof deadlineKinds)[number];
 
 /**
- * The five blocks, in the order they are read. The order is not decoration: it is what
- * makes every Tender land in exactly one, and the list a worklist rather than a report.
+ * The groups of the worklist, in the order they are drawn.
+ *
+ * **One ordered list, not two taxonomies.** Until the 29 August 2026 amendment to
+ * ADR-0007 there were five blocks, of which four named *urgency* and one —
+ * `awaiting_decision` — named a *phase*; and on this screen that one was not merely
+ * similar to Progress `submitted`, it was exactly that set. A reader had to learn five
+ * prose-hinted headings instead of one vocabulary they already used.
+ *
+ * So the list groups by **Progress**, the term `CONTEXT.md` already defines, in the order
+ * it already defines. Submission Missed is pinned above as the single exception: it is
+ * the failure the product exists to prevent, and a dead Tender rendered as one row inside
+ * "Sourcing" with a small red mark is the outcome the block was invented to stop.
+ *
+ * Keeping it a single ordered list is what preserves *every Tender appears in exactly one
+ * place*, and what lets `messages.test.ts` walk one union rather than two.
  */
-export const worklistBlocks = [
-  "submission_missed",
-  "sourcing_overdue",
-  "coming_up",
-  "awaiting_decision",
-  "everything_else",
-] as const;
+export const worklistGroups = ["submission_missed", ...tenderProgresses] as const;
 
-export type WorklistBlock = (typeof worklistBlocks)[number];
+export type WorklistGroup = (typeof worklistGroups)[number];
 
 /**
  * How far along a Tender is, evaluated top-down.
@@ -176,37 +184,146 @@ export function comingUpDeadlines(
 }
 
 /**
- * The one block a Tender belongs in, or null when it belongs on no list at all.
+ * The one group a Tender belongs in, or null when it belongs on no list at all.
  *
- * Read top-down, and the order is load-bearing: a missed submission is very often *also*
- * a sourcing failure — the unsourced Item is why the Bid never went out — and without an
- * order the same row would appear in two blocks and the list would stop being a worklist.
+ * Read top-down, and the order is load-bearing. **Submission Missed is tested first**
+ * because a dead Tender is very often also mid-Sourcing — the unsourced Item is *why* the
+ * Bid never went out — and grouping it by its Progress would file the one failure this
+ * product exists to prevent as an ordinary row halfway down the list.
  *
  * Null is exactly the Tenders whose Outcome has been recorded: written off (`no_bid`,
  * `cancelled`) or decided (`won`, `lost`, `partial`). There is no other way off the list,
  * which is what stops a Tender in trouble quietly ageing out of it.
  *
- * Two exclusions in here are worth naming, because both look like omissions:
- *
- * - **A submitted Tender is never "Coming up".** Its client deadline was met and its
- *   internal one is spent; what is left is a person to chase, which is Awaiting Decision.
- * - **A Tender part-decided but never sent falls to "everything else"**, not off the
- *   list. One Item pulled by the client with the rest still to bid is still work.
+ * Everything surviving both is grouped by {@link tenderProgress} — no third question, no
+ * urgency test. **Urgency did not disappear; it moved onto the row**, as an indicator
+ * lamp and a sentence naming the date and how far off it is ({@link rowStatus}). That is
+ * what keeps "a Tender appears in exactly one place" true: it appears once, under its
+ * Progress, and its trouble is stated *on* it rather than by which pile it landed in.
  */
-export function worklistBlock(
+export function worklistGroup(
   tender: ClassifiedTender,
   today: string,
-): WorklistBlock | null {
+): WorklistGroup | null {
   if (isSubmissionMissed(tender, today)) return "submission_missed";
-  if (isSourcingOverdue(tender, today)) return "sourcing_overdue";
 
-  // Every block below this line is about a Tender still open, so a recorded Outcome is
-  // the exit — checked once here rather than repeated into three conditions.
+  // A recorded Outcome is the exit, and the only one.
   if (tenderOutcome(tender.items) !== null) return null;
 
-  if (isAwaitingDecision(tender)) return "awaiting_decision";
+  return tenderProgress(tender);
+}
 
-  return comingUpDeadlines(tender, today).length > 0 ? "coming_up" : "everything_else";
+/**
+ * How many of a Tender's Items nobody has answered for.
+ *
+ * *Not Yet Sourced* is an Item with **neither a Quote nor a No Supplier Found record** —
+ * the same definition {@link isSourcingOverdue} turns on, and for the same reason.
+ * Counting "Items with no Quote" instead nags an Assignee who already rang round and
+ * reported back, which is the surest way to teach a team to ignore the nag.
+ */
+export function notYetSourcedCount(tender: ClassifiedTender): number {
+  return tender.items.filter(
+    (item) => item.quoteCount === 0 && item.noSupplierFoundCount === 0,
+  ).length;
+}
+
+/** How loud a row's indicator lamp is drawn. */
+export type LampTone = "alarm" | "signal" | "calm";
+
+/**
+ * What one row says about itself: which sentence it carries, and how loudly.
+ *
+ * Urgency used to be the *heading* a Tender was filed under. Since the 29 August 2026
+ * amendment to ADR-0007 the heading is Progress, and this is where urgency went — onto
+ * the row, as a lamp and a sentence naming the date and how far off it is. The sentence
+ * carries strictly more than the old chip did: the chip said *which* deadline, this says
+ * which **and how far**.
+ *
+ * A discriminated union rather than a rendered string, because the wording lives in the
+ * message files and the arithmetic is what is worth testing. `days` is the whole of the
+ * "how far": the screen turns it into *today*, *tomorrow* or a date, which is a wording
+ * decision and belongs beside the words.
+ */
+export type RowStatus =
+  | { kind: "submission_missed"; tone: "alarm"; days: number }
+  | { kind: "unsourced"; tone: "alarm"; count: number; total: number }
+  | { kind: "due"; tone: LampTone; deadline: DeadlineKind; days: number }
+  | { kind: "awaiting_decision"; tone: "calm" };
+
+/**
+ * The one sentence a row states, read top-down in the order the reader needs them.
+ *
+ * The order is the whole design. A dead Tender says it is dead before anything else; a
+ * Bid already with the client has no deadline left to state, so it says where it is; an
+ * Item nobody has answered for outranks a date still in the future, because it is the
+ * thing somebody can act on today. Only then does the row fall back to its next date.
+ *
+ * **Alarm is time, and only time** (ADR-0019). Both alarm readings here are dates that
+ * have gone by — a submission missed, and an Item still unsourced *after* the internal
+ * deadline. Neither is a judgement about money or about a person.
+ */
+export function rowStatus(tender: ClassifiedTender, today: string): RowStatus {
+  if (isSubmissionMissed(tender, today)) {
+    return {
+      kind: "submission_missed",
+      tone: "alarm",
+      days: daysBetween(tender.clientSubmissionDeadline, today),
+    };
+  }
+
+  // Both deadlines are spent once the Bid is out, so there is no next date to name. What
+  // is left is a person to chase, which is what the row says instead. This is exactly
+  // `isAwaitingDecision` — a Tender with an Outcome has already left the list — and it
+  // carries that name because `CONTEXT.md` defines the term and ADR-0007's amendment
+  // keeps it. Only the *heading* was retired, never the word.
+  if (isAwaitingDecision(tender)) return { kind: "awaiting_decision", tone: "calm" };
+
+  if (isSourcingOverdue(tender, today)) {
+    return {
+      kind: "unsourced",
+      tone: "alarm",
+      count: notYetSourcedCount(tender),
+      total: tender.items.length,
+    };
+  }
+
+  const next = nextDeadline(tender, today);
+  const days = daysBetween(today, next.date);
+
+  return {
+    kind: "due",
+    // Inside the rolling window something is expected of the reader; beyond it the lamp
+    // is drawn hollow. A date already gone by that got this far is one somebody has
+    // already looked at — a part-decided Tender that was never sent — so it is stated
+    // rather than shouted about.
+    tone: days >= 0 && days <= comingUpDays ? "signal" : "calm",
+    deadline: next.kind,
+    days,
+  };
+}
+
+/**
+ * The soonest deadline still ahead, or — when both are spent — the client's.
+ *
+ * Falling back to the client's rather than to nothing is what lets the row always have a
+ * date to name. Both being in the past and the Tender still on the list is the narrow
+ * case of a Tender part-decided but never sent: `isSubmissionMissed` excuses it because
+ * somebody has recorded an Outcome on an Item, so it lands here.
+ */
+function nextDeadline(
+  tender: ClassifiedTender,
+  today: string,
+): { kind: DeadlineKind; date: string } {
+  const internal = { kind: "internal_quote" as const, date: tender.internalQuoteDeadline };
+  const client = {
+    kind: "client_submission" as const,
+    date: tender.clientSubmissionDeadline,
+  };
+  const ahead = [internal, client]
+    .filter((deadline) => deadline.date >= today)
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+
+  return ahead[0] ?? client;
 }
 
 /**

@@ -46,7 +46,7 @@ describe(`the app bar mid-switch at ${phone.width}×${phone.height}`, () => {
   it.each(locales)("does not scroll sideways, in %s", async (locale, messages) => {
     render(
       <NextIntlClientProvider locale={locale} messages={messages} timeZone="Asia/Bangkok">
-        <AppHeader name="Somchai Prasertkul" isOrgAdmin />
+        <AppHeader isOrgAdmin />
       </NextIntlClientProvider>,
     );
 

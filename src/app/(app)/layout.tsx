@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { AppHeader } from "@/components/app-header";
 import { currentUser } from "@/lib/auth/session";
 
 /**
@@ -12,6 +11,12 @@ import { currentUser } from "@/lib/auth/session";
  * member still holds a valid session until it expires, but reads nothing through RLS —
  * so `currentUser` returns null for them and they land back at the login on their very
  * next request.
+ *
+ * **The app bar is not drawn here any more.** Since #73 it states *where the reader is*,
+ * and a layout cannot see the params of the page beneath it — so a bar rendered here
+ * could never name which Tender this is. Each page draws its own; `currentUser` is
+ * wrapped in React `cache()`, so the gate below is what the pages' calls are answered
+ * from and none of them costs a round trip.
  */
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await currentUser(await cookies());
@@ -19,10 +24,5 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   if (!user) redirect("/login");
   if (!user.locale) redirect("/choose-language");
 
-  return (
-    <>
-      <AppHeader name={user.name} isOrgAdmin={user.isOrgAdmin} />
-      {children}
-    </>
-  );
+  return <>{children}</>;
 }

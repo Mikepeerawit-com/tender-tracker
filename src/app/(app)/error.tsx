@@ -1,5 +1,6 @@
 "use client";
 
+import { AppHeader } from "@/components/app-header";
 import { ScreenError } from "@/components/ui/screen-error";
 
 /**
@@ -23,5 +24,13 @@ export default function AppError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
-  return <ScreenError digest={error.digest} retry={retry} />;
+  // The bar belongs to the page since #73, and a page that threw took its bar with it.
+  // The wordmark shape is drawn here so that a reader who cannot retry still has the way
+  // back to the list — which is the one thing this screen must not take away.
+  return (
+    <>
+      <AppHeader isOrgAdmin={false} />
+      <ScreenError digest={error.digest} retry={retry} />
+    </>
+  );
 }

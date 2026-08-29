@@ -1,17 +1,16 @@
 import { cookies, headers } from "next/headers";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getFormatter, getTranslations } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 
+import { AppHeader } from "@/components/app-header";
 import { ImageCountBadge } from "@/components/images/image-count-badge";
+import { ItemBrief } from "@/components/quotes/item-brief";
 import { NoSupplierFoundForm } from "@/components/quotes/no-supplier-found-form";
 import { QuoteForm } from "@/components/quotes/quote-form";
 import { QuoteList } from "@/components/quotes/quote-list";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
-import { Button } from "@/components/ui/button";
-import { ScreenHeader } from "@/components/ui/screen-header";
 import { currentUser } from "@/lib/auth/session";
-import { calendarDate, calendarDateFormat, todayIn } from "@/lib/calendar-date";
+import { todayIn } from "@/lib/calendar-date";
 import { loadItemSourcingScreen } from "@/lib/quotes/item-sourcing-screen";
 import { blankQuote } from "@/lib/quotes/quote-form";
 import { runInstantFromHeaders } from "@/lib/run-instant";
@@ -52,7 +51,7 @@ export default async function ItemSourcingPage({
 
   const t = await getTranslations("quotes");
   const tenders = await getTranslations("tenders");
-  const format = await getFormatter();
+  const nav = await getTranslations("nav");
 
   // Only an Assignee may enter a Quote on a Tender: they are the one who actually rang
   // the supplier, and every Quote records which of them it was. Nothing is wrong with
@@ -78,53 +77,45 @@ export default async function ItemSourcingPage({
   const today = todayIn(timezone, runInstantFromHeaders(await headers()));
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-6">
+    <>
+      <AppHeader
+        isOrgAdmin={user.isOrgAdmin}
+        location={{
+          kind: "record",
+          backHref: `/tenders/${tender.id}`,
+          reference: tender.reference,
+          // Through a message, not composed here: the separator is punctuation, and
+          // Chinese wants a full-width one. A `·` written into JSX is a string no
+          // translator can reach.
+          detail: nav("itemLocation", {
+            client: tender.clientName,
+            item: item.productName,
+          }),
+        }}
+      />
+      <div className="flex flex-1 flex-col gap-8 p-6">
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-        <ScreenHeader
-          eyebrow={`${tender.reference} · ${tender.clientName}`}
-          heading={item.productName}
-          actions={
-            <Button
-              variant="outline"
-              className="h-11"
-              nativeButton={false}
-              render={<Link href={`/tenders/${tender.id}`} />}
-            >
-              {t("backToTender")}
-            </Button>
+        {/* The brief the Assignee checks themselves against before typing a number, with
+            the client's own pictures inside it. The reference and the client name are not
+            repeated here — the app bar carries them (#73). */}
+        <ItemBrief
+          productName={item.productName}
+          quantity={item.quantity}
+          unit={item.unit}
+          description={item.description}
+          internalQuoteDeadline={tender.internalQuoteDeadline}
+          images={
+            referenceImages.length > 0 ? (
+              <ImageCountBadge
+                openLabel={tenders("referenceImages.openCount", {
+                  label: item.productName,
+                  count: referenceImages.length,
+                })}
+                images={referenceImages}
+              />
+            ) : null
           }
-        >
-          <p className="text-muted-foreground text-sm break-words">
-            {tenders("item.quantified", {
-              quantity: item.quantity,
-              unit: item.unit,
-            })}
-          </p>
-          {item.description ? (
-            <p className="text-muted-foreground text-sm break-words">{item.description}</p>
-          ) : null}
-          <p className="text-muted-foreground text-xs break-words">
-            {tenders("internalQuoteDue", {
-              date: format.dateTime(
-                calendarDate(tender.internalQuoteDeadline),
-                calendarDateFormat,
-              ),
-            })}
-          </p>
-        </ScreenHeader>
-
-        {referenceImages.length > 0 ? (
-          <section className="flex flex-col items-start gap-2">
-            <h2 className="text-sm font-medium">{tenders("referenceImages.title")}</h2>
-            <ImageCountBadge
-              openLabel={tenders("referenceImages.openCount", {
-                label: item.productName,
-                count: referenceImages.length,
-              })}
-              images={referenceImages}
-            />
-          </section>
-        ) : null}
+        />
 
         <section className="flex flex-col gap-4">
           <h2 className="text-sm font-medium">
@@ -183,6 +174,7 @@ export default async function ItemSourcingPage({
           </section>
         )}
       </main>
-    </div>
+      </div>
+    </>
   );
 }

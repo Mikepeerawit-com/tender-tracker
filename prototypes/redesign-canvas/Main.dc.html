@@ -1,0 +1,391 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <style>
+    :root{
+      --ground:oklch(0.986 0.004 200); --surface:oklch(1 0 0);
+      --ink:oklch(0.20 0.014 235); --ink-muted:oklch(0.52 0.016 235); --ink-faint:oklch(0.66 0.012 235);
+      --hairline:oklch(0.905 0.008 215); --hairline-soft:oklch(0.945 0.006 215);
+      --signal:oklch(0.55 0.15 195); --signal-ink:oklch(0.42 0.13 195); --signal-wash:oklch(0.55 0.15 195 / 0.09);
+      --alarm:oklch(0.55 0.15 28); --alarm-ink:oklch(0.46 0.16 28); --alarm-wash:oklch(0.55 0.15 28 / 0.08);
+      --radius:10px;
+      --sans:"IBM Plex Sans","PingFang SC","Hiragino Sans GB","Source Han Sans SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+      --mono:"IBM Plex Mono","SF Mono",ui-monospace,monospace;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:var(--sans);color:var(--ink);background:oklch(0.955 0.006 215);-webkit-font-smoothing:antialiased;}
+    a{color:var(--signal-ink);} a:hover{color:var(--signal);}
+    .board{display:flex;gap:40px;padding:24px 20px 28px;align-items:flex-start;}
+    .col{display:flex;flex-direction:column;gap:10px;}
+    .caption{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--ink-faint);text-transform:uppercase;}
+    .phone{width:390px;background:var(--ground);border:1px solid var(--hairline);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;}
+
+    .bar{display:flex;align-items:center;justify-content:space-between;gap:8px;height:52px;padding:0 10px 0 14px;background:var(--surface);border-bottom:1px solid var(--hairline);}
+    .wordmark{display:flex;align-items:center;gap:8px;min-width:0;}
+    .wordmark .nm{font-size:14px;font-weight:600;letter-spacing:-.005em;white-space:nowrap;}
+    .barbtns{display:flex;align-items:center;gap:2px;}
+    .iconbtn{width:44px;height:44px;display:grid;place-items:center;border-radius:var(--radius);border:0;background:transparent;color:var(--ink-muted);cursor:pointer;}
+    .iconbtn:hover{background:var(--hairline-soft);}
+    .langbtn{height:44px;min-width:44px;padding:0 10px;display:grid;place-items:center;border-radius:var(--radius);border:0;background:transparent;color:var(--ink-muted);font-family:var(--mono);font-size:12px;font-weight:500;cursor:pointer;}
+    .langbtn:hover{background:var(--hairline-soft);}
+
+    .screenhead{display:flex;flex-direction:column;gap:12px;padding:20px 16px 16px;}
+    .h1{font-size:21px;font-weight:600;letter-spacing:-.015em;margin:0;}
+    .sub{font-size:13px;line-height:1.5;color:var(--ink-muted);margin:0;text-wrap:pretty;}
+    .primary{height:44px;display:flex;align-items:center;justify-content:center;gap:7px;background:var(--signal);color:oklch(0.99 0.005 195);border:0;border-radius:var(--radius);font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;width:100%;}
+    .primary:hover{background:var(--signal-ink);}
+
+    .stack{display:flex;flex-direction:column;gap:22px;padding:4px 16px 22px;}
+
+    .alarmband{border:1px solid oklch(0.55 0.15 28 / 0.34);border-top:2px solid var(--alarm);border-radius:var(--radius);background:var(--alarm-wash);overflow:hidden;}
+    .alarmhead{display:flex;align-items:center;gap:8px;padding:11px 13px 9px;}
+    .alarmhead .t{font-size:13px;font-weight:600;color:var(--alarm-ink);letter-spacing:.005em;}
+    .alarmhead .c{margin-left:auto;font-family:var(--mono);font-size:13px;font-weight:500;color:var(--alarm-ink);}
+    .alarmhint{padding:0 13px 11px;font-size:12px;line-height:1.5;color:var(--alarm-ink);opacity:.85;margin:0;text-wrap:pretty;}
+    .alarmrows{display:flex;flex-direction:column;background:var(--surface);border-top:1px solid oklch(0.55 0.15 28 / 0.24);}
+
+    .grouphead{display:flex;align-items:center;gap:10px;padding:0 2px 9px;}
+    .grouphead .g{font-size:13px;font-weight:600;letter-spacing:.005em;white-space:nowrap;}
+    .track{display:flex;gap:2px;flex:0 0 auto;}
+    .seg{width:11px;height:3px;border-radius:1px;background:var(--hairline);}
+    .seg.on{background:var(--signal);}
+    .grouphead .c{margin-left:auto;font-family:var(--mono);font-size:13px;font-weight:500;color:var(--ink-faint);}
+
+    .rows{display:flex;flex-direction:column;border:1px solid var(--hairline);border-radius:var(--radius);background:var(--surface);overflow:hidden;}
+    .row{display:flex;gap:12px;align-items:flex-start;padding:13px 13px 12px;border-top:1px solid var(--hairline-soft);cursor:pointer;text-decoration:none;color:inherit;}
+    .row:first-child{border-top:0;}
+    .row:hover{background:oklch(0.55 0.15 195 / 0.035);}
+    .rowbody{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1;}
+    .idline{display:flex;align-items:baseline;gap:8px;min-width:0;flex-wrap:wrap;}
+    .ref{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--ink-faint);letter-spacing:.02em;}
+    .client{font-size:15px;font-weight:600;letter-spacing:-.008em;min-width:0;overflow-wrap:break-word;}
+    .title{font-size:13px;line-height:1.45;color:var(--ink-muted);overflow-wrap:break-word;text-wrap:pretty;}
+    .statusline{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding-top:1px;}
+    .status{font-size:12.5px;font-weight:500;}
+    .status.alarm{color:var(--alarm-ink);}
+    .status.signal{color:var(--signal-ink);}
+    .status.calm{color:var(--ink-faint);font-weight:400;}
+    .dot{width:2px;height:2px;border-radius:50%;background:var(--ink-faint);}
+    .meta{font-size:12.5px;color:var(--ink-faint);}
+    .chev{color:var(--hairline);margin-top:14px;flex:0 0 auto;}
+  </style>
+</helmet>
+
+<div class="board">
+
+  <!-- ============ ENGLISH ============ -->
+  <div class="col">
+    <div class="caption">Worklist · 390 × 844 · en</div>
+    <div class="phone">
+
+      <div class="bar">
+        <div class="wordmark">
+          <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="15" height="15" rx="3.5" stroke="oklch(0.55 0.15 195)" stroke-width="1.6"></rect><path d="M6.4 10.2l2.4 2.4 4.8-5" stroke="oklch(0.55 0.15 195)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          <span class="nm">Tender Tracker</span>
+        </div>
+        <div class="barbtns">
+          <button class="langbtn" type="button">EN</button>
+          <button class="iconbtn" type="button" aria-label="Menu"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg></button>
+        </div>
+      </div>
+
+      <div class="screenhead">
+        <h1 class="h1">Tenders</h1>
+        <p class="sub">Everything still live, in the order the work happens.</p>
+        <button class="primary" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>
+          Record a tender
+        </button>
+      </div>
+
+      <div class="stack">
+
+        <div class="alarmband">
+          <div class="alarmhead">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="oklch(0.55 0.15 28)" stroke-width="1.5"></circle><circle cx="8" cy="8" r="2.75" fill="oklch(0.55 0.15 28)"></circle></svg>
+            <span class="t">Submission missed</span>
+            <span class="c">1</span>
+          </div>
+          <p class="alarmhint">The bid never went out and the client's deadline has passed. It stays here until somebody records an outcome.</p>
+          <div class="alarmrows">
+            <a class="row" href="#">
+              <div class="rowbody">
+                <div class="idline"><span class="ref">T-14</span><span class="client">Siriraj Hospital</span></div>
+                <div class="title">Nitrile examination gloves, three sizes</div>
+                <div class="statusline"><span class="status alarm">Deadline passed 6 days ago</span></div>
+              </div>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </a>
+          </div>
+        </div>
+
+        <div>
+          <div class="grouphead">
+            <span class="g">Not started</span>
+            <span class="track"><span class="seg on"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span></span>
+            <span class="c">1</span>
+          </div>
+          <div class="rows">
+            <a class="row" href="#">
+              <div class="rowbody">
+                <div class="idline"><span class="ref">T-23</span><span class="client">Bangkok Hospital</span></div>
+                <div class="title">Surgical face masks, level 2</div>
+                <div class="statusline"><span class="status calm">Quotes due 4 Sep</span><span class="dot"></span><span class="meta">2 items</span></div>
+              </div>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </a>
+          </div>
+        </div>
+
+        <div>
+          <div class="grouphead">
+            <span class="g">Sourcing</span>
+            <span class="track"><span class="seg on"></span><span class="seg on"></span><span class="seg"></span><span class="seg"></span></span>
+            <span class="c">2</span>
+          </div>
+          <div class="rows">
+            <a class="row" href="#">
+              <div class="rowbody">
+                <div class="idline"><span class="ref">T-18</span><span class="client">Bumrungrad International</span></div>
+                <div class="title">IV infusion sets with flow regulator</div>
+                <div class="statusline">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="5.6" stroke="oklch(0.55 0.15 28)" stroke-width="1.5"></circle><circle cx="8" cy="8" r="2.6" fill="oklch(0.55 0.15 28)"></circle></svg>
+                  <span class="status alarm">3 of 4 items unsourced</span>
+                </div>
+              </div>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </a>
+            <a class="row" href="#">
+              <div class="rowbody">
+                <div class="idline"><span class="ref">T-21</span><span class="client">Ramathibodi Hospital</span></div>
+                <div class="title">Disposable syringes 5 ml, luer slip</div>
+                <div class="statusline">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="5.6" stroke="oklch(0.55 0.15 195)" stroke-width="1.5"></circle><circle cx="8" cy="8" r="2.6" fill="oklch(0.55 0.15 195)"></circle></svg>
+                  <span class="status signal">Quotes due tomorrow</span><span class="dot"></span><span class="meta">3 items</span>
+                </div>
+              </div>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </a>
+          </div>
+        </div>
+
+        <div>
+          <div class="grouphead">
+            <span class="g">Quoted</span>
+            <span class="track"><span class="seg on"></span><span class="seg on"></span><span class="seg on"></span><span class="seg"></span></span>
+            <span class="c">1</span>
+          </div>
+          <div class="rows">
+            <a class="row" href="#">
+              <div class="rowbody">
+                <div class="idline"><span class="ref">T-19</span><span class="client">Vejthani Hospital</span></div>
+                <div class="title">Foley catheters, silicone, 3-way</div>
+                <div class="statusline">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="5.6" stroke="oklch(0.55 0.15 195)" stroke-width="1.5"></circle><circle cx="8" cy="8" r="2.6" fill="oklch(0.55 0.15 195)"></circle></svg>
+                  <span class="status signal">Pick quotes and send the bid by 2 Sep</span>
+                </div>
+              </div>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </a>
+          </div>
+        </div>
+
+        <div>
+          <div class="grouphead">
+            <span class="g">Submitted</span>
+            <span class="track"><span class="seg on"></span><span class="seg on"></span><span class="seg on"></span><span class="seg on"></span></span>
+            <span class="c">2</span>
+          </div>
+          <div class="rows">
+            <a class="row" href="#">
+              <div class="rowbody">
+                <div class="idline"><span class="ref">T-12</span><span class="client">Chulalongkorn Hospital</span></div>
+                <div class="title">Examination couch paper rolls</div>
+                <div class="statusline"><span class="status calm">With the client since 19 Aug</span></div>
+              </div>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </a>
+            <a class="row" href="#">
+              <div class="rowbody">
+                <div class="idline"><span class="ref">T-16</span><span class="client">Phyathai 2 Hospital</span></div>
+                <div class="title">Alcohol prep pads, sterile</div>
+                <div class="statusline">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="5.6" stroke="oklch(0.55 0.15 195)" stroke-width="1.5"></circle><circle cx="8" cy="8" r="2.6" fill="oklch(0.55 0.15 195)"></circle></svg>
+                  <span class="status signal">Chase the client today</span>
+                </div>
+              </div>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 简体中文 ============ -->
+  <div class="col">
+    <div class="caption">Worklist · 390 × 844 · zh-Hans</div>
+    <div class="phone">
+
+      <div class="bar">
+        <div class="wordmark">
+          <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="15" height="15" rx="3.5" stroke="oklch(0.55 0.15 195)" stroke-width="1.6"></rect><path d="M6.4 10.2l2.4 2.4 4.8-5" stroke="oklch(0.55 0.15 195)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          <span class="nm">招标跟踪</span>
+        </div>
+        <div class="barbtns">
+          <button class="langbtn" type="button">中</button>
+          <button class="iconbtn" type="button" aria-label="菜单"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg></button>
+        </div>
+      </div>
+
+      <div class="screenhead">
+        <h1 class="h1">招标</h1>
+        <p class="sub">所有仍在进行的标书，按工作推进的先后排列。</p>
+        <button class="primary" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>
+          录入招标
+        </button>
+      </div>
+
+      <div class="stack">
+
+        <div class="alarmband">
+          <div class="alarmhead">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="oklch(0.55 0.15 28)" stroke-width="1.5"></circle><circle cx="8" cy="8" r="2.75" fill="oklch(0.55 0.15 28)"></circle></svg>
+            <span class="t">已错过提交</span>
+            <span class="c">1</span>
+          </div>
+          <p class="alarmhint">投标始终没有发出，客户的截止日期已过。在有人记录结果之前，它会一直留在这里。</p>
+          <div class="alarmrows">
+            <a class="row" href="#">
+              <div class="rowbody">
+                <div class="idline"><span class="ref">T-14</span><span class="client">诗里拉吉医院</span></div>
+                <div class="title">丁腈检查手套，三种尺码</div>
+                <div class="statusline"><span class="status alarm">截止日期已过 6 天</span></div>
+              </div>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </a>
+          </div>
+        </div>
+
+        <div>
+          <div class="grouphead">
+            <span class="g">尚未开始</span>
+            <span class="track"><span class="seg on"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span></span>
+            <span class="c">1</span>
+          </div>
+          <div class="rows">
+            <a class="row" href="#">
+              <div class="rowbody">
+                <div class="idline"><span class="ref">T-23</span><span class="client">曼谷医院</span></div>
+                <div class="title">外科口罩，二级防护</div>
+                <div class="statusline"><span class="status calm">报价 9 月 4 日截止</span><span class="dot"></span><span class="meta">2 项明细</span></div>
+              </div>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </a>
+          </div>
+        </div>
+
+        <div>
+          <div class="grouphead">
+            <span class="g">询价中</span>
+            <span class="track"><span class="seg on"></span><span class="seg on"></span><span class="seg"></span><span class="seg"></span></span>
+            <span class="c">2</span>
+          </div>
+          <div class="rows">
+            <a class="row" href="#">
+              <div class="rowbody">
+                <div class="idline"><span class="ref">T-18</span><span class="client">康民国际医院</span></div>
+                <div class="title">带流量调节器的输液器</div>
+                <div class="statusline">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="5.6" stroke="oklch(0.55 0.15 28)" stroke-width="1.5"></circle><circle cx="8" cy="8" r="2.6" fill="oklch(0.55 0.15 28)"></circle></svg>
+                  <span class="status alarm">4 项中有 3 项尚无报价</span>
+                </div>
+              </div>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </a>
+            <a class="row" href="#">
+              <div class="rowbody">
+                <div class="idline"><span class="ref">T-21</span><span class="client">拉玛提博迪医院</span></div>
+                <div class="title">一次性注射器 5 毫升，普通头</div>
+                <div class="statusline">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="5.6" stroke="oklch(0.55 0.15 195)" stroke-width="1.5"></circle><circle cx="8" cy="8" r="2.6" fill="oklch(0.55 0.15 195)"></circle></svg>
+                  <span class="status signal">报价明天截止</span><span class="dot"></span><span class="meta">3 项明细</span>
+                </div>
+              </div>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </a>
+          </div>
+        </div>
+
+        <div>
+          <div class="grouphead">
+            <span class="g">报价已齐</span>
+            <span class="track"><span class="seg on"></span><span class="seg on"></span><span class="seg on"></span><span class="seg"></span></span>
+            <span class="c">1</span>
+          </div>
+          <div class="rows">
+            <a class="row" href="#">
+              <div class="rowbody">
+                <div class="idline"><span class="ref">T-19</span><span class="client">威泰尼医院</span></div>
+                <div class="title">三腔硅胶导尿管</div>
+                <div class="statusline">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="5.6" stroke="oklch(0.55 0.15 195)" stroke-width="1.5"></circle><circle cx="8" cy="8" r="2.6" fill="oklch(0.55 0.15 195)"></circle></svg>
+                  <span class="status signal">选定报价，9 月 2 日前投标</span>
+                </div>
+              </div>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </a>
+          </div>
+        </div>
+
+        <div>
+          <div class="grouphead">
+            <span class="g">已提交</span>
+            <span class="track"><span class="seg on"></span><span class="seg on"></span><span class="seg on"></span><span class="seg on"></span></span>
+            <span class="c">2</span>
+          </div>
+          <div class="rows">
+            <a class="row" href="#">
+              <div class="rowbody">
+                <div class="idline"><span class="ref">T-12</span><span class="client">朱拉隆功医院</span></div>
+                <div class="title">诊查床垫纸卷</div>
+                <div class="statusline"><span class="status calm">8 月 19 日起等待客户答复</span></div>
+              </div>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </a>
+            <a class="row" href="#">
+              <div class="rowbody">
+                <div class="idline"><span class="ref">T-16</span><span class="client">帕亚泰 2 医院</span></div>
+                <div class="title">无菌酒精棉片</div>
+                <div class="statusline">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="5.6" stroke="oklch(0.55 0.15 195)" stroke-width="1.5"></circle><circle cx="8" cy="8" r="2.6" fill="oklch(0.55 0.15 195)"></circle></svg>
+                  <span class="status signal">今天跟进客户</span>
+                </div>
+              </div>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":880,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

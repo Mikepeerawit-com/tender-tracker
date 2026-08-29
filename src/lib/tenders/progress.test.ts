@@ -6,9 +6,11 @@ import {
   isAwaitingDecision,
   isSourcingOverdue,
   isSubmissionMissed,
+  notYetSourcedCount,
+  rowStatus,
   tenderProgress,
-  worklistBlock,
-  worklistBlocks,
+  worklistGroup,
+  worklistGroups,
   type ClassifiedTender,
   type SourcedItem,
 } from "./progress";
@@ -32,8 +34,8 @@ function item(overrides: Partial<SourcedItem> = {}): SourcedItem {
 
 /**
  * A Tender in no trouble at all: never submitted, both deadlines well beyond the rolling
- * window, one Item nobody has started. It lands in "everything else", so every test
- * below reads as the one change that moves it somewhere.
+ * window, one Item nobody has started. It reads as Progress `new` with a calm row, so
+ * every test below reads as the one change that moves it somewhere.
  */
 function tender(overrides: Partial<ClassifiedTender> = {}): ClassifiedTender {
   return {
@@ -230,49 +232,66 @@ describe("comingUpDeadlines", () => {
   });
 });
 
-describe("worklistBlock", () => {
-  it("puts a Tender in trouble in the first block that describes it", () => {
+describe("worklistGroup", () => {
+  it("pins a dead Tender above its Progress, however far along it looked", () => {
     // Both conditions hold at once, which is ordinary — an unsourced Item is *why* the
-    // submission was missed. Top-down is what stops the row appearing twice.
+    // submission was missed. Submission Missed is tested first so that the one failure
+    // this product exists to prevent is never filed as an ordinary row under `sourcing`.
     const both = tender({
       internalQuoteDeadline: "2026-08-05",
       clientSubmissionDeadline: "2026-08-09",
+      items: [item({ quoteCount: 1 }), item()],
     });
 
     expect(isSourcingOverdue(both, today)).toBe(true);
-    expect(worklistBlock(both, today)).toBe("submission_missed");
+    expect(tenderProgress(both)).toBe("sourcing");
+    expect(worklistGroup(both, today)).toBe("submission_missed");
   });
 
-  it("prefers Sourcing Overdue to a deadline merely coming up", () => {
+  it("groups a Tender whose sourcing is overdue by its Progress, not its trouble", () => {
+    // The trouble did not vanish; it moved onto the row. `rowStatus` is what says it now.
     const overdue = tender({
       internalQuoteDeadline: "2026-08-09",
       clientSubmissionDeadline: "2026-08-14",
+      items: [item({ quoteCount: 1 }), item()],
     });
 
-    expect(worklistBlock(overdue, today)).toBe("sourcing_overdue");
+    expect(worklistGroup(overdue, today)).toBe("sourcing");
+    expect(rowStatus(overdue, today).tone).toBe("alarm");
   });
 
-  it("holds a Bid that is out with the client in Awaiting Decision", () => {
-    // Not "coming up", even though its client deadline is days away: the deadline was
-    // met, and what is left to do is chase a person rather than a supplier.
+  it("groups each Progress under its own heading", () => {
     const sent = tender({
       submittedAt: "2026-08-09T09:00:00Z",
       clientSubmissionDeadline: "2026-08-14",
     });
 
-    expect(worklistBlock(sent, today)).toBe("awaiting_decision");
+    expect(worklistGroup(tender(), today)).toBe("new");
+    expect(worklistGroup(tender({ items: [item({ quoteCount: 1 }), item()] }), today)).toBe(
+      "sourcing",
+    );
+    expect(worklistGroup(tender({ items: [item({ quoteCount: 1 })] }), today)).toBe(
+      "quoted",
+    );
+    expect(worklistGroup(sent, today)).toBe("submitted");
   });
 
-  it("leaves an ordinary Tender with time on it in everything else", () => {
-    expect(worklistBlock(tender(), today)).toBe("everything_else");
+  it("draws Awaiting Decision and Progress `submitted` as the same set", () => {
+    // The whole reason `awaiting_decision` stopped being a heading: on this screen it was
+    // not merely similar to Progress `submitted`, it was exactly that set. A Tender with
+    // an Outcome has already left the list, so nothing submitted is ever *not* awaiting.
+    const sent = tender({ submittedAt: "2026-08-09T09:00:00Z" });
+
+    expect(isAwaitingDecision(sent)).toBe(true);
+    expect(worklistGroup(sent, today)).toBe("submitted");
   });
 
   it("takes a written-off Tender off the list entirely", () => {
     const noBid = tender({ items: [item({ outcome: "no_bid" })] });
     const cancelled = tender({ items: [item({ outcome: "cancelled" })] });
 
-    expect(worklistBlock(noBid, today)).toBeNull();
-    expect(worklistBlock(cancelled, today)).toBeNull();
+    expect(worklistGroup(noBid, today)).toBeNull();
+    expect(worklistGroup(cancelled, today)).toBeNull();
   });
 
   it("takes a decided Tender off the list, however it was decided", () => {
@@ -283,28 +302,29 @@ describe("worklistBlock", () => {
       items: [item({ outcome: "won" }), item({ outcome: "lost" })],
     });
 
-    expect(worklistBlock(won, today)).toBeNull();
-    expect(worklistBlock(split, today)).toBeNull();
+    expect(worklistGroup(won, today)).toBeNull();
+    expect(worklistGroup(split, today)).toBeNull();
   });
 
   it("keeps a partly-decided Tender that was never sent on the list", () => {
     // One Item pulled by the client, the rest still to bid. It is still work.
     const partly = tender({ items: [item({ outcome: "cancelled" }), item()] });
 
-    expect(worklistBlock(partly, today)).toBe("everything_else");
+    expect(worklistGroup(partly, today)).toBe("new");
   });
 
-  it("gives every Tender exactly one block, over every combination there is", () => {
-    // The acceptance criterion, proved by exhaustion rather than by example. Two things
-    // are asserted at once: that the ordered read agrees with each condition computed on
-    // its own — so a Tender the list calls Sourcing Overdue really is one — and that the
-    // *only* way off the list is a recorded Outcome. Falling through all five blocks
-    // while still being live work is how a worklist quietly loses a Tender.
+  it("gives every Tender exactly one group, over every combination there is", () => {
+    // The acceptance criterion, proved by exhaustion rather than by example. Three things
+    // are asserted at once: that the *only* way off the list is a recorded Outcome, that
+    // Submission Missed wins over Progress wherever both apply, and that everything
+    // surviving both is grouped by exactly `tenderProgress` and nothing else. Falling
+    // through every group while still being live work is how a worklist loses a Tender.
     const dates = ["2026-08-05", today, "2026-08-14", "2026-09-30"];
     const outcomes = [null, "won", "lost", "no_bid", "cancelled"] as const;
     const counts = [0, 1];
     let seen = 0;
     let offTheList = 0;
+    let pinned = 0;
 
     for (const internalQuoteDeadline of dates) {
       for (const clientSubmissionDeadline of dates) {
@@ -326,25 +346,20 @@ describe("worklistBlock", () => {
                   ],
                 };
                 const where = JSON.stringify(subject);
-                const block = worklistBlock(subject, today);
+                const group = worklistGroup(subject, today);
 
                 seen += 1;
-                if (block === null) offTheList += 1;
+                if (group === null) offTheList += 1;
+                if (group === "submission_missed") pinned += 1;
 
-                expect(block === null, where).toBe(tenderOutcome(subject.items) !== null);
-                expect(block === "submission_missed", where).toBe(
+                expect(group === null, where).toBe(tenderOutcome(subject.items) !== null);
+                expect(group === "submission_missed", where).toBe(
                   isSubmissionMissed(subject, today),
                 );
-                expect(block === "awaiting_decision", where).toBe(
-                  isAwaitingDecision(subject),
-                );
 
-                expect(block === "sourcing_overdue", where).toBe(
-                  isSourcingOverdue(subject, today) && !isSubmissionMissed(subject, today),
-                );
-
-                if (block === "coming_up") {
-                  expect(comingUpDeadlines(subject, today).length, where).toBeGreaterThan(0);
+                // Everything still on the list and not pinned is its Progress, exactly.
+                if (group !== null && group !== "submission_missed") {
+                  expect(group, where).toBe(tenderProgress(subject));
                 }
               }
             }
@@ -354,10 +369,183 @@ describe("worklistBlock", () => {
     }
 
     // A sweep is worth nothing if it never ran, and worth little if it only ever took
-    // one branch. Both are asserted: the count, and that the way off the list was
-    // genuinely exercised rather than sitting behind a condition no fixture could meet.
+    // one branch. All three are asserted: the count, that the way off the list was
+    // genuinely exercised, and that the pinned group was reached at all rather than
+    // sitting behind a condition no fixture could meet.
     expect(seen).toBe(dates.length ** 2 * 2 * outcomes.length ** 2 * counts.length);
     expect(offTheList).toBeGreaterThan(0);
-    expect(worklistBlocks).toHaveLength(5);
+    expect(pinned).toBeGreaterThan(0);
+    expect(worklistGroups).toHaveLength(5);
+  });
+});
+
+describe("notYetSourcedCount", () => {
+  it("counts only Items with neither a Quote nor a No Supplier Found", () => {
+    // The third state is the whole point. An Assignee who rang round and reported back
+    // has answered; counting them as a gap is how a team learns to ignore the nag.
+    const mixed = tender({
+      items: [
+        item(),
+        item(),
+        item({ quoteCount: 2 }),
+        item({ noSupplierFoundCount: 1 }),
+      ],
+    });
+
+    expect(notYetSourcedCount(mixed)).toBe(2);
+  });
+
+  it("is zero once every Item has been answered for, either way", () => {
+    const answered = tender({
+      items: [item({ quoteCount: 1 }), item({ noSupplierFoundCount: 1 })],
+    });
+
+    expect(notYetSourcedCount(answered)).toBe(0);
+  });
+});
+
+describe("rowStatus", () => {
+  it("says how long ago a missed submission was due", () => {
+    const dead = tender({ clientSubmissionDeadline: "2026-08-04" });
+
+    expect(rowStatus(dead, today)).toEqual({
+      kind: "submission_missed",
+      tone: "alarm",
+      days: 6,
+    });
+  });
+
+  it("counts the unanswered Items once the internal deadline has passed", () => {
+    const overdue = tender({
+      internalQuoteDeadline: "2026-08-09",
+      items: [item({ quoteCount: 1 }), item(), item(), item({ noSupplierFoundCount: 1 })],
+    });
+
+    expect(rowStatus(overdue, today)).toEqual({
+      kind: "unsourced",
+      tone: "alarm",
+      count: 2,
+      total: 4,
+    });
+  });
+
+  it("says a Bid is with the client rather than naming a spent deadline", () => {
+    // Both dates are behind it and neither means anything any more. What is left is a
+    // person to chase, so the row says where the Bid is instead of counting down to
+    // something that has already happened.
+    const sent = tender({
+      submittedAt: "2026-08-09T09:00:00Z",
+      internalQuoteDeadline: "2026-08-01",
+      clientSubmissionDeadline: "2026-08-09",
+    });
+
+    expect(rowStatus(sent, today)).toEqual({ kind: "awaiting_decision", tone: "calm" });
+  });
+
+  it("counts down to the soonest deadline still ahead", () => {
+    const soon = tender({
+      internalQuoteDeadline: "2026-08-11",
+      clientSubmissionDeadline: "2026-08-14",
+    });
+
+    expect(rowStatus(soon, today)).toEqual({
+      kind: "due",
+      tone: "signal",
+      deadline: "internal_quote",
+      days: 1,
+    });
+  });
+
+  it("moves to the client's deadline once the internal one is behind it", () => {
+    // Nothing is unsourced, so this is not overdue — the internal date simply passed with
+    // the work done, and the next thing that matters is getting the Bid out.
+    const sourced = tender({
+      internalQuoteDeadline: "2026-08-08",
+      clientSubmissionDeadline: "2026-08-12",
+      items: [item({ quoteCount: 1 })],
+    });
+
+    expect(rowStatus(sourced, today)).toEqual({
+      kind: "due",
+      tone: "signal",
+      deadline: "client_submission",
+      days: 2,
+    });
+  });
+
+  it("counts a deadline falling today as due today, not as passed", () => {
+    const now = tender({ internalQuoteDeadline: today });
+
+    expect(rowStatus(now, today)).toMatchObject({ deadline: "internal_quote", days: 0 });
+  });
+
+  it("draws the lamp hollow once the next date is beyond the rolling window", () => {
+    // Seven days is inside and eight is outside, which is the boundary `comingUpDays`
+    // sets. The lamp is still drawn — hollow, not omitted — so the row keeps its shape.
+    const inside = tender({ internalQuoteDeadline: "2026-08-17" });
+    const outside = tender({ internalQuoteDeadline: "2026-08-18" });
+
+    expect(rowStatus(inside, today).tone).toBe("signal");
+    expect(rowStatus(outside, today).tone).toBe("calm");
+  });
+
+  it("states a spent deadline rather than shouting about one somebody has seen", () => {
+    // Both dates behind it, never submitted, and off Submission Missed only because an
+    // Item carries an Outcome. Somebody has looked at this; it is stated, not alarmed.
+    const partly = tender({
+      internalQuoteDeadline: "2026-08-01",
+      clientSubmissionDeadline: "2026-08-04",
+      items: [item({ outcome: "cancelled" }), item()],
+    });
+
+    expect(worklistGroup(partly, today)).toBe("new");
+    expect(rowStatus(partly, today)).toEqual({
+      kind: "due",
+      tone: "calm",
+      deadline: "client_submission",
+      days: -6,
+    });
+  });
+
+  it("gives every Tender on the list exactly one sentence to say", () => {
+    // The row is never blank. A sweep rather than examples, because the fallback that
+    // makes this true — the client's deadline when both are spent — is reached by a
+    // combination no single fixture reads as obviously.
+    const dates = ["2026-08-01", "2026-08-05", today, "2026-08-14", "2026-09-30"];
+    const kinds = new Set<string>();
+
+    for (const internalQuoteDeadline of dates) {
+      for (const clientSubmissionDeadline of dates) {
+        for (const submittedAt of [null, "2026-08-09T09:00:00Z"]) {
+          for (const quoteCount of [0, 1]) {
+            for (const outcome of [null, "cancelled"] as const) {
+              const subject = {
+                internalQuoteDeadline,
+                clientSubmissionDeadline,
+                submittedAt,
+                items: [item({ quoteCount }), item({ outcome })],
+              };
+
+              if (worklistGroup(subject, today) === null) continue;
+
+              const status = rowStatus(subject, today);
+
+              kinds.add(status.kind);
+              expect(status.tone, JSON.stringify(subject)).toMatch(
+                /^(alarm|signal|calm)$/,
+              );
+            }
+          }
+        }
+      }
+    }
+
+    // Every reading is genuinely reachable from a real combination, not just declared.
+    expect([...kinds].sort()).toEqual([
+      "awaiting_decision",
+      "due",
+      "submission_missed",
+      "unsourced",
+    ]);
   });
 });

@@ -74,9 +74,9 @@ export function QuoteList({
           id={`quote-${quote.id}`}
           className={`flex flex-col gap-2 rounded-lg border p-4 ${
             quote.matchType === "alternative"
-              ? // Amber, per screen 5, and for the same reason here: this row is not a
-                // price for what was asked for.
-                "border-amber-500/40 bg-amber-500/5"
+              ? // Flag, per screen 5, and for the same reason here: this is a property of
+                // the Quote — a substitute was offered — and not something wrong with it.
+                "border-flag/40 bg-flag/5"
               : "border-border"
           }`}
         >
@@ -89,7 +89,7 @@ export function QuoteList({
 
           {quote.matchType === "alternative" ? (
             <p className="text-sm">
-              <span className="mr-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[0.7rem] font-medium tracking-wide uppercase">
+              <span className="field-label bg-flag-wash text-flag-ink mr-2 rounded px-1.5 py-0.5 text-[0.7rem] font-medium">
                 {t("matchType.alternative")}
               </span>
               <span className="font-medium">{quote.alternativeProductName}</span>
@@ -100,12 +100,16 @@ export function QuoteList({
             {/* Original amount primary and bold, THB beneath it in grey with `≈` — screen
                 5's rule, and it starts here so the two screens never disagree about which
                 number is the real one. */}
-            <span className="text-base font-semibold">
+            {/* Mono, tabular, display size — the same treatment the working sheet gives
+                it, because this card is the other place where the price *is* the
+                decision. An Assignee rings several suppliers in a row for one Item, and
+                the cards they come back to have to read as a column of numbers. */}
+            <span className="money text-xl leading-tight font-medium">
               {format.number(quote.unitPrice, {
                 style: "currency",
                 currency: quote.currency,
               })}
-              <span className="text-muted-foreground text-sm font-normal">
+              <span className="text-muted-foreground font-sans text-sm font-normal tracking-normal">
                 {" "}
                 {t("perUnit", { unit: quote.quotedUnit })}
               </span>
@@ -116,7 +120,7 @@ export function QuoteList({
               // number underneath with a `≈` in front of it would imply it had been.
               <span className="text-muted-foreground text-sm">{t("quotedInThb")}</span>
             ) : (
-              <span className="text-muted-foreground text-sm">
+              <span className="text-muted-foreground money text-sm">
                 {t("approx", {
                   amount: format.number(quote.unitPriceThb, {
                     style: "currency",
@@ -138,7 +142,7 @@ export function QuoteList({
                   // Said out loud rather than left in the column. A stale rate is what
                   // makes a 1.3% lead on the comparison sheet meaningless, and the person
                   // who entered this is the only one who can remember why it happened.
-                  <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[0.7rem]">
+                  <span className="bg-flag-wash text-flag-ink ml-2 rounded px-1.5 py-0.5 text-[0.7rem] font-medium">
                     {t("staleRate")}
                   </span>
                 ) : null}

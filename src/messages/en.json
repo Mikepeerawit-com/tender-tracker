@@ -85,9 +85,10 @@
   "nav": {
     "signOut": "Sign out",
     "people": "People",
-    "tenders": "Tenders",
     "groupRobot": "Group Robot",
-    "menu": "Menu"
+    "menu": "Menu",
+    "back": "Back",
+    "itemLocation": "{client} · {item}"
   },
   "images": {
     "viewing": "{position} of {total}",
@@ -116,7 +117,6 @@
     "recordDescription": "What the client asked for, when it has to be back with them, and every product it asks for.",
     "edit": "Edit tender",
     "editDescription": "The reference stays as issued. Items are added, changed and removed one at a time below.",
-    "backToList": "All tenders",
     "notSet": "Not set",
     "client": "Client",
     "tenderTitle": "Title",
@@ -134,26 +134,26 @@
     "expectedDecisionHint": "Optional — clients rarely state one. Set it and the owner is reminded to chase the client that day.",
     "notes": "Notes",
     "itemCount": "{count, plural, =1 {# item} other {# items}}",
-    "block": {
+    "group": {
       "submission_missed": {
         "title": "Submission missed",
         "hint": "The bid never went out and the client's deadline has passed. It stays here until somebody records an outcome."
       },
-      "sourcing_overdue": {
-        "title": "Sourcing overdue",
-        "hint": "The internal quote deadline has passed with an item nobody has answered for — neither a quote nor a no supplier found."
+      "new": {
+        "title": "Not started",
+        "hint": "Recorded, with nobody yet ringing suppliers."
       },
-      "coming_up": {
-        "title": "Coming up",
-        "hint": "A deadline inside the next seven days. The chip on each row says which deadline it is."
+      "sourcing": {
+        "title": "Sourcing",
+        "hint": "Assignees are getting prices in. Some items may still have nobody on them."
       },
-      "awaiting_decision": {
-        "title": "Awaiting decision",
+      "quoted": {
+        "title": "Quoted",
+        "hint": "Every item has a price against it. These are waiting on somebody to pick and send the bid."
+      },
+      "submitted": {
+        "title": "Submitted",
         "hint": "The bid is with the client. Nothing has gone wrong — this is where to chase them."
-      },
-      "everything_else": {
-        "title": "Everything else",
-        "hint": "Live tenders with time still on them."
       }
     },
     "progress": {
@@ -162,9 +162,28 @@
       "quoted": "Quoted",
       "submitted": "Submitted"
     },
-    "due": {
-      "internal_quote": "Internal quote due {date}",
-      "client_submission": "Client submission due {date}"
+    "row": {
+      "submissionMissed": "Deadline passed {days, plural, =1 {# day} other {# days}} ago",
+      "unsourced": "{count} of {total} items unsourced",
+      "awaitingDecision": "With the client since {date}",
+      "due": {
+        "internal_quote": {
+          "today": "Quotes due today",
+          "tomorrow": "Quotes due tomorrow",
+          "on": "Quotes due {date}",
+          "passed": "Quotes were due {date}"
+        },
+        "client_submission": {
+          "today": "Bid due with the client today",
+          "tomorrow": "Bid due with the client tomorrow",
+          "on": "Bid due with the client {date}",
+          "passed": "Bid was due with the client {date}"
+        }
+      }
+    },
+    "outstanding": {
+      "title": "Waiting on you",
+      "hint": "You have neither entered a quote nor recorded no supplier found on these items."
     },
     "item": {
       "plural": "Tender items",
@@ -261,7 +280,7 @@
     }
   },
   "quotes": {
-    "backToTender": "Back to tender",
+    "asked": "What the client asked for",
     "recorded": "{count, plural, =1 {# quote recorded} other {# quotes recorded}}",
     "none": "Nothing recorded against this item yet.",
     "add": "Add a quote",
@@ -382,6 +401,7 @@
       "landedCost": "Landed cost / unit for {item}, in THB",
       "selling": "Selling / unit for {item}, in THB",
       "hint": "Add shipping, duty and handling. Saving confirms the cost.",
+      "unconfirmed": "Unconfirmed",
       "save": "Save",
       "saving": "Saving…",
       "error": {

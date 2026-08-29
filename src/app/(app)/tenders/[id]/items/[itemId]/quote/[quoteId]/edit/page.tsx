@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
+import { AppHeader } from "@/components/app-header";
 import { EditQuoteForm } from "@/components/quotes/edit-quote-form";
 import { currentUser } from "@/lib/auth/session";
 import { mayCorrectQuote, quoteAsSubmitted } from "@/lib/quotes/quote-form";
@@ -62,9 +63,26 @@ export default async function EditQuotePage({
   }
 
   const t = await getTranslations("quotes");
+  const nav = await getTranslations("nav");
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-6">
+    <>
+      <AppHeader
+        isOrgAdmin={user.isOrgAdmin}
+        location={{
+          kind: "record",
+          backHref: sourcing,
+          reference: tender.reference,
+          // Through a message, not composed here: the separator is punctuation, and
+          // Chinese wants a full-width one. A `·` written into JSX is a string no
+          // translator can reach.
+          detail: nav("itemLocation", {
+            client: tender.clientName,
+            item: item.productName,
+          }),
+        }}
+      />
+      <div className="flex flex-1 flex-col gap-8 p-6">
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
         <header className="flex flex-col gap-2">
           <span className="text-muted-foreground text-xs break-words">
@@ -84,6 +102,7 @@ export default async function EditQuotePage({
           defaults={quoteAsSubmitted(quote)}
         />
       </main>
-    </div>
+      </div>
+    </>
   );
 }

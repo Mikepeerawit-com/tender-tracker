@@ -37,17 +37,20 @@ const locales = [
 /** The three headers, with whichever locale's real button labels on them. */
 function cases(m: typeof en) {
   return {
-    "the Tender detail, two buttons": {
-      eyebrow: "TR-2026-0142",
+    // Since #73 the reference and the way back live on the app bar, so the Tender's
+    // header is a client name and one button. The eyebrow slot survives for the screens
+    // that still have a reference of their own to show above a heading.
+    "the Tender detail, one button": {
+      eyebrow: undefined,
       heading: "Bangkok Metropolitan Administration",
       detail: "Medical consumables, Q3 2026",
-      actions: [m.tenders.backToList, m.tenders.edit],
+      actions: [m.tenders.edit],
     },
-    "item sourcing, one button and a long eyebrow": {
+    "a header still carrying a reference above its heading": {
       eyebrow: "TR-2026-0142 · Bangkok Metropolitan Administration",
       heading: "Nitrile examination glove, powder-free, size M",
       detail: "40,000 piece",
-      actions: [m.quotes.backToTender],
+      actions: [m.tenders.edit],
     },
     "the tender list, which has no reference of its own": {
       eyebrow: undefined,
@@ -59,7 +62,7 @@ function cases(m: typeof en) {
       eyebrow: "TR20260142MOPHDMSCENTRALPROCUREMENT0098",
       heading: "ChulalongkornMemorialHospitalProcurementDepartment",
       detail: "NitrileExaminationGlovesPowderFreeSizeMediumNonSterile",
-      actions: [m.tenders.backToList, m.tenders.edit],
+      actions: [m.tenders.record, m.tenders.edit],
     },
   };
 }
