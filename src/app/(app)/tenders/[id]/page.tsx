@@ -3,8 +3,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { AppHeader } from "@/components/app-header";
 import { WorkingSheet } from "@/components/comparison/working-sheet";
+import { Screen } from "@/components/screen";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { OutcomePanel } from "@/components/tenders/outcome-panel";
 import { OutstandingBand } from "@/components/tenders/outstanding-band";
@@ -53,81 +53,76 @@ export default async function TenderPage({ params }: PageProps<"/tenders/[id]">)
   const t = await getTranslations("tenders");
 
   return (
-    <>
-      <AppHeader
-        isOrgAdmin={user.isOrgAdmin}
-        location={{
-          kind: "record",
-          backHref: "/tenders",
-          reference: tender.reference,
-          detail: tender.clientName,
-        }}
+    <Screen
+      location={{
+        kind: "record",
+        backHref: "/tenders",
+        reference: tender.reference,
+        detail: tender.clientName,
+      }}
+      width="max-w-7xl"
+    >
+      {/* No reference in the eyebrow and no way back in the actions: the app bar
+          carries both on every screen about one record (#73), and drawing the same
+          journey twice spends a row of a 390px phone on something already on screen. */}
+      <ScreenHeader
+        heading={tender.clientName}
+        actions={
+          <Button
+            variant="outline"
+            className="h-11"
+            nativeButton={false}
+            render={<Link href={`/tenders/${tender.id}/edit`} />}
+          >
+            {t("edit")}
+          </Button>
+        }
+      >
+        <p className="text-muted-foreground text-sm break-words">{tender.title}</p>
+      </ScreenHeader>
+
+      {/* First thing under the header, because arriving from a reminder is the most
+          common way this screen is opened and "what do I owe" is the question that
+          arrival is asking. It draws nothing at all when the reader owes nothing. */}
+      <OutstandingBand tenderId={tender.id} items={outstandingForYou} />
+
+      <TenderFacts tender={tender} />
+
+      <WorkingSheet
+        tenderId={tender.id}
+        items={sheet.items}
+        photos={sheet.photos}
+        referenceImages={referenceImages}
       />
-      <div className="flex flex-1 flex-col gap-8 p-6">
-      <main className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        {/* No reference in the eyebrow and no way back in the actions: the app bar
-            carries both on every screen about one record (#73), and drawing the same
-            journey twice spends a row of a 390px phone on something already on screen. */}
-        <ScreenHeader
-          heading={tender.clientName}
-          actions={
-            <Button
-              variant="outline"
-              className="h-11"
-              nativeButton={false}
-              render={<Link href={`/tenders/${tender.id}/edit`} />}
-            >
-              {t("edit")}
-            </Button>
-          }
-        >
-          <p className="text-muted-foreground text-sm break-words">{tender.title}</p>
-        </ScreenHeader>
 
-        {/* First thing under the header, because arriving from a reminder is the most
-            common way this screen is opened and "what do I owe" is the question that
-            arrival is asking. It draws nothing at all when the reader owes nothing. */}
-        <OutstandingBand tenderId={tender.id} items={outstandingForYou} />
+      <OutcomePanel tender={tender} timezone={timezone} />
 
-        <TenderFacts tender={tender} />
+      {/* Unassigned images are shown on the Tender rather than held back until somebody
+          places them: they are the ones with work outstanding, and the placing itself
+          happens on the edit screen, where the pictures can be looked at. */}
+      {unassignedImages.length > 0 ? (
+        <section className="flex flex-col items-start gap-2">
+          <h2 className="text-sm font-medium">
+            {t("referenceImages.unassigned")}
+          </h2>
+          <ImageCountBadge
+            openLabel={t("referenceImages.openCount", {
+              label: t("referenceImages.unassigned"),
+              count: unassignedImages.length,
+            })}
+            images={unassignedImages}
+          />
+        </section>
+      ) : null}
 
-        <WorkingSheet
-          tenderId={tender.id}
-          items={sheet.items}
-          photos={sheet.photos}
-          referenceImages={referenceImages}
-        />
-
-        <OutcomePanel tender={tender} timezone={timezone} />
-
-        {/* Unassigned images are shown on the Tender rather than held back until somebody
-            places them: they are the ones with work outstanding, and the placing itself
-            happens on the edit screen, where the pictures can be looked at. */}
-        {unassignedImages.length > 0 ? (
-          <section className="flex flex-col items-start gap-2">
-            <h2 className="text-sm font-medium">
-              {t("referenceImages.unassigned")}
-            </h2>
-            <ImageCountBadge
-              openLabel={t("referenceImages.openCount", {
-                label: t("referenceImages.unassigned"),
-                count: unassignedImages.length,
-              })}
-              images={unassignedImages}
-            />
-          </section>
-        ) : null}
-
-        <AssigneeControls
-          tenderId={tender.id}
-          assignees={tender.assignees}
-          members={members}
-          callerId={user.id}
-          isOwner={tender.ownerUserId === user.id}
-        />
-      </main>
-      </div>
-    </>
+      <AssigneeControls
+        tenderId={tender.id}
+        assignees={tender.assignees}
+        members={members}
+        callerId={user.id}
+        isOwner={tender.ownerUserId === user.id}
+      />
+    </Screen>
   );
 }
 

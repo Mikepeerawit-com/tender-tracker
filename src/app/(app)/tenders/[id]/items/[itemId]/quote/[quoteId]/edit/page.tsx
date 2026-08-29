@@ -2,8 +2,8 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { AppHeader } from "@/components/app-header";
 import { EditQuoteForm } from "@/components/quotes/edit-quote-form";
+import { Screen } from "@/components/screen";
 import { currentUser } from "@/lib/auth/session";
 import { mayCorrectQuote, quoteAsSubmitted } from "@/lib/quotes/quote-form";
 import { listQuotes } from "@/lib/quotes/quotes";
@@ -66,43 +66,37 @@ export default async function EditQuotePage({
   const nav = await getTranslations("nav");
 
   return (
-    <>
-      <AppHeader
-        isOrgAdmin={user.isOrgAdmin}
-        location={{
-          kind: "record",
-          backHref: sourcing,
-          reference: tender.reference,
-          // Through a message, not composed here: the separator is punctuation, and
-          // Chinese wants a full-width one. A `·` written into JSX is a string no
-          // translator can reach.
-          detail: nav("itemLocation", {
-            client: tender.clientName,
-            item: item.productName,
-          }),
-        }}
-      />
-      <div className="flex flex-1 flex-col gap-8 p-6">
-      <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-        <header className="flex flex-col gap-2">
-          <span className="text-muted-foreground text-xs break-words">
-            {`${tender.reference} · ${item.productName}`}
-          </span>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("editTitle")}</h1>
-          <p className="text-muted-foreground text-sm break-words">
-            {t("sourcedBy", { name: quote.sourcedByName })}
-          </p>
-        </header>
+    <Screen
+      location={{
+        kind: "record",
+        backHref: sourcing,
+        reference: tender.reference,
+        // Through a message, not composed here: the separator is punctuation, and
+        // Chinese wants a full-width one. A `·` written into JSX is a string no
+        // translator can reach.
+        detail: nav("itemLocation", {
+          client: tender.clientName,
+          item: item.productName,
+        }),
+      }}
+    >
+      <header className="flex flex-col gap-2">
+        <span className="text-muted-foreground text-xs break-words">
+          {`${tender.reference} · ${item.productName}`}
+        </span>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("editTitle")}</h1>
+        <p className="text-muted-foreground text-sm break-words">
+          {t("sourcedBy", { name: quote.sourcedByName })}
+        </p>
+      </header>
 
-        <EditQuoteForm
-          tenderId={tender.id}
-          tenderItemId={item.id}
-          quoteId={quote.id}
-          currency={quote.currency}
-          defaults={quoteAsSubmitted(quote)}
-        />
-      </main>
-      </div>
-    </>
+      <EditQuoteForm
+        tenderId={tender.id}
+        tenderItemId={item.id}
+        quoteId={quote.id}
+        currency={quote.currency}
+        defaults={quoteAsSubmitted(quote)}
+      />
+    </Screen>
   );
 }

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { AppHeader } from "@/components/app-header";
+import { Screen } from "@/components/screen";
 import { TenderGroup } from "@/components/tenders/tender-group";
 import { Button } from "@/components/ui/button";
 import { ScreenHeader } from "@/components/ui/screen-header";
@@ -50,43 +50,38 @@ export default async function TendersPage() {
   const filled = sections.filter((section) => section.tenders.length > 0);
 
   return (
-    <>
-      <AppHeader isOrgAdmin={user.isOrgAdmin} />
-      <div className="flex flex-1 flex-col gap-8 p-6">
-      <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-        <ScreenHeader
-          heading={t("title")}
-          actions={
-            <Button
-              className="h-11"
-              nativeButton={false}
-              render={<Link href="/tenders/new" prefetch={false} />}
-            >
-              {t("record")}
-            </Button>
-          }
-        >
-          <p className="text-muted-foreground text-sm break-words">{t("description")}</p>
-        </ScreenHeader>
+    <Screen>
+      <ScreenHeader
+        heading={t("title")}
+        actions={
+          <Button
+            className="h-11"
+            nativeButton={false}
+            render={<Link href="/tenders/new" prefetch={false} />}
+          >
+            {t("record")}
+          </Button>
+        }
+      >
+        <p className="text-muted-foreground text-sm break-words">{t("description")}</p>
+      </ScreenHeader>
 
-        {filled.length === 0 ? (
-          // Two different emptinesses, and they must not read as the same sentence: a
-          // team who has recorded nothing yet needs the way in, and a team who has
-          // finished everything needs telling that they have.
-          <p className="text-muted-foreground text-sm">
-            {total === 0 ? t("empty") : t("allClear")}
-          </p>
-        ) : (
-          // In the order `listWorklist` returns them, which is the order the groups are
-          // read in. Empty ones are dropped here rather than there: the ordering is the
-          // assembly's decision and drawing it is the screen's.
-          filled.map((section) => (
-            <TenderGroup key={section.group} section={section} timezone={timezone} />
-          ))
-        )}
-      </main>
-      </div>
-    </>
+      {filled.length === 0 ? (
+        // Two different emptinesses, and they must not read as the same sentence: a
+        // team who has recorded nothing yet needs the way in, and a team who has
+        // finished everything needs telling that they have.
+        <p className="text-muted-foreground text-sm">
+          {total === 0 ? t("empty") : t("allClear")}
+        </p>
+      ) : (
+        // In the order `listWorklist` returns them, which is the order the groups are
+        // read in. Empty ones are dropped here rather than there: the ordering is the
+        // assembly's decision and drawing it is the screen's.
+        filled.map((section) => (
+          <TenderGroup key={section.group} section={section} timezone={timezone} />
+        ))
+      )}
+    </Screen>
   );
 }
 

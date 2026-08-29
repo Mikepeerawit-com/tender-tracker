@@ -2,8 +2,8 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { AppHeader } from "@/components/app-header";
 import { GroupRobotForm } from "@/components/admin/group-robot-form";
+import { Screen } from "@/components/screen";
 import { currentUser } from "@/lib/auth/session";
 import { groupRobotStatus } from "@/lib/wecom/group-robot";
 
@@ -33,23 +33,18 @@ export default async function GroupRobotPage() {
   if (status === null) notFound();
 
   return (
-    <>
-      <AppHeader isOrgAdmin={user.isOrgAdmin} />
-      <div className="flex flex-1 flex-col gap-8 p-6">
-      <main className="mx-auto flex w-full max-w-2xl flex-col gap-8">
-        <header className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-          <p className="text-muted-foreground text-sm">{t("description")}</p>
-        </header>
+    <Screen width="max-w-2xl">
+      <header className="flex flex-col gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
+        <p className="text-muted-foreground text-sm">{t("description")}</p>
+      </header>
 
-        <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
-          <GroupRobotForm
-            configured={status.configured}
-            updatedAt={status.updatedAt}
-          />
-        </section>
-      </main>
-      </div>
-    </>
+      <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
+        <GroupRobotForm
+          configured={status.configured}
+          updatedAt={status.updatedAt}
+        />
+      </section>
+    </Screen>
   );
 }
