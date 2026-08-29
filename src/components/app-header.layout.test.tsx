@@ -7,7 +7,7 @@ import "@/app/globals.css";
 import en from "@/messages/en.json";
 import zhHans from "@/messages/zh-Hans.json";
 
-import { AppHeader } from "./app-header";
+import { AppHeader, type AppLocation } from "./app-header";
 import { controlRows, expectNoSidewaysScroll, phone } from "@/test/layout";
 
 /**
@@ -23,6 +23,11 @@ import { controlRows, expectNoSidewaysScroll, phone } from "@/test/layout";
  * Tenders, People, Group Robot, the two locales and Sign out — and `Button` is
  * `shrink-0 whitespace-nowrap`, so none of them gives up a pixel.
  *
+ * Since #73 the bar also states **where the reader is**, which gives it two shapes and a
+ * new way to overflow: the `record` shape carries a back control plus a reference and a
+ * client name, and neither of those is a string this app chose. They are measured here in
+ * the unbroken form a client really supplies, because that is the one that pushes.
+ *
  * Both locales are measured, because the labels are translated and English is not
  * automatically the worst case: a Han glyph is about twice the width of a Latin letter,
  * so a shorter Chinese string is not necessarily a narrower button. The locale is handed
@@ -34,29 +39,72 @@ vi.mock("@/app/actions/auth", () => ({ signOutAction: async () => ({}) }));
 vi.mock("@/app/actions/locale", () => ({ switchLocale: async () => ({}) }));
 
 const locales = [
-  ["en", en, "Somchai Prasertkul"],
-  ["zh-Hans", zhHans, "张伟明"],
-  // A member's display name is whatever they were enrolled as, and nothing obliges it to
-  // contain a space. It does not currently fail on its own — the left group wraps and the
-  // name still fits a line — but it is a real input shape and cheap to keep measured.
-  ["en", en, "SomchaiPrasertkulwattanachaiwong"],
+  ["en", en],
+  ["zh-Hans", zhHans],
 ] as const;
+
+/**
+ * The shapes the bar has, and the widths it has to survive in each.
+ *
+ * A reference and a client name are whatever the client calls them, and neither has to
+ * contain a space — the unbroken pair is not invented for the test. The sourcing screen's
+ * form is the longest of all, since it names the Item after the client.
+ */
+const locations = [
+  ["the wordmark, on a screen about no one record", undefined],
+  [
+    "a Tender, named by its reference and client",
+    {
+      kind: "record",
+      backHref: "/tenders",
+      reference: "TR-2026-0142",
+      detail: "Bangkok Metropolitan Administration",
+    },
+  ],
+  [
+    "a Tender whose reference and client have nowhere to wrap",
+    {
+      kind: "record",
+      backHref: "/tenders",
+      reference: "TR20260142MOPHDMSCENTRALPROCUREMENT0098",
+      detail: "ChulalongkornMemorialHospitalProcurementDepartment",
+    },
+  ],
+  [
+    "an Item being sourced, which names the client and the Item too",
+    {
+      kind: "record",
+      backHref: "/tenders/8f14e45f",
+      reference: "TR20260142MOPHDMSCENTRALPROCUREMENT0098",
+      detail:
+        "ChulalongkornMemorialHospitalProcurementDepartment · NitrileExaminationGlovesPowderFreeSizeMediumNonSterile",
+    },
+  ],
+] as const satisfies readonly (readonly [string, AppLocation | undefined])[];
 
 describe(`the app header at ${phone.width}×${phone.height}`, () => {
   it.each(
-    locales.flatMap(([locale, messages, name]) =>
-      [
-        ["an org admin, who gets the two admin buttons", true],
-        ["an ordinary member", false],
-      ].map(
-        ([who, isOrgAdmin]) =>
-          [`${who}, ${name} in ${locale}`, isOrgAdmin as boolean, locale, messages, name] as const,
+    locales.flatMap(([locale, messages]) =>
+      locations.flatMap(([where, location]) =>
+        [
+          ["an org admin, who gets the two admin buttons", true],
+          ["an ordinary member", false],
+        ].map(
+          ([who, isOrgAdmin]) =>
+            [
+              `${who}, on ${where}, in ${locale}`,
+              isOrgAdmin as boolean,
+              locale,
+              messages,
+              location,
+            ] as const,
+        ),
       ),
     ),
-  )("does not push the page sideways for %s", (_case, isOrgAdmin, locale, messages, name) => {
+  )("does not push the page sideways for %s", (_case, isOrgAdmin, locale, messages, location) => {
     render(
       <NextIntlClientProvider locale={locale} messages={messages} timeZone="Asia/Bangkok">
-        <AppHeader name={name} isOrgAdmin={isOrgAdmin} />
+        <AppHeader isOrgAdmin={isOrgAdmin} location={location} />
       </NextIntlClientProvider>,
     );
 

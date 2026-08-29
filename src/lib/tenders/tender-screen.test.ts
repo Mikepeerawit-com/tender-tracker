@@ -14,7 +14,9 @@ import {
   type SessionCookieStore,
 } from "@/lib/supabase/session-client";
 import { createStorageClient } from "@/lib/supabase/storage-client";
-import { createTender, getTender } from "@/lib/tenders/tenders";
+import { respondingRates } from "@/lib/fx/rate-stub";
+import { createQuote, recordNoSupplierFound } from "@/lib/quotes/quotes";
+import { addAssignee, createTender, getTender } from "@/lib/tenders/tenders";
 
 import { loadTenderScreen } from "./tender-screen";
 
@@ -41,6 +43,8 @@ const run = crypto.randomUUID().slice(0, 8);
 const service = createServiceClient();
 
 const owner = { id: "", email: `screen-owner-${run}@example.test` };
+/** A second Assignee on the same Tender, so "what *you* owe" can be told from "what the team owes". */
+const mate = { id: "", email: `screen-mate-${run}@example.test` };
 const outsider = { id: "", email: `screen-outsider-${run}@example.test` };
 
 let orgId = "";
@@ -176,6 +180,7 @@ async function aReferenceImage(
 }
 
 let store: SessionCookieStore;
+let mateStore: SessionCookieStore;
 let outsiderStore: SessionCookieStore;
 
 beforeAll(async () => {
@@ -183,12 +188,22 @@ beforeAll(async () => {
   otherOrgId = await createOrg(`Tender screen outsiders ${run}`);
 
   await createMember(orgId, owner);
+  await createMember(orgId, mate);
   await createMember(otherOrgId, outsider);
 
   store = await signedInAs(owner.email);
+  mateStore = await signedInAs(mate.email);
   outsiderStore = await signedInAs(outsider.email);
 
   await aTenderWithTwoItems(store);
+
+  // Both are Assignees, which under ADR-0004 is what makes either of them owe anything
+  // at all: Assignees compete rather than divide, so both owe both Items to begin with.
+  for (const who of [owner, mate]) {
+    const added = await addAssignee({ tenderId, userId: who.id }, store);
+
+    if (!added.ok) throw new Error(`could not assign: ${added.reason}`);
+  }
 
   // One placed on each Item and one left Unassigned, so a loader that split them wrongly
   // would come back with three in the unassigned pile or none.
@@ -207,7 +222,7 @@ afterAll(async () => {
     await service.storage.from(imagesBucket).remove(objects);
   }
 
-  const memberIds = [owner.id, outsider.id].filter(Boolean);
+  const memberIds = [owner.id, mate.id, outsider.id].filter(Boolean);
 
   await service.from("users").delete().in("id", memberIds);
 
@@ -220,9 +235,31 @@ afterAll(async () => {
   }
 });
 
+/** One Quote against an Item, entered by whoever the store is signed in as. */
+async function aQuote(tenderItemId: string, as: SessionCookieStore): Promise<void> {
+  const result = await createQuote(
+    {
+      tenderItemId,
+      supplierName: "Ace Medical",
+      unitPrice: 125.5,
+      currency: "THB",
+      quotedUnit: "box of 50",
+      leadTimeDays: 14,
+      matchType: "exact",
+      alternativeProductName: null,
+      detailNotes: null,
+      quotedAt: "2026-08-05",
+    },
+    as,
+    respondingRates(1),
+  );
+
+  if (!result.ok) throw new Error(`could not enter a Quote: ${result.reason}`);
+}
+
 describe("loading the tender screen", () => {
   it("returns the Tender with everything the screen draws beside it", async () => {
-    const screen = await loadTenderScreen(tenderId, store);
+    const screen = await loadTenderScreen(tenderId, owner.id, store);
 
     expect(screen.tender?.id).toBe(tenderId);
     expect(screen.sheet.items).toHaveLength(2);
@@ -232,7 +269,7 @@ describe("loading the tender screen", () => {
   });
 
   it("separates the Reference Images nobody has placed yet", async () => {
-    const screen = await loadTenderScreen(tenderId, store);
+    const screen = await loadTenderScreen(tenderId, owner.id, store);
 
     expect(screen.unassignedImages).toHaveLength(1);
     expect(screen.unassignedImages[0].tenderItemId).toBeNull();
@@ -244,7 +281,7 @@ describe("loading the tender screen", () => {
   it("answers a Tender that does not exist with null, rather than throwing", async () => {
     // The batch runs all five reads against this id. Every one of them has to survive it,
     // or the page's `notFound()` never gets the chance to run.
-    const screen = await loadTenderScreen(crypto.randomUUID(), store);
+    const screen = await loadTenderScreen(crypto.randomUUID(), owner.id, store);
 
     expect(screen.tender).toBeNull();
     expect(screen.sheet.items).toEqual([]);
@@ -252,11 +289,72 @@ describe("loading the tender screen", () => {
     expect(screen.unassignedImages).toEqual([]);
   });
 
+  it("names the Items this reader has not answered for", async () => {
+    const screen = await loadTenderScreen(tenderId, owner.id, store);
+
+    expect(screen.outstandingForYou.map((item) => item.id).sort()).toEqual(
+      [itemId, otherItemId].sort(),
+    );
+    expect(screen.outstandingForYou.map((item) => item.productName)).toContain(
+      "Nitrile gloves, powder-free",
+    );
+  });
+
+  it("drops an Item once this reader has entered a Quote on it", async () => {
+    await aQuote(itemId, store);
+
+    const screen = await loadTenderScreen(tenderId, owner.id, store);
+
+    expect(screen.outstandingForYou.map((item) => item.id)).toEqual([otherItemId]);
+  });
+
+  it("treats No Supplier Found as an answer, not as a gap", async () => {
+    // The whole reason the third sourcing state exists. "Nobody could supply this" and
+    // "nobody tried" mean opposite things, and only one of them is worth a nag.
+    const recorded = await recordNoSupplierFound(
+      { tenderItemId: otherItemId, note: "Discontinued." },
+      store,
+    );
+
+    expect(recorded.ok).toBe(true);
+
+    const screen = await loadTenderScreen(tenderId, owner.id, store);
+
+    expect(screen.outstandingForYou).toEqual([]);
+  });
+
+  it("is unmoved by what another Assignee has or has not done", async () => {
+    // The Owner answered for both Items in the two tests above. The colleague has
+    // answered for neither, and still owes both — a band that reported the *team's*
+    // outstanding work would now be empty for them, which is precisely the report this
+    // is not.
+    const theirs = await loadTenderScreen(tenderId, mate.id, mateStore);
+
+    expect(theirs.outstandingForYou.map((item) => item.id).sort()).toEqual(
+      [itemId, otherItemId].sort(),
+    );
+
+    // And the Owner, who answered for both, is still owed nothing by their colleague's
+    // silence.
+    const mine = await loadTenderScreen(tenderId, owner.id, store);
+
+    expect(mine.outstandingForYou).toEqual([]);
+  });
+
+  it("owes nothing to somebody who is not an Assignee", async () => {
+    // Under ADR-0004 only an Assignee may enter a Quote, and Assignees enrol themselves.
+    // Every Item would otherwise read as outstanding for a reader who cannot act on any
+    // of them, with links to a screen that would refuse them.
+    const stranger = await loadTenderScreen(tenderId, outsider.id, store);
+
+    expect(stranger.outstandingForYou).toEqual([]);
+  });
+
   it("answers another org's Tender the same way, and reads none of it", async () => {
     // RLS makes this identical to the case above, which is the point: the outsider learns
     // nothing about whether this id exists. The four reads that now run before anyone has
     // checked must come back empty rather than error.
-    const screen = await loadTenderScreen(tenderId, outsiderStore);
+    const screen = await loadTenderScreen(tenderId, outsider.id, outsiderStore);
 
     expect(screen.tender).toBeNull();
     expect(screen.sheet.items).toEqual([]);

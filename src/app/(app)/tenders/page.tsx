@@ -1,11 +1,14 @@
 import { cookies, headers } from "next/headers";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
+import { AppHeader } from "@/components/app-header";
 import { TenderGroup } from "@/components/tenders/tender-group";
 import { Button } from "@/components/ui/button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { todayIn } from "@/lib/calendar-date";
+import { currentUser } from "@/lib/auth/session";
 import { getOrgSettings } from "@/lib/org/org";
 import { runInstantFromHeaders } from "@/lib/run-instant";
 import { listWorklist } from "@/lib/tenders/worklist";
@@ -35,13 +38,21 @@ import { listWorklist } from "@/lib/tenders/worklist";
 export default async function TendersPage() {
   const t = await getTranslations("tenders");
   const store = await cookies();
+  // Free: `(app)/layout.tsx` has already asked and `currentUser` is wrapped in React
+  // `cache()`, so this is answered from the request rather than the network.
+  const user = await currentUser(store);
+
+  if (!user) redirect("/login");
+
   const { timezone } = await getOrgSettings(store);
   const today = todayIn(timezone, runInstantFromHeaders(await headers()));
   const { sections, total } = await listWorklist(today, store);
   const filled = sections.filter((section) => section.tenders.length > 0);
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-6">
+    <>
+      <AppHeader isOrgAdmin={user.isOrgAdmin} />
+      <div className="flex flex-1 flex-col gap-8 p-6">
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
         <ScreenHeader
           heading={t("title")}
@@ -74,7 +85,8 @@ export default async function TendersPage() {
           ))
         )}
       </main>
-    </div>
+      </div>
+    </>
   );
 }
 

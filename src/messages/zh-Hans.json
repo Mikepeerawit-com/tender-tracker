@@ -85,9 +85,9 @@
   "nav": {
     "signOut": "退出登录",
     "people": "成员",
-    "tenders": "招标",
     "groupRobot": "群机器人",
-    "menu": "菜单"
+    "menu": "菜单",
+    "back": "返回"
   },
   "images": {
     "viewing": "第 {position} 张，共 {total} 张",
@@ -180,6 +180,10 @@
           "passed": "原定 {date} 提交客户"
         }
       }
+    },
+    "outstanding": {
+      "title": "等你处理",
+      "hint": "以下明细你既没有录入报价，也没有记为找不到供应商。"
     },
     "due": {
       "internal_quote": "内部报价 {date} 截止",

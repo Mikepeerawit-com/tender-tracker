@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
+import { AppHeader } from "@/components/app-header";
 import { InviteForm } from "@/components/admin/invite-form";
 import { TestMentionButton } from "@/components/admin/test-mention-button";
 import { WecomUseridForm } from "@/components/admin/wecom-userid-form";
@@ -30,7 +31,9 @@ export default async function PeoplePage() {
     .order("name");
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-6">
+    <>
+      <AppHeader isOrgAdmin={user.isOrgAdmin} />
+      <div className="flex flex-1 flex-col gap-8 p-6">
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
         <header className="flex flex-col gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
@@ -76,6 +79,7 @@ export default async function PeoplePage() {
           </ul>
         </section>
       </main>
-    </div>
+      </div>
+    </>
   );
 }

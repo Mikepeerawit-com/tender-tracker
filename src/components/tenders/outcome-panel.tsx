@@ -6,7 +6,7 @@ import {
   RecordSubmissionButton,
 } from "@/components/tenders/outcome-controls";
 import { instantDayFormat } from "@/lib/calendar-date";
-import { tenderOutcome, type TenderOutcome } from "@/lib/tenders/outcome";
+import { tenderOutcome } from "@/lib/tenders/outcome";
 import type { Tender } from "@/lib/tenders/tenders";
 
 /**
@@ -93,7 +93,15 @@ export async function OutcomePanel({
       {/* The Tender's own Outcome, read off the Items above it and stored nowhere. */}
       <div className="border-border bg-muted/40 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg border px-4 py-3">
         <span className="text-muted-foreground text-xs">{t("tenderOutcome")}</span>
-        <span className={`text-sm font-semibold ${verdict.tone}`}>{verdict.label}</span>
+        {/* Ink, for every Outcome. This was green for won and red for lost until
+            ADR-0019: in Chinese financial convention red is up and green is down — the
+            inverse of the Western reading — so the two colours said the opposite thing to
+            half the people reading them. Alarm is reserved for time and there is no hue
+            meaning "this went well", so the words carry it, which they always did.
+            `partial` was already unstyled for a neighbouring reason: a split award is not
+            a qualified win, and colouring it as one is how "we won that tender" gets said
+            about a Tender we mostly lost. */}
+        <span className="text-sm font-semibold">{verdict.label}</span>
         <span className="text-muted-foreground text-sm">{verdict.note}</span>
       </div>
     </section>
@@ -106,7 +114,7 @@ export async function OutcomePanel({
  * Three readings, and only one of them is the derived Outcome: a Tender with an Item
  * still undecided has none, and what to say about it turns on whether the Bid has gone
  * out. **This is not #31's Awaiting Decision block rule** and must not be mistaken for
- * it — that one decides which block of the worklist a Tender lands in and takes a Tender
+ * it — that one decides which group of the worklist a Tender lands in and takes a Tender
  * with *any* Outcome recorded out of it. This one is about the Tender in front of you,
  * where a client who has ruled on two Items of four is still being waited on. Two
  * definitions of a state coexisting on purpose is the same shape the buildspec draws
@@ -120,7 +128,6 @@ async function tenderVerdict(tender: Tender) {
     return {
       label: t(`value.${derived}`),
       note: t(`explain.${derived}`),
-      tone: tone(derived),
     };
   }
 
@@ -129,24 +136,5 @@ async function tenderVerdict(tender: Tender) {
   return {
     label: awaited ? t("awaitingDecision") : t("noOutcome"),
     note: awaited ? t("awaitingDecisionNote") : t("noOutcomeNote"),
-    tone: "",
   };
-}
-
-/**
- * Ink, for every outcome. No hue at all.
- *
- * This was green for won and red for lost, and ADR-0019 is why it is not any more: in
- * Chinese financial convention **red is up and green is down**, the inverse of the
- * Western reading, so the two colours said the opposite thing to half the people reading
- * this. Alarm is reserved for time, and there is no fifth hue meaning "this went well" —
- * so the words do the work, which they were always doing anyway. `outcome.value.*` names
- * the outcome and `outcome.explain.*` says what it means underneath it.
- *
- * `partial` was already deliberately unstyled rather than half-green: a split award is
- * not a qualified win, and colouring it as one is how "we won that tender" gets said
- * about a Tender we mostly lost. That reasoning now covers all five.
- */
-function tone(_outcome: TenderOutcome | null): string {
-  return "";
 }

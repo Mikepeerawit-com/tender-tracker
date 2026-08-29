@@ -16,7 +16,17 @@ export type TenderScreenData = {
   /** The ones nobody has said which Item they are of. Split here so the screen does not. */
   unassignedImages: ReferenceImage[];
   sheet: ComparisonSheet;
+  /**
+   * The Items **this reader** has neither Quoted nor recorded No Supplier Found on.
+   *
+   * Empty for a reader who owes nothing, and empty for anybody who is not an Assignee on
+   * this Tender — see {@link outstandingFor}.
+   */
+  outstandingForYou: OutstandingItem[];
 };
+
+/** One Item a reader still owes an answer on, and enough of it to name and link to. */
+export type OutstandingItem = { id: string; productName: string };
 
 /**
  * Everything screen 5 draws, read in one round trip's worth of time instead of five.
@@ -43,6 +53,8 @@ export type TenderScreenData = {
  * `currentUser` is deliberately *not* in here. It stays on the page as the gate, and it is
  * free by then: `(app)/layout.tsx` has already asked, and `currentUser` is wrapped in
  * React `cache()`, so the page's call is answered from the request rather than the network.
+ * The caller's id arrives as an argument for that reason — the "outstanding for you" band
+ * is per-viewer, and asking again in here would undo the arrangement above.
  *
  * A function rather than the top of the page, for the reason `vitest.config.mts` gives:
  * an `async` Server Component behind `currentUser` is reachable by no test in this repo,
@@ -50,6 +62,7 @@ export type TenderScreenData = {
  */
 export async function loadTenderScreen(
   tenderId: string,
+  callerId: string,
   store: SessionCookieStore,
 ): Promise<TenderScreenData> {
   const [tender, members, settings, referenceImages, sheet] = await Promise.all([
@@ -69,5 +82,47 @@ export async function loadTenderScreen(
     referenceImages,
     unassignedImages: referenceImages.filter((image) => image.tenderItemId === null),
     sheet,
+    // A filter over data already in hand, not a sixth read. The sheet carries every
+    // Quote's `sourcedByUserId` and every No Supplier Found record's `userId` because the
+    // screen already draws both — so who owes what is a question the batch can already
+    // answer, and asking the database again would put a round trip back on the slowest
+    // screen in the app to learn something it had just been told.
+    outstandingForYou: outstandingFor(callerId, tender, sheet),
   };
+}
+
+/**
+ * What one reader still owes on this Tender.
+ *
+ * An Assignee who is nagged, taps the Group Robot link and arrives here was shown the
+ * Owner's price-comparison sheet with no statement anywhere of what **they personally**
+ * had to do. This is that statement, and it is deliberately *personal*: an Owner who is
+ * also an Assignee sees what they owe, never what the team owes. A band that reported the
+ * team's outstanding work would be a status report, and it would never be empty, which is
+ * what makes it mean something when it is there.
+ *
+ * **No Supplier Found counts as an answer, not a gap.** "Nobody could supply this" and
+ * "nobody tried" mean opposite things — only one of them is worth chasing somebody about,
+ * and treating the first as the second is how a team learns to ignore the nag.
+ *
+ * **Somebody who is not an Assignee owes nothing**, and gets no band. Under ADR-0004 only
+ * an Assignee may enter a Quote and Assignees enrol themselves, so every Item would
+ * otherwise read as outstanding for an Owner who never took one on — nagging them about
+ * work they cannot do, with links to a screen that would refuse them.
+ */
+function outstandingFor(
+  callerId: string,
+  tender: Tender | null,
+  sheet: ComparisonSheet,
+): OutstandingItem[] {
+  if (tender === null) return [];
+  if (!tender.assignees.some((assignee) => assignee.id === callerId)) return [];
+
+  return sheet.items
+    .filter(
+      (item) =>
+        !item.quotes.some((quote) => quote.sourcedByUserId === callerId) &&
+        !item.sourcing.noSupplierFound.some((refusal) => refusal.userId === callerId),
+    )
+    .map((item) => ({ id: item.id, productName: item.productName }));
 }

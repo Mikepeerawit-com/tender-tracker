@@ -11,6 +11,7 @@ import { EditQuoteForm } from "@/components/quotes/edit-quote-form";
 import { QuoteList } from "@/components/quotes/quote-list";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { TenderFacts } from "@/components/tenders/tender-facts";
+import { OutstandingBand } from "@/components/tenders/outstanding-band";
 import { TenderGroup } from "@/components/tenders/tender-group";
 import { Button } from "@/components/ui/button";
 import { ScreenError } from "@/components/ui/screen-error";
@@ -34,10 +35,10 @@ import { controlRows, expectNoSidewaysScroll, phone } from "@/test/layout";
  * passed, while the real screen carried the app shell's header above it and overflowed.
  * A guard that never composes the two cannot see the bug the user saw.
  *
- * So each case here is a screen as the router really assembles it: `AppHeader` from the
- * `(app)` layout, then the page's own body underneath, inside the page's own wrapper
- * div. An org admin is used throughout, because that is the six-button bar and the worst
- * case for the header.
+ * So each case here is a screen as the router really assembles it: the page's own
+ * `AppHeader` — carrying the location shape that screen really draws, since #73 — then
+ * the page's body underneath, inside the page's own wrapper div. An org admin is used
+ * throughout, because that is the fullest menu and the worst case for the bar.
  *
  * Both locales, for the reason #56 gives — *"the labels are translated, so English is not
  * the worst case"*. A Han glyph is about twice the width of a Latin letter, so a shorter
@@ -82,7 +83,7 @@ const locales = [
 function screens(m: typeof en) {
   return {
     "the tender list": (
-      <Body width="max-w-3xl">
+      <Body width="max-w-3xl" bar={<AppHeader isOrgAdmin />}>
         <ScreenHeader
           heading={m.tenders.title}
           actions={<Button className="h-11">{m.tenders.record}</Button>}
@@ -102,7 +103,7 @@ function screens(m: typeof en) {
       </Body>
     ),
     "a tender": (
-      <Body width="max-w-7xl">
+      <Body width="max-w-7xl" bar={<AppHeader isOrgAdmin location={tenderBar} />}>
         <ScreenHeader
           eyebrow={tender.reference}
           heading={tender.clientName}
@@ -119,6 +120,9 @@ function screens(m: typeof en) {
         >
           <p className="text-muted-foreground text-sm break-words">{tender.title}</p>
         </ScreenHeader>
+        {/* Two Items with nothing to break in their names, which is the row this band
+            has that can be any width — a product name is whatever the client called it. */}
+        <OutstandingBand tenderId={tender.id} items={outstanding} />
         <TenderFacts tender={tender} />
         <AssigneeControls
           tenderId={tender.id}
@@ -130,7 +134,7 @@ function screens(m: typeof en) {
       </Body>
     ),
     "sourcing an item": (
-      <Body width="max-w-3xl">
+      <Body width="max-w-3xl" bar={<AppHeader isOrgAdmin location={itemBar} />}>
         <ScreenHeader
           eyebrow={`${tender.reference} · ${tender.clientName}`}
           heading="Nitrile examination glove, powder-free, size M"
@@ -161,7 +165,7 @@ function screens(m: typeof en) {
       </Body>
     ),
     "correcting a quote": (
-      <Body width="max-w-3xl">
+      <Body width="max-w-3xl" bar={<AppHeader isOrgAdmin location={itemBar} />}>
         <header className="flex flex-col gap-2">
           <span className="text-muted-foreground text-xs break-words">
             {`${tender.reference} · Nitrile examination glove, powder-free, size M`}
@@ -186,11 +190,19 @@ function screens(m: typeof en) {
     // sees the second instead of a blank page when the fetch behind it fails (#57).
     // Neither is wrapped in `Body` — a route-level `loading.tsx` and `error.tsx` replace
     // the page, so each has to draw the page's own wrapper itself, and does.
-    "the loading fallback": <ScreenSkeleton />,
+    "the loading fallback": (
+      <>
+        <AppHeader isOrgAdmin={false} />
+        <ScreenSkeleton />
+      </>
+    ),
     // A digest of the length Next really mints, since it is the one string on this screen
     // that nobody chose the width of.
     "a screen that threw": (
-      <ScreenError digest="3990102495" retry={() => {}} />
+      <>
+        <AppHeader isOrgAdmin={false} />
+        <ScreenError digest="3990102495" retry={() => {}} />
+      </>
     ),
   };
 }
@@ -205,7 +217,6 @@ describe(`a whole screen at ${phone.width}×${phone.height}`, () => {
   )("does not scroll sideways: %s", (_case, locale, messages, body) => {
     render(
       <NextIntlClientProvider locale={locale} messages={messages} timeZone="Asia/Bangkok">
-        <AppHeader name="Somchai Prasertkul" isOrgAdmin />
         {body}
       </NextIntlClientProvider>,
     );
@@ -233,8 +244,7 @@ describe(`the create-a-Quote form with photos held, at ${phone.width}×${phone.h
 
     render(
       <NextIntlClientProvider locale={locale} messages={m} timeZone="Asia/Bangkok">
-        <AppHeader name="Somchai Prasertkul" isOrgAdmin />
-        <Body width="max-w-3xl">
+        <Body width="max-w-3xl" bar={<AppHeader isOrgAdmin location={itemBar} />}>
           <QuoteForm
             tenderId={tender.id}
             tenderItemId="item-gloves"
@@ -269,14 +279,48 @@ const heldPhotos = [
   ),
 ];
 
-/** The wrapper every `(app)` page draws its body inside. */
-function Body({ width, children }: { width: string; children: React.ReactNode }) {
+/**
+ * A whole `(app)` page: its own app bar, then the wrapper it draws its body inside.
+ *
+ * The bar is a prop rather than something this renders itself, because since #73 each
+ * page draws the bar shape that names *where it is* — the list gets the wordmark, a
+ * Tender and the sourcing screen get the record form with a reference and a client name
+ * in it. Composing the wrong one here would measure a screen the router never assembles.
+ */
+function Body({
+  width,
+  bar,
+  children,
+}: {
+  width: string;
+  bar: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex flex-1 flex-col gap-8 p-6">
-      <main className={`mx-auto flex w-full flex-col gap-8 ${width}`}>{children}</main>
-    </div>
+    <>
+      {bar}
+      <div className="flex flex-1 flex-col gap-8 p-6">
+        <main className={`mx-auto flex w-full flex-col gap-8 ${width}`}>{children}</main>
+      </div>
+    </>
   );
 }
+
+/** The two record bars, carrying the unbroken strings a client really supplies. */
+const tenderBar = {
+  kind: "record",
+  backHref: "/tenders",
+  reference: "TR-2026-0142",
+  detail: "ChulalongkornMemorialHospitalProcurementDepartment",
+} as const;
+
+const itemBar = {
+  kind: "record",
+  backHref: "/tenders/8f14e45f",
+  reference: "TR-2026-0142",
+  detail:
+    "ChulalongkornMemorialHospitalProcurementDepartment · Nitrile examination glove, powder-free, size M",
+} as const;
 
 /* ============================ fixtures ============================ */
 
@@ -337,6 +381,14 @@ const deadRow: WorklistRow = {
   dueDeadlines: [],
   status: { kind: "submission_missed", tone: "alarm", days: 128 },
 };
+
+const outstanding = [
+  { id: "item-gloves", productName: "Nitrile examination glove, powder-free, size M" },
+  {
+    id: "item-masks",
+    productName: "SurgicalFaceMaskThreePlyTypeIIRWithEarloopsNonSterile",
+  },
+];
 
 const tender: Tender = {
   id: "8f14e45f-ceea-4d67-b4a7-4c5e2f6a1b90",

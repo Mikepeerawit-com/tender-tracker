@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
 
+import { AppHeader } from "@/components/app-header";
 import { ImageCountBadge } from "@/components/images/image-count-badge";
 import { NoSupplierFoundForm } from "@/components/quotes/no-supplier-found-form";
 import { QuoteForm } from "@/components/quotes/quote-form";
@@ -78,7 +79,17 @@ export default async function ItemSourcingPage({
   const today = todayIn(timezone, runInstantFromHeaders(await headers()));
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-6">
+    <>
+      <AppHeader
+        isOrgAdmin={user.isOrgAdmin}
+        location={{
+          kind: "record",
+          backHref: `/tenders/${tender.id}`,
+          reference: tender.reference,
+          detail: `${tender.clientName} · ${item.productName}`,
+        }}
+      />
+      <div className="flex flex-1 flex-col gap-8 p-6">
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
         <ScreenHeader
           eyebrow={`${tender.reference} · ${tender.clientName}`}
@@ -183,6 +194,7 @@ export default async function ItemSourcingPage({
           </section>
         )}
       </main>
-    </div>
+      </div>
+    </>
   );
 }

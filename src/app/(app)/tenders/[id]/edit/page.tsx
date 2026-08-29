@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
+import { AppHeader } from "@/components/app-header";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { EditTenderForm } from "@/components/tenders/edit-tender-form";
 import { ReferenceImageGallery } from "@/components/tenders/reference-image-gallery";
@@ -41,7 +42,17 @@ export default async function EditTenderPage({
   const t = await getTranslations("tenders");
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-6">
+    <>
+      <AppHeader
+        isOrgAdmin={user.isOrgAdmin}
+        location={{
+          kind: "record",
+          backHref: `/tenders/${tender.id}`,
+          reference: tender.reference,
+          detail: tender.clientName,
+        }}
+      />
+      <div className="flex flex-1 flex-col gap-8 p-6">
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
         <header className="flex flex-col gap-2">
           <span className="text-muted-foreground font-mono text-xs">
@@ -110,6 +121,7 @@ export default async function EditTenderPage({
           isOwner={tender.ownerUserId === user.id}
         />
       </main>
-    </div>
+      </div>
+    </>
   );
 }
