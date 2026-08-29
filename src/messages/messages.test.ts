@@ -17,7 +17,7 @@ import { testMentionStatuses } from "@/lib/wecom/test-mention";
 import {
   deadlineKinds,
   tenderProgresses,
-  worklistBlocks,
+  worklistGroups,
 } from "@/lib/tenders/progress";
 import { tenderProblems } from "@/lib/tenders/tenders";
 
@@ -128,7 +128,7 @@ describe.each(others)("%s", (locale) => {
  * screen reading `tenders.error.unassignable`.
  *
  * The same argument covers every other union the app renders a key from — the worklist's
- * blocks, Progress, and which deadline a row is due on. Each is walked rather than
+ * groups, Progress, and which deadline a row is due on. Each is walked rather than
  * listed, so a value added to one of them cannot ship without a sentence.
  */
 describe.each(locales)("%s wording", (locale) => {
@@ -174,13 +174,15 @@ describe.each(locales)("%s wording", (locale) => {
     expect(missing).toEqual([]);
   });
 
-  it("names every block of the worklist, and says what it means", () => {
-    // The list is the app's home, and a block whose title renders as
-    // `tenders.block.sourcing_overdue.title` is a heading nobody can act on. The union
-    // is walked rather than the keys listed, so a sixth block cannot ship unnamed.
-    const missing = worklistBlocks.flatMap((block) =>
+  it("names every group of the worklist, and says what it means", () => {
+    // The list is the app's home, and a group whose title renders as
+    // `tenders.group.sourcing.title` is a heading nobody can act on. The union is walked
+    // rather than the keys listed, so a sixth group cannot ship unnamed — which is the
+    // whole of what changed here when the five blocks became Progress plus the one
+    // pinned exception.
+    const missing = worklistGroups.flatMap((group) =>
       ["title", "hint"]
-        .map((part) => `tenders.block.${block}.${part}`)
+        .map((part) => `tenders.group.${group}.${part}`)
         .filter((key) => !flat.has(key)),
     );
 
@@ -195,10 +197,15 @@ describe.each(locales)("%s wording", (locale) => {
     expect(missing).toEqual([]);
   });
 
-  it("says which deadline put a Tender in Coming up", () => {
-    // Either deadline can, and a chip that does not say which is one the reader has to
-    // open the Tender to act on — which is the whole thing the block exists to save.
-    const missing = deadlineKinds.filter((kind) => !flat.has(`tenders.due.${kind}`));
+  it("says which deadline a row is counting down to, and how far off it is", () => {
+    // Either deadline can be the next one, and a row that does not say which is one the
+    // reader has to open the Tender to act on. Each kind needs all four readings: the
+    // day itself, tomorrow, a date further out, and one already gone by.
+    const missing = deadlineKinds.flatMap((kind) =>
+      ["today", "tomorrow", "on", "passed"]
+        .map((when) => `tenders.row.due.${kind}.${when}`)
+        .filter((key) => !flat.has(key)),
+    );
 
     expect(missing).toEqual([]);
   });

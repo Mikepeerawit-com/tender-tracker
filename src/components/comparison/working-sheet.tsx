@@ -268,7 +268,7 @@ function ItemSummary({ tenderId, item }: { tenderId: string; item: SheetItem }) 
             </span>
           </>
         ) : (
-          <span className="font-medium text-amber-700 dark:text-amber-400">
+          <span className="font-medium text-flag-ink">
             {t("needsDecision")}
           </span>
         )}
@@ -458,7 +458,7 @@ function QuoteRow({
         // its left-hand side and everything else stacked beside it.
         "max-md:border-border max-md:grid max-md:grid-cols-[1.75rem_minmax(0,1fr)] max-md:gap-x-3 max-md:rounded-lg max-md:border max-md:p-3",
         // Amber, because this row is not a price for what was asked for.
-        isAlternative ? "bg-amber-500/5 max-md:border-amber-500/50" : "",
+        isAlternative ? "bg-flag/5 max-md:border-flag/50" : "",
         isSelected ? "bg-primary/5 max-md:border-primary/60" : "",
       ].join(" ")}
     >
@@ -483,8 +483,8 @@ function QuoteRow({
 
       <Cell>
         {isAlternative ? (
-          <div className="flex flex-col gap-1 max-md:rounded-lg max-md:border max-md:border-amber-500/40 max-md:bg-amber-500/10 max-md:p-2">
-            <span className="w-fit max-w-full rounded bg-amber-500/20 px-1.5 py-0.5 text-[0.7rem] font-medium tracking-wide uppercase">
+          <div className="flex flex-col gap-1 max-md:rounded-lg max-md:border max-md:border-flag/40 max-md:bg-flag/10 max-md:p-2">
+            <span className="w-fit max-w-full rounded bg-flag/20 px-1.5 py-0.5 text-[0.7rem] font-medium tracking-wide uppercase">
               {tq("matchType.alternative")}
             </span>
             <span className="font-medium">{quote.alternativeProductName}</span>
@@ -520,7 +520,7 @@ function QuoteRow({
                 }),
               })}
               {quote.fxRateIsStale ? (
-                <span className="ml-1 rounded bg-amber-500/20 px-1 py-0.5 text-[0.65rem]">
+                <span className="ml-1 rounded bg-flag/20 px-1 py-0.5 text-[0.65rem]">
                   {tq("staleRate")}
                 </span>
               ) : null}
@@ -534,7 +534,7 @@ function QuoteRow({
           {/* "lowest", never "cheapest": the row is highlighted, not stamped. Absent
               entirely from an Item that cannot be ranked. */}
           {row.isLowest ? (
-            <span className="w-fit max-w-full rounded bg-emerald-500/20 px-1.5 py-0.5 text-[0.7rem] font-medium">
+            <span className="w-fit max-w-full rounded bg-signal/20 px-1.5 py-0.5 text-[0.7rem] font-medium">
               {t("quote.lowest")}
             </span>
           ) : null}
@@ -696,7 +696,7 @@ function Notice({
 }) {
   const tones = {
     stop: "border-destructive/40 bg-destructive/10 text-destructive",
-    warn: "border-amber-500/40 bg-amber-500/10",
+    warn: "border-flag/40 bg-flag/10",
     info: "border-border bg-background",
   };
 
@@ -734,7 +734,7 @@ function SourcingChips({ sourcing }: { sourcing: ItemSourcing }) {
         </span>
       ) : null}
       {refusals > 0 ? (
-        <span className="text-foreground w-fit max-w-full rounded bg-amber-500/20 px-2 py-0.5 text-xs">
+        <span className="text-foreground w-fit max-w-full rounded bg-flag/20 px-2 py-0.5 text-xs">
           {t("noSupplierFound", { count: refusals })}
         </span>
       ) : null}

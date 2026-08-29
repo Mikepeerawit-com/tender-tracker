@@ -38,6 +38,8 @@ describe(`a tender row at ${phone.width}×${phone.height}`, () => {
       [
         ["an ordinary row", ordinary],
         ["a client whose name and reference have nowhere to wrap", unbroken],
+        ["a row whose sourcing is overdue, so the lamp is lit", overdue],
+        ["a row whose submission was missed, the longest sentence there is", dead],
       ].map(
         ([who, tender]) =>
           [`${who}, in ${locale}`, locale, messages, tender as WorklistRow] as const,
@@ -50,11 +52,14 @@ describe(`a tender row at ${phone.width}×${phone.height}`, () => {
             has rather than edge to edge. */}
         <div className="flex flex-1 flex-col gap-8 p-6">
           <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-            <ul className="flex flex-col gap-3">
-              <li>
-                <TenderRow block="coming_up" tender={tender} />
-              </li>
-            </ul>
+            {/* The bordered container the group draws its rows inside. */}
+            <div className="border-hairline bg-card overflow-hidden rounded-lg border">
+              <ul className="flex flex-col">
+                <li>
+                  <TenderRow tender={tender} />
+                </li>
+              </ul>
+            </div>
           </main>
         </div>
       </NextIntlClientProvider>,
@@ -80,6 +85,8 @@ const base = {
   itemCount: 12,
   progress: "sourcing",
   dueDeadlines: ["internal_quote"],
+  status: { kind: "due", tone: "signal", deadline: "internal_quote", days: 1 },
+  notYetSourced: 0,
 } satisfies WorklistRow;
 
 const ordinary: WorklistRow = {
@@ -101,4 +108,26 @@ const unbroken: WorklistRow = {
   clientName: "ChulalongkornMemorialHospitalProcurementDepartment",
   title: "NitrileExaminationGlovesPowderFreeSizeMediumNonSterile",
   ownerName: "Somchai Prasertkul",
+};
+
+/**
+ * The two lit readings, on the unbroken fixture rather than the tidy one.
+ *
+ * The lamp and the sentence are what #71 added to this row, and they are added to the
+ * line that was already the tightest — a reference and a client name with nowhere to
+ * wrap. A sentence that fits beside a short name proves nothing about the row that
+ * actually overflows.
+ */
+const overdue: WorklistRow = {
+  ...unbroken,
+  status: { kind: "unsourced", tone: "alarm", count: 11, total: 12 },
+  notYetSourced: 11,
+  dueDeadlines: [],
+};
+
+const dead: WorklistRow = {
+  ...unbroken,
+  progress: "new",
+  status: { kind: "submission_missed", tone: "alarm", days: 128 },
+  dueDeadlines: [],
 };

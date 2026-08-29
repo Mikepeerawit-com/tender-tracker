@@ -18,7 +18,7 @@ import {
   type TenderFields,
   type TenderItemFields,
 } from "./tenders";
-import { worklistBlocks, type WorklistBlock } from "./progress";
+import { worklistGroups, type WorklistGroup } from "./progress";
 import { listWorklist } from "./worklist";
 
 /**
@@ -27,7 +27,7 @@ import { listWorklist } from "./worklist";
  *
  * `progress.test.ts` holds the rules as arithmetic. What is left here is the half that
  * does not survive being lifted out of the database — that a Quote *row*, a No Supplier
- * Found *row* and an Outcome *column* are what the blocks are actually derived from, and
+ * Found *row* and an Outcome *column* are what the groups are actually derived from, and
  * that deleting the row takes the derivation back with it. Derive-on-read is the whole
  * design (ADR-0001), so the thing worth asserting is that the read really does derive.
  *
@@ -153,19 +153,19 @@ async function aQuote(tenderItemId: string, supplierName = "Ace Medical"): Promi
   return result.quoteId;
 }
 
-/** The worklist's blocks as the Owner sees them. */
+/** The worklist's groups as the Owner sees them. */
 async function worklist() {
   return (await listWorklist(today, await signedInAs(owner.email))).sections;
 }
 
-/** Which block a Tender landed in, or null when the list does not carry it at all. */
-async function blockOf(tenderId: string): Promise<WorklistBlock | null> {
+/** Which group a Tender landed in, or null when the list does not carry it at all. */
+async function groupOf(tenderId: string): Promise<WorklistGroup | null> {
   const sections = await worklist();
   const found = sections
     .filter((section) => section.tenders.some((tender) => tender.id === tenderId))
-    .map((section) => section.block);
+    .map((section) => section.group);
 
-  // Not a convenience: appearing twice is the failure the block order exists to prevent,
+  // Not a convenience: appearing twice is the failure the group order exists to prevent,
   // and a helper that returned the first match would hide it from every test below.
   expect(found.length).toBeLessThanOrEqual(1);
 
@@ -198,22 +198,29 @@ afterAll(async () => {
 });
 
 describe("listWorklist", () => {
-  it("returns the five blocks in the order they are read", async () => {
-    expect((await worklist()).map((section) => section.block)).toEqual([...worklistBlocks]);
+  it("returns all five groups in order, empty ones included", async () => {
+    // Empty ones too: the order is this function's decision, and a screen that had to
+    // reassemble it from whatever came back could get it wrong. Drawing or skipping an
+    // empty group is the screen's business, not the assembly's.
+    const sections = await worklist();
+
+    expect(sections.map((section) => section.group)).toEqual([...worklistGroups]);
+    expect(sections.every((section) => section.tenders.length === 0)).toBe(true);
   });
 
-  it("puts every Tender in exactly one block, and sorts each by the client's deadline", async () => {
+  it("puts every Tender in exactly one group, and sorts each by the client's deadline", async () => {
     const missed = await aTender({
       internalQuoteDeadline: "2026-08-01",
       clientSubmissionDeadline: "2026-08-05",
     });
+    // Overdue on sourcing, but that is a fact about the *row* now. It groups by Progress
+    // like everything else, and its Progress is `new`.
     const overdue = await aTender({ internalQuoteDeadline: "2026-08-05" });
-    const soon = await aTender({
-      internalQuoteDeadline: "2026-08-13",
-      clientSubmissionDeadline: "2026-08-14",
-    });
     const quiet = await aTender();
     const alsoQuiet = await aTender({ clientSubmissionDeadline: "2026-08-30" });
+
+    const priced = await aTender({ items: [anItem(), anItem("Surgical masks")] });
+    await aQuote(priced.itemIds[0]);
 
     const sent = await aTender();
     await recordSubmission(
@@ -227,15 +234,16 @@ describe("listWorklist", () => {
     expect(new Set(placed).size).toBe(placed.length);
     expect(sections.map((section) => section.tenders.map((row) => row.id))).toEqual([
       [missed.id],
-      [overdue.id],
-      [soon.id],
+      // Soonest client submission deadline first, within a group as across the list. The
+      // order is inherited from `listTenders`, never decided here.
+      [alsoQuiet.id, overdue.id, quiet.id],
+      [priced.id],
+      [],
       [sent.id],
-      // Soonest client submission deadline first, within the block as across the list.
-      [alsoQuiet.id, quiet.id],
     ]);
   });
 
-  it("labels a Coming up row with which deadline put it there", async () => {
+  it("labels every row with whichever deadlines are inside the rolling window", async () => {
     const internal = await aTender({
       internalQuoteDeadline: "2026-08-12",
       clientSubmissionDeadline: "2026-09-30",
@@ -245,9 +253,10 @@ describe("listWorklist", () => {
       clientSubmissionDeadline: "2026-08-13",
     });
 
-    const comingUp = (await worklist()).find((section) => section.block === "coming_up");
     const labels = new Map(
-      comingUp!.tenders.map((row) => [row.id, row.dueDeadlines] as const),
+      (await worklist())
+        .flatMap((section) => section.tenders)
+        .map((row) => [row.id, row.dueDeadlines] as const),
     );
 
     // The case a client-deadline-only window misses: the Tender reads "due 30 Sep" and
@@ -256,15 +265,44 @@ describe("listWorklist", () => {
     expect(labels.get(both.id)).toEqual(["internal_quote", "client_submission"]);
   });
 
-  it("leaves a Coming up row unlabelled everywhere else", async () => {
+  it("gives a row with nothing inside the window an empty label and a calm lamp", async () => {
+    // `dueDeadlines` is populated for every row now, where it used to be filled for one
+    // block only. Empty here means *nothing is due within seven days*, which is a fact
+    // about this Tender — not a fact about which pile it landed in.
     const quiet = await aTender();
-    const sections = await worklist();
-    const elsewhere = sections
-      .filter((section) => section.block !== "coming_up")
-      .flatMap((section) => section.tenders);
+    const row = await groupRow(quiet.id);
 
-    expect(elsewhere.map((row) => row.id)).toContain(quiet.id);
-    expect(elsewhere.every((row) => row.dueDeadlines.length === 0)).toBe(true);
+    expect(row.dueDeadlines).toEqual([]);
+    expect(row.status).toEqual({
+      kind: "due",
+      tone: "calm",
+      deadline: "internal_quote",
+      days: 15,
+    });
+  });
+
+  it("states each row's own urgency, wherever the group put it", async () => {
+    // The whole point of moving urgency off the heading: two Tenders in the same group
+    // say different things, because the trouble is a property of the Tender rather than
+    // of the pile. Both of these are Progress `new`.
+    const overdue = await aTender({
+      internalQuoteDeadline: "2026-08-05",
+      items: [anItem(), anItem("Surgical masks")],
+    });
+    const calm = await aTender();
+
+    expect(await groupOf(overdue.id)).toBe("new");
+    expect(await groupOf(calm.id)).toBe("new");
+
+    expect((await groupRow(overdue.id)).status).toEqual({
+      kind: "unsourced",
+      tone: "alarm",
+      count: 2,
+      total: 2,
+    });
+    expect((await groupRow(overdue.id)).notYetSourced).toBe(2);
+    expect((await groupRow(calm.id)).status.tone).toBe("calm");
+    expect((await groupRow(calm.id)).notYetSourced).toBe(1);
   });
 
   it("derives Progress from the Quote rows, and takes it back when they go", async () => {
@@ -272,19 +310,19 @@ describe("listWorklist", () => {
     // untransitioned. Deleting the row is the whole of it.
     const { id, itemIds } = await aTender({ items: [anItem(), anItem("Surgical masks")] });
 
-    expect((await blockRow(id)).progress).toBe("new");
+    expect((await groupRow(id)).progress).toBe("new");
 
     const first = await aQuote(itemIds[0]);
 
-    expect((await blockRow(id)).progress).toBe("sourcing");
+    expect((await groupRow(id)).progress).toBe("sourcing");
 
     await aQuote(itemIds[1]);
 
-    expect((await blockRow(id)).progress).toBe("quoted");
+    expect((await groupRow(id)).progress).toBe("quoted");
 
     await service.from("quotes").delete().eq("id", first);
 
-    expect((await blockRow(id)).progress).toBe("sourcing");
+    expect((await groupRow(id)).progress).toBe("sourcing");
   });
 
   it("does not let an Item marked no_bid hold Progress at sourcing", async () => {
@@ -297,7 +335,7 @@ describe("listWorklist", () => {
       store,
     );
 
-    expect((await blockRow(id)).progress).toBe("quoted");
+    expect((await groupRow(id)).progress).toBe("quoted");
   });
 
   it("reads Progress as submitted the moment the Bid is recorded as sent", async () => {
@@ -308,13 +346,13 @@ describe("listWorklist", () => {
       await signedInAs(owner.email),
     );
 
-    expect((await blockRow(id)).progress).toBe("submitted");
+    expect((await groupRow(id)).progress).toBe("submitted");
   });
 
   it("stops calling an Item overdue once somebody records No Supplier Found on it", async () => {
     const { id, itemIds } = await aTender({ internalQuoteDeadline: "2026-08-05" });
 
-    expect(await blockOf(id)).toBe("sourcing_overdue");
+    expect((await groupRow(id)).status).toMatchObject({ kind: "unsourced", count: 1 });
 
     const recorded = await recordNoSupplierFound(
       { tenderItemId: itemIds[0], note: "Nobody stocks this size." },
@@ -324,7 +362,8 @@ describe("listWorklist", () => {
     expect(recorded.ok).toBe(true);
     // The point of the third sourcing state: the Assignee answered, so the nag stops —
     // where counting "Items with no Quote" would have gone on nagging them.
-    expect(await blockOf(id)).toBe("everything_else");
+    expect((await groupRow(id)).status).not.toMatchObject({ kind: "unsourced" });
+    expect((await groupRow(id)).notYetSourced).toBe(0);
   });
 
   it("keeps a Submission Missed Tender out of the default active list", async () => {
@@ -335,7 +374,7 @@ describe("listWorklist", () => {
       clientSubmissionDeadline: "2026-08-05",
     });
 
-    expect(await blockOf(id)).toBe("submission_missed");
+    expect(await groupOf(id)).toBe("submission_missed");
 
     await setItemOutcome(
       { itemId: itemIds[0], outcome: "lost", decidedAt: new Date("2026-08-11T09:00:00Z") },
@@ -343,7 +382,7 @@ describe("listWorklist", () => {
     );
 
     // It leaves when an Outcome is recorded, and not before.
-    expect(await blockOf(id)).toBeNull();
+    expect(await groupOf(id)).toBeNull();
   });
 
   it("takes a written-off Tender off the list", async () => {
@@ -354,12 +393,12 @@ describe("listWorklist", () => {
       await signedInAs(owner.email),
     );
 
-    expect(await blockOf(id)).toBeNull();
+    expect(await groupOf(id)).toBeNull();
   });
 
   it("carries what a row shows: the reference, the Owner's name and the Item count", async () => {
     const { id } = await aTender({ items: [anItem(), anItem("Surgical masks")] });
-    const row = await blockRow(id);
+    const row = await groupRow(id);
 
     expect(row).toMatchObject({
       clientName: "Bangkok General Hospital",
@@ -382,7 +421,7 @@ describe("listWorklist", () => {
 
     const list = await listWorklist(today, await signedInAs(owner.email));
 
-    expect(await blockOf(id)).toBeNull();
+    expect(await groupOf(id)).toBeNull();
     expect(list.sections.flatMap((section) => section.tenders)).toEqual([]);
     expect(list.total).toBe(1);
   });
@@ -400,7 +439,7 @@ describe("listWorklist", () => {
 });
 
 /** The one row a test is about, wherever the list put it. */
-async function blockRow(tenderId: string) {
+async function groupRow(tenderId: string) {
   const sections = await worklist();
   const row = sections
     .flatMap((section) => section.tenders)

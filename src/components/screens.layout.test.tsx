@@ -11,7 +11,7 @@ import { EditQuoteForm } from "@/components/quotes/edit-quote-form";
 import { QuoteList } from "@/components/quotes/quote-list";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { TenderFacts } from "@/components/tenders/tender-facts";
-import { TenderRow } from "@/components/tenders/tender-row";
+import { TenderGroup } from "@/components/tenders/tender-group";
 import { Button } from "@/components/ui/button";
 import { ScreenError } from "@/components/ui/screen-error";
 import { ScreenHeader } from "@/components/ui/screen-header";
@@ -91,13 +91,14 @@ function screens(m: typeof en) {
             {m.tenders.description}
           </p>
         </ScreenHeader>
-        <ul className="flex flex-col gap-3">
-          {[ordinaryRow, unbrokenRow].map((row) => (
-            <li key={row.id}>
-              <TenderRow block="coming_up" tender={row} />
-            </li>
-          ))}
-        </ul>
+        {/* The pinned alarm band and an ordinary Progress group, which are the two
+            shapes the list has. The band is the wider of the two — it carries a hint
+            paragraph and a count inside a bordered box — so measuring only the plain
+            group would miss the case that actually pushes. */}
+        <TenderGroup section={{ group: "submission_missed", tenders: [deadRow] }} />
+        <TenderGroup
+          section={{ group: "sourcing", tenders: [ordinaryRow, unbrokenRow] }}
+        />
       </Body>
     ),
     "a tender": (
@@ -297,6 +298,8 @@ const rowBase = {
   itemCount: 12,
   progress: "sourcing",
   dueDeadlines: ["internal_quote"],
+  status: { kind: "due", tone: "signal", deadline: "internal_quote", days: 1 },
+  notYetSourced: 0,
   reference: "",
   clientName: "",
   title: "",
@@ -320,6 +323,19 @@ const unbrokenRow: WorklistRow = {
   clientName: "ChulalongkornMemorialHospitalProcurementDepartment",
   title: "NitrileExaminationGlovesPowderFreeSizeMediumNonSterile",
   ownerName: "Somchai Prasertkul",
+};
+
+/** The pinned group's one row, carrying the longest sentence the list ever says. */
+const deadRow: WorklistRow = {
+  ...rowBase,
+  id: "2b7a1c05-6e39-4f21-8a4d-9c0e3f5b7d12",
+  reference: "TR20260142MOPHDMSCENTRALPROCUREMENT0098",
+  clientName: "ChulalongkornMemorialHospitalProcurementDepartment",
+  title: "NitrileExaminationGlovesPowderFreeSizeMediumNonSterile",
+  ownerName: "Somchai Prasertkul",
+  progress: "new",
+  dueDeadlines: [],
+  status: { kind: "submission_missed", tone: "alarm", days: 128 },
 };
 
 const tender: Tender = {

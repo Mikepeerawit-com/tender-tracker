@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { worklistBlock, type ClassifiedTender } from "@/lib/tenders/progress";
+import { worklistGroup, type ClassifiedTender } from "@/lib/tenders/progress";
 import type { ItemOutcome } from "@/lib/tenders/outcome";
 
 import { digestLines, isOpen, nextMilestone, type DigestTender } from "./digest";
@@ -147,7 +147,7 @@ describe("which Tenders the Digest lists", () => {
           expect({ items, submittedAt, open: isOpen(items) }).toEqual({
             items,
             submittedAt,
-            open: worklistBlock(classified, today) !== null,
+            open: worklistGroup(classified, today) !== null,
           });
         }
       }

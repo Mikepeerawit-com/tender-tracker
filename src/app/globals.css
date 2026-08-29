@@ -4,12 +4,64 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/**
+ * The visual system ADR-0019 records.
+ *
+ * Four hues and what each one is allowed to say. **Signal** — something is expected of
+ * you: primary actions, the Selected Quote, rank 1, the outstanding-for-you band.
+ * **Alarm** — time, and only time: a missed submission, a passed deadline, an unsourced
+ * Item after the internal date. It never touches a money figure, because in Chinese
+ * financial convention red is up and a red negative Margin would be read as a gain by
+ * half the people using this daily. **Flag** — a property of a Quote or a figure rather
+ * than a state: an Alternative, a provisional Landed Cost. **Ink** — everything else,
+ * over a cool near-white ground.
+ *
+ * The shadcn token *names* survive and only their values move, so nothing that already
+ * consumes them breaks. The meaning-carrying hues are additionally exposed under their
+ * own names, because `--primary` does not say *signal* and a screen reaching for a hue
+ * should have to name what it means by it.
+ */
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+
+  /*
+   * IBM Plex for Latin and numerals, and the CJK stack declared rather than inherited.
+   * No CJK webfont is fetched: a Han face cannot be subset, so it is megabytes over a
+   * phone network inside the WeCom webview — on the exact path a reminder link takes.
+   * The device draws it, which is why the stack is named in full rather than left to
+   * `sans-serif`.
+   */
+  --font-sans:
+    var(--font-ibm-plex-sans), "PingFang SC", "Hiragino Sans GB", "Source Han Sans SC",
+    "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono:
+    var(--font-ibm-plex-mono), "SF Mono", ui-monospace, "PingFang SC",
+    "Hiragino Sans GB", "Source Han Sans SC", "Noto Sans SC", "Microsoft YaHei",
+    monospace;
+  --font-heading: var(--font-sans);
+
+  /* The three hues, each with the ink and the wash it needs to be legible on the ground. */
+  --color-signal: var(--signal);
+  --color-signal-ink: var(--signal-ink);
+  --color-signal-wash: var(--signal-wash);
+  --color-signal-edge: var(--signal-edge);
+  --color-alarm: var(--alarm);
+  --color-alarm-ink: var(--alarm-ink);
+  --color-alarm-wash: var(--alarm-wash);
+  --color-alarm-edge: var(--alarm-edge);
+  --color-flag: var(--flag);
+  --color-flag-ink: var(--flag-ink);
+  --color-flag-wash: var(--flag-wash);
+  --color-flag-edge: var(--flag-edge);
+
+  /* Ink, and the two hairlines the ground is divided by. */
+  --color-ink-faint: var(--ink-faint);
+  --color-hairline: var(--border);
+  --color-hairline-soft: var(--hairline-soft);
+  --color-surface: var(--card);
+
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,72 +101,114 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* A cool near-white, not cream, with a cool-cast ink over it. */
+  --background: oklch(0.986 0.004 200);
+  --foreground: oklch(0.2 0.014 235);
+  --ink-faint: oklch(0.66 0.012 235);
+  --hairline-soft: oklch(0.945 0.006 215);
+
+  --signal: oklch(0.55 0.15 195);
+  --signal-ink: oklch(0.42 0.13 195);
+  --signal-wash: oklch(0.55 0.15 195 / 0.09);
+  --signal-edge: oklch(0.55 0.15 195 / 0.28);
+  --alarm: oklch(0.55 0.15 28);
+  --alarm-ink: oklch(0.46 0.16 28);
+  --alarm-wash: oklch(0.55 0.15 28 / 0.08);
+  --alarm-edge: oklch(0.55 0.15 28 / 0.3);
+  --flag: oklch(0.62 0.13 75);
+  --flag-ink: oklch(0.48 0.12 75);
+  --flag-wash: oklch(0.62 0.13 75 / 0.15);
+  --flag-edge: oklch(0.62 0.13 75 / 0.3);
+
+  /* Cards and popovers sit on the ground as plain white surfaces. */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: var(--foreground);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --popover-foreground: var(--foreground);
+
+  /* Primary *is* signal: a primary action is the definition of something expected of you. */
+  --primary: var(--signal);
+  --primary-foreground: oklch(0.99 0.005 195);
+  --secondary: oklch(0.955 0.006 215);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.955 0.006 215);
+  --muted-foreground: oklch(0.52 0.016 235);
+  --accent: oklch(0.955 0.006 215);
+  --accent-foreground: var(--foreground);
+  /* Destructive is alarm. Both mean *this has gone wrong*, and one hue is enough. */
+  --destructive: var(--alarm);
+  --border: oklch(0.905 0.008 215);
+  --input: oklch(0.905 0.008 215);
+  --ring: var(--signal);
+  --chart-1: var(--signal);
+  --chart-2: var(--flag);
+  --chart-3: oklch(0.52 0.016 235);
+  --chart-4: oklch(0.66 0.012 235);
+  --chart-5: oklch(0.2 0.014 235);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--signal);
+  --sidebar-primary-foreground: oklch(0.99 0.005 195);
+  --sidebar-accent: oklch(0.955 0.006 215);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: oklch(0.905 0.008 215);
+  --sidebar-ring: var(--signal);
 }
 
+/*
+ * Nothing in this app turns dark mode on — there is no toggle and no `.dark` is ever
+ * applied. It is kept defined rather than deleted so that the hues resolve to something
+ * deliberate if it ever is, instead of to nothing at all.
+ */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: oklch(0.19 0.012 235);
+  --foreground: oklch(0.965 0.004 200);
+  --ink-faint: oklch(0.62 0.012 235);
+  --hairline-soft: oklch(0.28 0.012 235);
+
+  --signal: oklch(0.7 0.13 195);
+  --signal-ink: oklch(0.8 0.11 195);
+  --signal-wash: oklch(0.7 0.13 195 / 0.16);
+  --signal-edge: oklch(0.7 0.13 195 / 0.4);
+  --alarm: oklch(0.68 0.16 28);
+  --alarm-ink: oklch(0.78 0.13 28);
+  --alarm-wash: oklch(0.68 0.16 28 / 0.16);
+  --alarm-edge: oklch(0.68 0.16 28 / 0.4);
+  --flag: oklch(0.75 0.12 75);
+  --flag-ink: oklch(0.84 0.1 75);
+  --flag-wash: oklch(0.75 0.12 75 / 0.18);
+  --flag-edge: oklch(0.75 0.12 75 / 0.4);
+
+  --card: oklch(0.23 0.013 235);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.23 0.013 235);
+  --popover-foreground: var(--foreground);
+  --primary: var(--signal);
+  --primary-foreground: oklch(0.17 0.02 195);
+  --secondary: oklch(0.28 0.012 235);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.28 0.012 235);
+  --muted-foreground: oklch(0.72 0.012 235);
+  --accent: oklch(0.28 0.012 235);
+  --accent-foreground: var(--foreground);
+  --destructive: var(--alarm);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: var(--signal);
+  --chart-1: var(--signal);
+  --chart-2: var(--flag);
+  --chart-3: oklch(0.72 0.012 235);
+  --chart-4: oklch(0.62 0.012 235);
+  --chart-5: oklch(0.965 0.004 200);
+  --sidebar: oklch(0.23 0.013 235);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--signal);
+  --sidebar-primary-foreground: oklch(0.17 0.02 195);
+  --sidebar-accent: oklch(0.28 0.012 235);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: var(--signal);
 }
 
 @layer base {
@@ -126,5 +220,42 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer components {
+  /**
+   * A field label, under one rule per script rather than one rule stretched over both.
+   *
+   * Latin is uppercase with 0.055em tracking at 10.5px. Chinese has no case to change and
+   * tracking hurts a script whose glyphs are already on a fixed body, so the CJK reading
+   * is sentence case at 11.5px with no tracking. `:lang(zh)` matches `lang="zh-Hans"` on
+   * the `html` element — CSS language matching is by prefix — so the switch follows the
+   * locale the app is already rendering in, with nothing to pass down.
+   */
+  .field-label {
+    font-size: 10.5px;
+    line-height: 1.45;
+    font-weight: 500;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  :lang(zh) .field-label {
+    font-size: 11.5px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  /**
+   * A money figure, where money is the decision — the working sheet and the quote cards.
+   * Tabular so the digits line up and eight competing offers read down the column as a
+   * column of numbers. Never given an alarm tone: see the note at the top of this file.
+   */
+  .money {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
   }
 }

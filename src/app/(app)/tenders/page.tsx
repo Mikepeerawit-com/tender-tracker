@@ -2,7 +2,7 @@ import { cookies, headers } from "next/headers";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-import { TenderRow } from "@/components/tenders/tender-row";
+import { TenderGroup } from "@/components/tenders/tender-group";
 import { Button } from "@/components/ui/button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { todayIn } from "@/lib/calendar-date";
@@ -13,11 +13,15 @@ import { listWorklist } from "@/lib/tenders/worklist";
 /**
  * Screen 2: the tender list, and the app's home.
  *
- * It is a **worklist, not a report**: grouped by what is wrong with each Tender rather
- * than by how the business is doing, so that opening the app at 9am says what to do
- * rather than how we are getting on. Every Tender appears in exactly one block, which is
- * what makes the list a list of jobs — a row in two places is something to read, not
+ * It is a **worklist, not a report**. It is grouped by **Progress** — the vocabulary
+ * `CONTEXT.md` already defines, in the order it already defines — with Submission Missed
+ * pinned above as the single exception. Every Tender appears in exactly one group, which
+ * is what makes the list a list of jobs: a row in two places is something to read, not
  * something to do.
+ *
+ * Urgency is not the grouping. It is stated on each row, as a lamp and a sentence naming
+ * the date and how far off it is — see the 29 August 2026 amendment to ADR-0007 for why
+ * the five blocks were two taxonomies wearing one set of headings.
  *
  * There are **no metric cards** (ADR-0007, as amended by ticket 11). `buildspec_1`'s four
  * were labels rather than definitions, and counting is not worth a card at this volume.
@@ -62,31 +66,11 @@ export default async function TendersPage() {
             {total === 0 ? t("empty") : t("allClear")}
           </p>
         ) : (
+          // In the order `listWorklist` returns them, which is the order the groups are
+          // read in. Empty ones are dropped here rather than there: the ordering is the
+          // assembly's decision and drawing it is the screen's.
           filled.map((section) => (
-            <section key={section.block} className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
-                <h2
-                  className={
-                    section.block === "submission_missed"
-                      ? "text-destructive text-sm font-semibold"
-                      : "text-sm font-semibold"
-                  }
-                >
-                  {t(`block.${section.block}.title`)}
-                </h2>
-                <p className="text-muted-foreground text-xs">
-                  {t(`block.${section.block}.hint`)}
-                </p>
-              </div>
-
-              <ul className="flex flex-col gap-3">
-                {section.tenders.map((tender) => (
-                  <li key={tender.id}>
-                    <TenderRow block={section.block} tender={tender} />
-                  </li>
-                ))}
-              </ul>
-            </section>
+            <TenderGroup key={section.group} section={section} />
           ))
         )}
       </main>

@@ -134,15 +134,19 @@ async function tenderVerdict(tender: Tender) {
 }
 
 /**
- * Green for won, red for lost, and nothing at all for the other three.
+ * Ink, for every outcome. No hue at all.
  *
- * `partial` is deliberately unstyled rather than half-green: a split award is not a
- * qualified win, and colouring it as one is how "we won that tender" gets said about a
- * Tender we mostly lost.
+ * This was green for won and red for lost, and ADR-0019 is why it is not any more: in
+ * Chinese financial convention **red is up and green is down**, the inverse of the
+ * Western reading, so the two colours said the opposite thing to half the people reading
+ * this. Alarm is reserved for time, and there is no fifth hue meaning "this went well" —
+ * so the words do the work, which they were always doing anyway. `outcome.value.*` names
+ * the outcome and `outcome.explain.*` says what it means underneath it.
+ *
+ * `partial` was already deliberately unstyled rather than half-green: a split award is
+ * not a qualified win, and colouring it as one is how "we won that tender" gets said
+ * about a Tender we mostly lost. That reasoning now covers all five.
  */
-function tone(outcome: TenderOutcome | null): string {
-  if (outcome === "won") return "text-emerald-700 dark:text-emerald-400";
-  if (outcome === "lost") return "text-destructive";
-
+function tone(_outcome: TenderOutcome | null): string {
   return "";
 }

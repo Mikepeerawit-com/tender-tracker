@@ -28,9 +28,9 @@ import type { GroupMessage } from "@/lib/wecom/robot";
  * ## "Open" is the tender list's definition, not a second one
  *
  * A Tender is open while **no Outcome has been recorded on it** — which is exactly the
- * Tenders `worklistBlock` puts in one of its five blocks, since the one way off that
+ * Tenders `worklistGroup` puts in one of its five groups, since the one way off that
  * list is a recorded Outcome. Stated here as {@link isOpen} rather than by calling
- * `worklistBlock`, because the blocks need each Item's sourcing counts and the Digest
+ * `worklistGroup`, because the groups need each Item's sourcing counts and the Digest
  * needs none of that; `digest.test.ts` holds the two definitions to each other over
  * fixtures so they cannot drift apart.
  *
@@ -61,7 +61,7 @@ export type DigestTender = {
  * Is this Tender still open?
  *
  * The tender list's default filter, in the terms the Digest can afford to ask in. See
- * the note above: `worklistBlock` returns null for precisely these Tenders and the test
+ * the note above: `worklistGroup` returns null for precisely these Tenders and the test
  * proves it, so a Tender on somebody's worklist is a Tender in the morning's Digest.
  */
 export function isOpen(items: DecidedItem[]): boolean {

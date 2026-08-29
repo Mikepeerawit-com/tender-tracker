@@ -76,7 +76,7 @@ export function QuoteList({
             quote.matchType === "alternative"
               ? // Amber, per screen 5, and for the same reason here: this row is not a
                 // price for what was asked for.
-                "border-amber-500/40 bg-amber-500/5"
+                "border-flag/40 bg-flag/5"
               : "border-border"
           }`}
         >
@@ -89,7 +89,7 @@ export function QuoteList({
 
           {quote.matchType === "alternative" ? (
             <p className="text-sm">
-              <span className="mr-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[0.7rem] font-medium tracking-wide uppercase">
+              <span className="mr-2 rounded bg-flag/20 px-1.5 py-0.5 text-[0.7rem] font-medium tracking-wide uppercase">
                 {t("matchType.alternative")}
               </span>
               <span className="font-medium">{quote.alternativeProductName}</span>
@@ -138,7 +138,7 @@ export function QuoteList({
                   // Said out loud rather than left in the column. A stale rate is what
                   // makes a 1.3% lead on the comparison sheet meaningless, and the person
                   // who entered this is the only one who can remember why it happened.
-                  <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[0.7rem]">
+                  <span className="ml-2 rounded bg-flag/20 px-1.5 py-0.5 text-[0.7rem]">
                     {t("staleRate")}
                   </span>
                 ) : null}

@@ -2,13 +2,16 @@ import "server-only";
 
 import {
   comingUpDeadlines,
+  notYetSourcedCount,
+  rowStatus,
   tenderProgress,
-  worklistBlock,
-  worklistBlocks,
+  worklistGroup,
+  worklistGroups,
   type DeadlineKind,
+  type RowStatus,
   type SourcedItem,
   type TenderProgress,
-  type WorklistBlock,
+  type WorklistGroup,
 } from "@/lib/tenders/progress";
 import { countItemSourcing } from "@/lib/quotes/quotes";
 import { listTenders, type TenderSummary } from "@/lib/tenders/tenders";
@@ -17,10 +20,14 @@ import type { SessionCookieStore } from "@/lib/supabase/session-client";
 /**
  * The tender list, assembled as a worklist.
  *
- * This is the app's home and the answer to "what do I do next" at 9am, which is why it
- * is grouped by **what is wrong with each Tender** rather than by how the business is
- * doing, and why **every Tender appears in exactly one block**. A row that shows up in
- * two places is a report; a row that shows up in one is a job.
+ * This is the app's home and the answer to "what do I do next" at 9am. It is grouped by
+ * **Progress** — the vocabulary `CONTEXT.md` already defines — with Submission Missed
+ * pinned above as the single exception, and **every Tender appears in exactly one group**.
+ * A row that shows up in two places is a report; a row that shows up in one is a job.
+ *
+ * Urgency is not the grouping and has not been since the 29 August 2026 amendment to
+ * ADR-0007. It is stated *on each row* instead, which is what {@link WorklistRow.status}
+ * carries.
  *
  * Nothing here is stored. `@/lib/tenders/progress` holds the rules as arithmetic and is
  * tested as arithmetic; this file is the read they run over — three queries however many
@@ -35,19 +42,31 @@ import type { SessionCookieStore } from "@/lib/supabase/session-client";
  * afternoon.
  */
 
-/** One row of the list: what it shows, and what the block put on it. */
+/** One row of the list: what it shows, and what it now says about itself. */
 export type WorklistRow = TenderSummary & {
   itemCount: number;
   progress: TenderProgress;
   /**
-   * Which deadline put this row in "Coming up", in the order a row shows them. Empty in
-   * every other block — a Tender in trouble is not also "due Tuesday", and the row says
-   * one thing.
+   * Which of the two deadlines fall inside the rolling seven days, in the order a row
+   * shows them.
+   *
+   * **Populated for every row**, where it used to be filled only for the one block called
+   * "Coming up". Every row states its own next date now rather than inheriting one from
+   * the pile it landed in, so there is no longer a group this is meaningless for.
    */
   dueDeadlines: DeadlineKind[];
+  /** The one sentence the row states, and how loudly. See {@link rowStatus}. */
+  status: RowStatus;
+  /**
+   * How many Items nobody has answered for — neither a Quote nor a No Supplier Found.
+   *
+   * Carried on every row rather than only the overdue ones, so that the count the
+   * sentence quotes and the count the row holds cannot drift apart.
+   */
+  notYetSourced: number;
 };
 
-export type WorklistSection = { block: WorklistBlock; tenders: WorklistRow[] };
+export type WorklistSection = { group: WorklistGroup; tenders: WorklistRow[] };
 
 export type Worklist = {
   /** All five, always, empty ones included — see {@link listWorklist}. */
@@ -63,11 +82,11 @@ export type Worklist = {
 };
 
 /**
- * The whole list, block by block, in the order the blocks are read.
+ * The whole list, group by group, in the order the groups are drawn.
  *
  * All five sections are always returned, empty ones included: the order is the product
  * decision, and a caller that had to reassemble it from whatever came back could get it
- * wrong. Drawing or skipping an empty block is the screen's business.
+ * wrong. Drawing or skipping an empty group is the screen's business.
  *
  * Tenders whose Outcome has been recorded — written off (`no_bid`, `cancelled`) or
  * decided (`won`, `lost`, `partial`) — are in none of the five and so are absent here.
@@ -77,15 +96,15 @@ export async function listWorklist(
   today: string,
   store: SessionCookieStore,
 ): Promise<Worklist> {
-  // Already soonest Client Submission Deadline first, which is the order every block
-  // inherits: the blocks decide *which* pile a Tender is in, never where in the pile.
+  // Already soonest Client Submission Deadline first, which is the order every group
+  // inherits: grouping decides *which* pile a Tender is in, never where in the pile.
   const tenders = await listTenders(store);
   const itemIds = tenders.flatMap((tender) => tender.items.map((item) => item.id));
   // Two more queries for the whole list rather than two per Tender. An Item absent from
   // the map is Not Yet Sourced, which is the state Sourcing Overdue turns on.
   const sourcing = await countItemSourcing(itemIds, store);
-  const sections = new Map<WorklistBlock, WorklistRow[]>(
-    worklistBlocks.map((block) => [block, []]),
+  const sections = new Map<WorklistGroup, WorklistRow[]>(
+    worklistGroups.map((group) => [group, []]),
   );
 
   for (const { items: listItems, ...summary } of tenders) {
@@ -94,22 +113,24 @@ export async function listWorklist(
       ...(sourcing.get(item.id) ?? notYetSourced),
     }));
     const classified = { ...summary, items };
-    const block = worklistBlock(classified, today);
+    const group = worklistGroup(classified, today);
 
-    // The Tenders in no block are exactly the ones whose Outcome has been recorded. They
+    // The Tenders in no group are exactly the ones whose Outcome has been recorded. They
     // are off the list, not hidden in it: the work on them is done.
-    if (block === null) continue;
+    if (group === null) continue;
 
-    sections.get(block)!.push({
+    sections.get(group)!.push({
       ...summary,
       itemCount: items.length,
       progress: tenderProgress(classified),
-      dueDeadlines: block === "coming_up" ? comingUpDeadlines(classified, today) : [],
+      dueDeadlines: comingUpDeadlines(classified, today),
+      status: rowStatus(classified, today),
+      notYetSourced: notYetSourcedCount(classified),
     });
   }
 
   return {
-    sections: worklistBlocks.map((block) => ({ block, tenders: sections.get(block)! })),
+    sections: worklistGroups.map((group) => ({ group, tenders: sections.get(group)! })),
     total: tenders.length,
   };
 }
