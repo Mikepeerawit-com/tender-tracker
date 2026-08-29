@@ -29,7 +29,7 @@ Three readings the rules above leave open, decided here and pinned by tests in
 
 - **A milestone that has been *met* is suppressed like one that has passed.** Rule 2 is
   written about the deadline going by, but a Tender whose Bid has gone out has met its
-  client deadline and spent its internal one — the same reading `worklistBlock` takes when
+  client deadline and spent its internal one — the same reading `worklistGroup` takes when
   it refuses to call a submitted Tender "coming up" — and one whose Items have all been
   decided is off the worklist entirely. Nagging either is chasing finished work. Suppressed
   rows are marked `sent`, not left pending: they are settled, and a deadline that later
