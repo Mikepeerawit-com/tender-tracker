@@ -32,12 +32,20 @@
    * phone network inside the WeCom webview — on the exact path a reminder link takes.
    * The device draws it, which is why the stack is named in full rather than left to
    * `sans-serif`.
+   *
+   * The `var()` fallbacks are load-bearing, not belt-and-braces. `next/font` defines
+   * `--font-ibm-plex-*` on the `html` element, and anything rendering these styles
+   * *without* it — a browser layout test, which is how this app's 390px guard works —
+   * would otherwise hit an undefined variable, invalidate the whole declaration at
+   * computed-value time and fall all the way back to the default serif. Naming the family
+   * in the fallback keeps the rest of the stack, and the CJK half of it in particular,
+   * reachable either way.
    */
   --font-sans:
-    var(--font-ibm-plex-sans), "PingFang SC", "Hiragino Sans GB", "Source Han Sans SC",
-    "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+    var(--font-ibm-plex-sans, "IBM Plex Sans"), "PingFang SC", "Hiragino Sans GB",
+    "Source Han Sans SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
   --font-mono:
-    var(--font-ibm-plex-mono), "SF Mono", ui-monospace, "PingFang SC",
+    var(--font-ibm-plex-mono, "IBM Plex Mono"), "SF Mono", ui-monospace, "PingFang SC",
     "Hiragino Sans GB", "Source Han Sans SC", "Noto Sans SC", "Microsoft YaHei",
     monospace;
   --font-heading: var(--font-sans);

@@ -405,6 +405,7 @@
       "landedCost": "到岸成本 / 单位 — {item}（泰铢）",
       "selling": "售价 / 单位 — {item}（泰铢）",
       "hint": "请加上运费、关税与手续费。保存即视为确认该成本。",
+      "unconfirmed": "未确认",
       "save": "保存",
       "saving": "保存中…",
       "error": {

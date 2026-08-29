@@ -405,6 +405,7 @@
       "landedCost": "Landed cost / unit for {item}, in THB",
       "selling": "Selling / unit for {item}, in THB",
       "hint": "Add shipping, duty and handling. Saving confirms the cost.",
+      "unconfirmed": "Unconfirmed",
       "save": "Save",
       "saving": "Saving…",
       "error": {
