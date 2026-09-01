@@ -186,7 +186,7 @@ function PriceField({
    * What the field is called, above it. The Item's blocks wrap rather than sitting under
    * a header strip, so each field says what it is where it is — the accessible name below
    * opens with the same words and then goes on to say which Item it belongs to, which
-   * four fields all reading "Landed cost / unit" could not.
+   * four fields all reading "Cost to us / unit" could not.
    */
   caption: string;
   label: string;

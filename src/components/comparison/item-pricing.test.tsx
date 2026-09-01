@@ -56,7 +56,7 @@ function renderRow(item: SheetItem) {
   );
 }
 
-const landedCostField = () => screen.getByLabelText(/landed cost \/ unit for/i);
+const landedCostField = () => screen.getByLabelText(/cost to us \/ unit for/i);
 const sellingField = () => screen.getByLabelText(/selling \/ unit for/i);
 
 describe("pricing inline in the Item's row", () => {

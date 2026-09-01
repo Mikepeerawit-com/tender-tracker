@@ -735,3 +735,104 @@ describe("keys written into the source", () => {
     expect(used.filter((key) => !flat.has(key))).toEqual([]);
   });
 });
+
+/**
+ * The English stops using vocabulary we invented for ourselves.
+ *
+ * A person whose job is phoning suppliers for prices opens this app and meets "Digest",
+ * "Landed cost", "Margin", "Group Robot" and "Org Admin" — five terms that name real
+ * things, and not one of which they would have used for those things an hour earlier.
+ * None of them is *wrong*, which is exactly why they lasted: every one is defensible to
+ * whoever wrote it and opaque to whoever reads it.
+ *
+ * "Digest" was the worst of the five, and for a reason the others do not share. It is a
+ * capitalised proper noun for a thing the reader **has no screen for** — it exists only
+ * as a message in a WeCom group — so the one word that could have told them what it is
+ * is a word they can only have learned from us. The other four at least sit beside the
+ * thing they name.
+ *
+ * The Chinese does not move. It already says 每日摘要, 到岸成本, 毛利, 群机器人 and
+ * 组织管理员, and each is the ordinary word in that language rather than a calque of
+ * ours — 到岸成本 is what a Chinese trade reader calls the figure, and 群机器人 is
+ * WeCom's own name for the feature, on WeCom's own screens. This block is therefore about
+ * English alone, which is the reverse of the two above it, where English was the file
+ * that decided and Chinese was the file that moved.
+ *
+ * `CONTEXT.md` keeps all five as domain terms and so does the code: `landedCost` is still
+ * `landedCost`, `groupRobot.title` is still `groupRobot.title`, and the `_Label_` lines
+ * are what say the screen disagrees. A key is a name we say to each other; a message is
+ * a name we say to somebody else.
+ *
+ * Each assertion below names a retired word rather than demanding the new one. "Cost to
+ * us" appearing somewhere in `en.json` proves nothing about the string that still says
+ * "Landed cost" three keys away, and it is the survivor that this ticket is about.
+ */
+describe("the words the English says", () => {
+  const english = flatten(messages("en"));
+
+  /**
+   * Every key whose English still says a retired word.
+   *
+   * The English twin of the block above's `saying`, and separate from it rather than
+   * hoisted: that one matches a Chinese word as a substring, because Chinese does not
+   * space its words, and this one needs `\b` to keep "landed" out of "landedCost" —
+   * the two blocks agree on the shape of the answer and disagree on what a word is.
+   *
+   * Sorted and returned whole, so a failure names the strings to go and rewrite. Read
+   * through `sentence` for the reason the blocks above are: `app.error.reference` is
+   * "Reference {digest}", and that `digest` is Next's own name for an error's hash —
+   * a variable, not a word anybody reads.
+   */
+  function stillSaying(retired: RegExp): string[] {
+    return [...english]
+      .filter(([, message]) => retired.test(sentence(message)))
+      .map(([key]) => key)
+      .sort();
+  }
+
+  it("has no Digest left, capitalised or otherwise", () => {
+    expect(stillSaying(/\bdigests?\b/i)).toEqual([]);
+  });
+
+  it("has no Landed cost left", () => {
+    // Three: the comparison sheet's column, the field's own label inside a row, and the
+    // totals bar. 到岸成本 stays on the Chinese side of all three deliberately.
+    expect(stillSaying(/\blanded\b/i)).toEqual([]);
+  });
+
+  it("has no Margin left", () => {
+    // Three, and "Margin on line" is the one worth reading twice. It becomes "Profit on
+    // line" rather than plain "Profit", which is a deliberate half-step away from the
+    // ticket's own wording: the sheet shows a per-unit figure and a per-line one in the
+    // same row, so a heading that says only "Profit" beside "Profit / unit" is asking
+    // the reader to work out which of the two it is. What the ticket objected to was a
+    // compound of two pieces of jargon, and "on line" is not one of them — the Chinese
+    // has drawn exactly this distinction all along, 毛利 / 单位 against 该行毛利.
+    expect(stillSaying(/\bmargins?\b/i)).toEqual([]);
+  });
+
+  it("has no Group Robot left, outside the sentence that sends a reader into WeCom", () => {
+    // The one exception is argued rather than tolerated, and argued in `CONTEXT.md`
+    // rather than only here: `groupRobot.help` is the sentence that walks somebody
+    // through WeCom's own interface to find the webhook, and a wayfinding instruction has
+    // to use the name the feature carries on the screen it is sending them to. That is
+    // the same argument that keeps 群机器人 in Chinese everywhere. Should WeCom's English
+    // wording turn out to be something else, the fix is to match it — not to drop it.
+    //
+    // `groupRobot.status.not_a_wecom_webhook` is the string most likely to be read as
+    // inconsistent with this one, and is not: it refuses a URL rather than sending
+    // anybody to find one, so it names our own concept and lets the address do the rest.
+    //
+    // Checked on the bare word rather than on the pair, because "the robot" is what a
+    // retired "Group Robot" decays into, and a check on /group robot/ would be silent on
+    // exactly that.
+    expect(stillSaying(/\brobots?\b/i)).toEqual(["groupRobot.help"]);
+  });
+
+  it("has no Org Admin left", () => {
+    // Twelve, and the half that matter are the ones a person reads while locked out:
+    // "Ask your Org Admin" is an instruction to go and find somebody, and it only works
+    // if the word names a person the reader could ask for by that name.
+    expect(stillSaying(/\borg admins?\b/i)).toEqual([]);
+  });
+});

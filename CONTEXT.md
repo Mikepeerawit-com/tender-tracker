@@ -176,7 +176,9 @@ chat. The only WeCom surface this project is not gated out of, and the only outb
 integration in v1. What it says is deliberately narrow: never a price, a Margin or a
 supplier's name (ADR-0012).
 _Label_: zh 群机器人 is WeCom's own name for the feature and lands instantly; the English
-calque does not, so en says "WeCom group".
+calque does not, so en says "WeCom group". The one English sentence that keeps "robot" is
+the one walking somebody through WeCom's own interface to find the webhook: a wayfinding
+instruction has to use the name the feature carries on the screen it is sending them to.
 _Avoid_: bot, webhook, notifier, WeCom integration
 
 **Reminder**:
