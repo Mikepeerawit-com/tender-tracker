@@ -5,16 +5,28 @@ for, what suppliers quoted in response, what we bid back, and whether we won.
 
 ## Language
 
+The terms below are the **domain** model: what we call things in conversation, in code,
+in tests and in ADRs. They are not automatically what the screen says. Where a term is
+jargon to a supplier-chaser on a phone, a `_Label_` line records the words the interface
+uses instead, per language. The domain term never bends to fit the button; the button is
+free to say something a new colleague understands on first read.
+
+A term with no `_Label_` line is shown as it is written.
+
 ### The client side
 
 **Tender**:
 One request from one client, with one deadline and one owner. The unit a client
 would recognise as "the enquiry they sent us".
+_Label_: en "Tender" · zh 招标 — never 标书, which is the bid *document* and points the
+other way.
 _Avoid_: RFQ, enquiry, bid request
 
 **Tender Item**:
 One distinct product a Tender asks for. A Tender always has at least one; multi-item
 Tenders are normal and the model carries them natively.
+_Label_: en "Item" · zh 产品项 — one word, everywhere. 招标明细, 条目 and bare 产品 are
+three more names for this and are not used.
 _Avoid_: line item, product, requested product, SKU
 
 **Bid**:
@@ -48,6 +60,8 @@ _Avoid_: supplier quote, quotation, offer
 An Assignee's explicit record that they could not source a Tender Item. Silences the
 sourcing nag for them and distinguishes "nobody could supply this" from "nobody tried"
 — which mean opposite things when deciding whether to Bid at all.
+_Label_: stated in the first person, as something the Assignee did rather than a status
+they set — "I could not source this" / "I found one after all".
 _Avoid_: skipped, unavailable, N/A
 
 **Alternative**:
@@ -65,19 +79,29 @@ _Avoid_: photo, image, supplier image, attachment
 A Tender Item an Assignee has neither Quoted nor marked No Supplier Found. The third
 sourcing state, and the only one that is overdue: an Item nobody has touched means
 different work from one somebody has already given up on.
-_Avoid_: no quote, missing, blank
+
+It has a screen of its own: **My work** lists exactly the Items an Assignee is Not Yet
+Sourced on, and nothing else. The list is finishable — marking No Supplier Found removes
+a row just as entering a Quote does, because both are answers and only silence is not.
+_Label_: the screen is "My work"; a row is never headed "pending".
+_Avoid_: no quote, missing, blank, pending
 
 **Assignee**:
 A user working a Tender. Several Assignees work the same Tender at once, each
 sourcing every Item they can through their own suppliers — they compete rather than
 divide, because comparing their Quotes is the point. Only an Assignee may enter
 Quotes on that Tender, since they are the one who actually asked the supplier.
+
+An Assignee sees their own Quotes and no one else's, and sees no money at all
+(ADR-0020). Comparing is the Owner's act, not theirs.
+_Label_: en "Assignee" · zh 参与人 — never 负责人, which is the Owner.
 _Avoid_: sourcer, responsible person, assigned user
 
 **Owner**:
 The user who created a Tender. Accountable for the client relationship and for the Bid
 going out on time; receives submission and decision reminders. Usually also an
 Assignee. A role, not a rank — every user can create Tenders and be an Assignee.
+_Label_: en "Owner" · zh 负责人 — held for this term alone.
 _Avoid_: manager, admin, lead
 
 **Selected**:
@@ -111,6 +135,8 @@ _Avoid_: deadline, submission deadline
 **Sourcing Overdue**:
 The Internal Quote Deadline has passed and some Assignee's Item still has no Quote.
 Derived, never stored. Still fixable; concerns that Assignee alone.
+_Label_: named by who it is waiting on rather than by its own condition — "Waiting on
+you".
 _Avoid_: late, overdue
 
 **Submission Missed**:
@@ -149,6 +175,8 @@ The WeCom webhook every notification leaves through — one URL, posting into on
 chat. The only WeCom surface this project is not gated out of, and the only outbound
 integration in v1. What it says is deliberately narrow: never a price, a Margin or a
 supplier's name (ADR-0012).
+_Label_: zh 群机器人 is WeCom's own name for the feature and lands instantly; the English
+calque does not, so en says "WeCom group".
 _Avoid_: bot, webhook, notifier, WeCom integration
 
 **Reminder**:
@@ -177,6 +205,8 @@ the robot it also hears the Reminders through — and it is **silent on a mornin
 nothing open**, because a daily message with no work in it is the same lesson by a
 slower route. It is stateless: nothing records that one went out, and a Digest missed is
 answered by tomorrow's rather than caught up.
+_Label_: en "daily summary" · zh 每日摘要. "Digest" is ours; a capitalised proper noun
+for a thing the reader has no screen for is the worst string in the app.
 _Avoid_: summary, daily report, standup
 
 ### Money
@@ -213,6 +243,8 @@ _Avoid_: old rate, cached rate, fallback rate
 What a Tender Item actually costs us — the Selected Quote's price converted to THB,
 plus shipping, duty and handling. Pre-filled from the Quote, then edited, because
 supplier prices often exclude freight.
+_Label_: en "Cost to us" · zh 到岸成本, which is the ordinary trade term and needs no
+softening.
 _Avoid_: cost, cost price, ex-works price
 
 **Unconfirmed**:
@@ -221,11 +253,15 @@ duty or handling to. Any Margin derived from one is understated in cost and over
 profit, so it is shown as provisional rather than as a number. Nothing is blocked and
 nobody is nagged — the figure simply does not pretend to be final. Writing the figure by
 hand is what confirms it: touched and vouched-for are one fact, not two (ADR-0014).
-_Avoid_: unedited, draft, estimated, incomplete
+_Label_: **"Provisional"**, one word, everywhere it appears — it says what the figure is
+rather than what somebody failed to do. The app shipped two labels for this one state,
+"Unconfirmed" and "Provisional"; the second wins and the first leaves the interface.
+_Avoid_: unedited, draft, estimated, incomplete, unconfirmed *as a label*
 
 **Margin**:
 Selling price minus Landed Cost, on a Tender Item. Always computed, never entered.
-Internal-only.
+Internal-only — and internal now means the Owner, not the org (ADR-0020).
+_Label_: en "Profit" · zh 毛利.
 
 **Coverage**:
 How many Tender Items carry a selling price, out of all of them. Sits at the head of the
@@ -243,19 +279,22 @@ _Avoid_: pipeline, total quoted value, open value
 ### Identity
 
 **Org Admin**:
-The single user who may invite others into the organisation. A capability, not a rank —
-an Org Admin has no extra visibility and no say over Tenders they don't own. Stored as
-a boolean, true for exactly one row, deliberately not a role enum.
+A user who may invite others into one organisation. A capability, not a rank — an Org
+Admin has no extra visibility and no say over Tenders they don't own. Still a boolean and
+deliberately not a role enum, but it is a property of a **Membership** rather than of a
+person: admin of one organisation says nothing about any other. An organisation must
+always have at least one, so the last one cannot be Disabled (ADR-0017).
+_Label_: en "Administrator" · zh 组织管理员.
 _Avoid_: admin, owner, superuser, manager
 
 **Invite**:
-The email an Org Admin sends to bring a new user into the organisation. The only way an
-account comes into existence *from inside the app*, and the only email the app sends.
-Scanning a WeCom QR code never creates an account. One exception, and only one: the first
-Org Admin has nobody to be invited by, and is created once when the organisation is first
-stood up — behind a secret, never repeatable, and never a way for anyone else to arrive
-(ADR-0017).
-_Avoid_: signup, registration, onboarding link
+The email an Org Admin sends to bring someone into *their* organisation. The only way a
+Membership of an existing organisation is ever created, and the only email the app sends.
+Scanning a WeCom QR code never creates an account. Signing up creates a new, empty
+organisation and never joins an existing one — so no stranger can put themselves inside
+another org's prices (ADR-0017). An Invite grants Membership only; becoming an Org Admin
+is a separate deliberate act by an existing one.
+_Avoid_: signup, registration, onboarding link, join request
 
 **Connected WeCom**:
 A user who has linked their WeCom identity to their existing account, and may thereafter
@@ -274,5 +313,21 @@ _Avoid_: test message, ping, verification, delivery check
 **Disabled**:
 A user whose access has been revoked but whose row remains, because they own Tenders and
 entered Quotes that must stay readable. Users are never deleted. Disabling is a manual
-step — nothing checks WeCom membership automatically.
+step — nothing checks WeCom membership automatically. An organisation's last Org Admin
+cannot be Disabled, because nobody could then ever invite anyone into it again.
 _Avoid_: deleted, removed, deactivated, archived user
+
+**Membership**:
+One person's place in one organisation, and where their Org Admin capability lives. A
+person may hold several. It is the Membership rather than the person that an Invite
+creates, that Disabling ends, and that RLS reads — which is why admin of one organisation
+grants nothing anywhere else.
+_Avoid_: role, org user, user_org, seat
+
+**Active Org**:
+The one organisation a session is currently looking at. Everything on every screen is
+scoped to it, and a person holding several Memberships changes it deliberately rather
+than seeing two organisations' Tenders in one list. The control that changes it does not
+render at all for the overwhelming majority who hold exactly one Membership — a global
+mode is worth its cost only to the people who actually have a second thing to switch to.
+_Avoid_: current org, selected org, workspace, tenant

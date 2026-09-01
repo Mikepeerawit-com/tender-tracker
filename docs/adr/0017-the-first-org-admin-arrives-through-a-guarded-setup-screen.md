@@ -42,3 +42,24 @@ Until now it was closed by hand, in README §6: create the auth user in the Supa
 - **The one-shot guard means production's Org Admin should be created through the deployed screen, not by hand first.** Hand-bootstrapping consumes the emptiness condition permanently, leaving a path that is only ever exercised locally.
 - **`CONTEXT.md`'s **Invite** entry is qualified rather than rewritten.** "The only way an account comes into existence" becomes true _from inside the app_, with the first Org Admin named as the exception it always was.
 - **Multi-org is unaffected and still deferred.** When one account may belong to several organisations, `current_org_id()` stops meaning "the caller's org" and this route's "the org" becomes a question rather than a `limit 1` — but nothing here makes that change harder.
+
+## Amendment, 31 August 2026 — signup creates an organisation; joining one never does
+
+Multi-org is no longer deferred as a direction, and the last consequence above has come due. The decision is recorded here rather than in a new ADR because it changes exactly one clause of this one — how the *first* Org Admin of an organisation arrives — and leaves the rest standing.
+
+**Signing up creates a new, empty organisation, with the person who signed up as its first Org Admin. There is no way to sign up *into* an existing organisation.** A Membership of an organisation that already holds data is created by an **Invite** from one of that organisation's Org Admins, and by nothing else.
+
+**The rejected shape was a signup form offering "create an org" or "join an org", and it is worth being explicit about why**, because it is the obvious design and it is unsafe. The v1 RLS posture is one policy per table keyed on `current_org_id()`: inside your org you read and write everything, supplier names, prices, Landed Cost and Margin included. A self-selected "join" makes the attacker a *legitimate member*, so every policy would work perfectly and still hand over the business. There is no version of that form that is safe without a token in the loop — and a token in the loop is an Invite by another name. The safe alternatives considered were an org-scoped invite link (an Invite) and email-domain verification (which fails the moment two colleagues use Gmail).
+
+Creating an empty organisation is safe for the same reason that joining one is not: there is nothing in it yet.
+
+### What this changes
+
+- **`/setup` and `SETUP_SECRET` retire** once signup exists. Their whole purpose was closing the "the first account cannot invite itself" gap for a single seeded organisation; signup closes it generally, and for every organisation rather than one. Until signup ships, `/setup` stands exactly as specified above.
+- **`enable_signup` flips to `true`, and the reasoning above is what makes that safe** — not a relaxation of the argument in "Why not the alternatives", but its resolution. What was rejected there was signup into *the* org, when there was only one and it held everything.
+- **Org Admin moves off the person and onto the Membership.** A boolean still, and deliberately not a role enum, but scoped: admin of one organisation says nothing about any other, and an Invite grants Membership only. Promotion is a separate deliberate act by an existing admin of that organisation.
+- **"Exactly one row" becomes "at least one per organisation."** The old constraint has a failure mode that only bites later: a sole Org Admin who leaves or is Disabled leaves an organisation nobody can ever invite anyone into again, with no recovery path in the app. Disabling the last remaining Org Admin of an organisation is therefore refused.
+- **One person may hold several Memberships, and sees one organisation at a time.** `current_org_id()` survives as a scalar — it reads a session's **Active Org** instead of a column — rather than becoming a set. Showing two organisations' Tenders in one list was rejected: it reintroduces the long-list problem, forces every row to carry an org label at 390px, and turns cross-org adjacency into a permanent one-bug-away risk instead of an impossible state.
+- **The switcher renders only for people holding more than one Membership.** A global mode that changes what every screen shows is exactly the kind of control that defeats a low-literacy reader, and the overwhelming majority have nothing to switch to. See [ADR-0021](0021-two-destinations-and-the-device-follows-the-role.md), whose bar is capped at two destinations.
+- **The organisation's name becomes visible**, having been stored and never rendered anywhere. Correct while there was one; a hazard the moment there are two.
+- **Sequencing: none of this ships before the simplification work.** It is a new product surface with a security model to get right, and it makes no difference to whether a colleague can enter a Quote. The four constraints above exist so that work starts from them rather than rediscovering them.
