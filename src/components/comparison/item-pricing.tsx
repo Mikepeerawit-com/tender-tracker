@@ -39,6 +39,26 @@ import { reportingCurrency } from "@/lib/fx/currencies";
  * are watching as they type. Until they touch it, a pre-filled cost has had no shipping,
  * duty or handling added and the Margin says so instead of pretending to be final.
  *
+ * **The Margin is the only place that is said.** The landed-cost field carried a marker
+ * of its own — an amber "Unconfirmed" chip beside its caption — so one state wore two
+ * names in the same row and left the reader to work out that the chip and the word under
+ * it were about the same figure. **"Provisional" is the one that survives**, on the
+ * figure the marking is actually for: a cost with nothing added is only misleading
+ * through the profit it implies, and that is the number somebody bids on.
+ *
+ * The chip was deliberately not `aria-hidden`, on the argument that a screen reader
+ * skipping it would read a pre-filled cost as a real one, and that argument survives its
+ * removal: the Margin's marker is a `<dd>` under a named `<dt>`, so the row still says
+ * "Profit / unit — Provisional" out loud. What went is the second saying of it, not the
+ * saying of it.
+ *
+ * The chip did say it in one place the Margin cannot: an Item with a pre-filled cost and
+ * no selling price yet, where there is no Margin to qualify and the row shows an em dash.
+ * That is deliberate rather than overlooked. A cost with nothing added for freight is not
+ * wrong, only incomplete, and it misleads solely through a profit — so the marker appears
+ * on the beat the profit does, which is the same keystroke somebody is watching when it
+ * would first matter to them.
+ *
  * Each field saves on its way out — blur, or Enter — rather than behind a Save button per
  * row, and each is its own form so that a page with no JavaScript still writes both.
  */
@@ -104,20 +124,6 @@ export function ItemPricing({
           action={setLandedCostAction}
           name="landedCostPerUnit"
           caption={t("label.landedCost")}
-          // The cost is still sitting at whatever the Selected Quote pre-filled, with
-          // nothing added for shipping, duty or handling — so it is marked where it is
-          // read, not only inferred from the Margin beneath it. Writing a Landed Cost is
-          // what confirms it (ADR-0014), so this clears the moment somebody saves one.
-          //
-          // It takes a figure to be provisional. An Item with no Selected Quote yet has
-          // nothing pre-filled and renders an empty field, and ADR-0014 defines
-          // Unconfirmed as a Landed Cost *still at its pre-filled value* — so flagging
-          // that would put an amber chip beside a number that does not exist.
-          unconfirmed={
-            !editedHere &&
-            item.landedCostPerUnit !== null &&
-            item.landedCostConfirmedAt === null
-          }
           label={t("pricing.landedCost", { item: item.productName })}
           // What this field is for, and what saving it does. On the field rather than
           // under it, and repeated into the accessible name the way the quote table
@@ -174,7 +180,6 @@ function PriceField({
   caption,
   label,
   hint,
-  unconfirmed = false,
   value,
   storedValue,
   onValueChange,
@@ -192,8 +197,6 @@ function PriceField({
   label: string;
   /** Said on hover and to a screen reader, never given a line of the row's width. */
   hint?: string;
-  /** Marks the figure as not yet confirmed by anybody. Only the Landed Cost can be. */
-  unconfirmed?: boolean;
   value: string;
   /** What the row was rendered with — what "changed" is measured against. */
   storedValue: string;
@@ -209,19 +212,8 @@ function PriceField({
     <form ref={form} action={formAction} className="flex min-w-0 flex-col gap-1">
       {children}
 
-      <span className="flex flex-wrap items-baseline gap-1.5">
-        <span className="field-label" aria-hidden>
-          {caption}
-        </span>
-        {unconfirmed ? (
-          // In words as well as in flag, so the marking survives greyscale and sunlight.
-          // Not `aria-hidden`: this one is a fact about the figure, not a repeat of the
-          // field's own name, and a screen reader that skipped it would read a pre-filled
-          // cost as a real one.
-          <span className="bg-flag-wash text-flag-ink rounded px-1.5 py-0.5 text-[0.7rem] font-medium">
-            {t("unconfirmed")}
-          </span>
-        ) : null}
+      <span className="field-label" aria-hidden>
+        {caption}
       </span>
 
       <Input
