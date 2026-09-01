@@ -327,6 +327,138 @@ describe.each(locales)("%s wording", (locale) => {
 });
 
 /**
+ * Two roles, two Chinese words, and neither borrowed by the other.
+ *
+ * 负责人 read as both Owner and Assignee for as long as both roles existed, and that is a
+ * translation no single sentence catches you out on: every screen stays fluent, and the
+ * reader simply cannot tell which of the two people a sentence is about. The app had
+ * already noticed and papered over it — `quotes.error.not_sourced_by_you` ended
+ * 负责人（Owner）, glossing one of the two occurrences in English so a Chinese reader
+ * could tell them apart. A parenthesis is not a translation; it is a translation
+ * admitting it does not have a word.
+ *
+ * It is load-bearing rather than tidy. ADR-0020 gives an Assignee a different Tender
+ * screen from the Owner's, and a split between two roles cannot be explained — in wording,
+ * in an error, or in the sentence telling somebody why the sheet is not there — in a
+ * language that has one word for both.
+ *
+ * English is what says which role a message is about. It is the file the strings are
+ * written in first, and its two words have never been confused for each other. The two
+ * locales are named here rather than taken from `defaultLocale` and `locales`, because
+ * these are assertions about two particular languages' words: were English to stop being
+ * the default, this would still be the file that decides, and 负责人 would still be
+ * Chinese.
+ */
+describe("the two roles in Chinese", () => {
+  const english = flatten(messages("en"));
+  const chinese = flatten(messages("zh-Hans"));
+
+  /**
+   * ICU arguments are named in English out of necessity — `{owner}` is a variable, not a
+   * word anybody reads — so they come out before a sentence is read for the words in it.
+   */
+  function sentence(message: string): string {
+    return message.replace(/\{\s*\w+/g, "{");
+  }
+
+  const names = {
+    owner: (message: string) => /\bowners?\b/i.test(sentence(message)),
+    assignee: (message: string) => /\bassignees?\b/i.test(sentence(message)),
+  };
+
+  it("spends 负责人 on the Owner and on nobody else", () => {
+    // Goes red on the sentence this ticket started from: the sourcing group's hint said
+    // 负责人正在收集价格 for an English line about Assignees getting prices in.
+    const misused = [...chinese]
+      .filter(([, message]) => message.includes("负责人"))
+      .filter(([key]) => !names.owner(english.get(key) ?? ""))
+      .map(([key]) => key)
+      .sort();
+
+    expect(misused).toEqual([]);
+  });
+
+  it("spends 参与人 on the Assignee and on nobody else", () => {
+    // The same rule pointed the other way, and not symmetry for its own sake: without it,
+    // `tenders.ownedBy` could read 参与人：{name} against English "Owner: {name}" and every
+    // other assertion here stays green. That is this ticket's own fault with the roles
+    // exchanged, which is the one regression a fix like this actually invites.
+    const misused = [...chinese]
+      .filter(([, message]) => message.includes("参与人"))
+      .filter(([key]) => !names.assignee(english.get(key) ?? ""))
+      .map(([key]) => key)
+      .sort();
+
+    expect(misused).toEqual([]);
+  });
+
+  it("calls an Assignee 参与人 wherever English names one", () => {
+    // The two above say a Chinese word is never spent on the wrong role. This says the
+    // word is spent at all — a translation that drops the role and says 有人 instead
+    // breaks nothing above and loses exactly what this ticket is for.
+    //
+    // `assignee` and not `assign`: "Colleague to assign" and "Not yet assigned to an item"
+    // are about the act, not the person, and Chinese says those with a verb.
+    const unnamed = [...english]
+      .filter(([, message]) => names.assignee(message))
+      .filter(([key]) => !(chinese.get(key) ?? "").includes("参与人"))
+      .map(([key]) => key)
+      .sort();
+
+    expect(unnamed).toEqual([]);
+  });
+
+  it("keeps the two in their own clauses where one message names both", () => {
+    // `quotes.error.not_sourced_by_you` is the only message naming both roles, and it is
+    // the reason this whole block exists — so it is also the one message every check above
+    // is weakest on. Each of them is satisfied by a word appearing *somewhere* in the
+    // sentence, which means the two could be swapped for each other and nothing would
+    // notice: "only the Owner who sourced this quote, or the Tender's Assignee". That
+    // sentence is fluent, is the opposite of the rule it states, and would ship.
+    //
+    // Order is what tells the two apart, and it is readable here because both languages
+    // list the roles in the same order — "the assignee who sourced this, or the tender's
+    // owner". A translation that deliberately reordered them would go red and should:
+    // whoever did it has to say why the clauses no longer line up.
+    const jumbled = [...english]
+      .filter(([, message]) => names.owner(message) && names.assignee(message))
+      .filter(([key, message]) => {
+        const zh = chinese.get(key) ?? "";
+        const assignee = zh.indexOf("参与人");
+        const owner = zh.indexOf("负责人");
+
+        // Both have to be there before an order means anything — a Chinese sentence that
+        // simply dropped the Owner half would otherwise read as correctly ordered.
+        if (assignee === -1 || owner === -1) return true;
+
+        const assigneeFirstInChinese = assignee < owner;
+        const assigneeFirstInEnglish =
+          sentence(message).search(/\bassignees?\b/i) <
+          sentence(message).search(/\bowners?\b/i);
+
+        return assigneeFirstInChinese !== assigneeFirstInEnglish;
+      })
+      .map(([key]) => key)
+      .sort();
+
+    expect(jumbled).toEqual([]);
+  });
+
+  it("names neither role in English inside a Chinese message", () => {
+    // The gloss that existed only because the two roles shared a word. With the words
+    // separated there is nothing left for it to disambiguate, and leaving it would invite
+    // the next one — a reader who has been shown that Chinese role names need an English
+    // footnote will keep expecting it.
+    const glossed = [...chinese]
+      .filter(([, message]) => names.owner(message) || names.assignee(message))
+      .map(([key]) => key)
+      .sort();
+
+    expect(glossed).toEqual([]);
+  });
+});
+
+/**
  * Every key written as a literal in the source resolves to a message.
  *
  * The tests above walk the unions the app builds keys from at runtime. This walks the
