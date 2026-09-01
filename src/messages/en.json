@@ -22,16 +22,16 @@
   },
   "login": {
     "title": "Sign in",
-    "description": "Tender Tracker is invitation-only. If you do not have an account yet, ask your Org Admin to invite you.",
+    "description": "Tender Tracker is invitation-only. If you do not have an account yet, ask your Administrator to invite you.",
     "email": "Email",
     "password": "Password",
     "submit": "Sign in",
     "submitting": "Signing in…",
     "error": {
-      "invalid": "That email and password do not match. Ask your Org Admin to reset your password if you cannot remember it.",
-      "disabled": "This account can no longer sign in. Ask your Org Admin.",
+      "invalid": "That email and password do not match. Ask your Administrator to reset your password if you cannot remember it.",
+      "disabled": "This account can no longer sign in. Ask your Administrator.",
       "incomplete": "Enter both your email and your password.",
-      "link": "That invitation link has expired or has already been used. Ask your Org Admin for a new one."
+      "link": "That invitation link has expired or has already been used. Ask your Administrator for a new one."
     }
   },
   "setPassword": {
@@ -45,11 +45,11 @@
     "error": {
       "too_short": "Use at least 8 characters.",
       "mismatch": "Those two passwords are not the same.",
-      "no_session": "That invitation link has expired or has already been used. Ask your Org Admin for a new one."
+      "no_session": "That invitation link has expired or has already been used. Ask your Administrator for a new one."
     }
   },
   "setup": {
-    "title": "Create the first Org Admin",
+    "title": "Create the first Administrator",
     "description": "This app has no accounts yet. The account you create here is the one that can invite everyone else, and it can only be created once.",
     "name": "Your name",
     "email": "Email",
@@ -62,7 +62,7 @@
     "submitting": "Creating…",
     "closed": {
       "title": "Setup is already done",
-      "description": "This app already has an account, so the first Org Admin cannot be created again. Sign in, or ask your Org Admin to invite you.",
+      "description": "This app already has an account, so the first Administrator cannot be created again. Sign in, or ask your Administrator to invite you.",
       "signIn": "Go to the sign-in screen"
     },
     "error": {
@@ -85,7 +85,7 @@
   "nav": {
     "signOut": "Sign out",
     "people": "People",
-    "groupRobot": "Group Robot",
+    "groupRobot": "WeCom group",
     "menu": "Menu",
     "back": "Back",
     "itemLocation": "{client} · {item}"
@@ -379,10 +379,10 @@
     },
     "label": {
       "selectedQuote": "Selected quote",
-      "landedCost": "Landed cost / unit",
+      "landedCost": "Cost to us / unit",
       "selling": "Selling / unit",
-      "marginPerUnit": "Margin / unit",
-      "marginOnLine": "Margin on line"
+      "marginPerUnit": "Profit / unit",
+      "marginOnLine": "Profit on line"
     },
     "twisty": {
       "open": "Show the quotes for {item}",
@@ -398,7 +398,7 @@
     "needsDecision": "Needs a decision ↓",
     "provisional": "Provisional",
     "pricing": {
-      "landedCost": "Landed cost / unit for {item}, in THB",
+      "landedCost": "Cost to us / unit for {item}, in THB",
       "selling": "Selling / unit for {item}, in THB",
       "hint": "Add shipping, duty and handling. Saving confirms the cost.",
       "unconfirmed": "Unconfirmed",
@@ -414,8 +414,8 @@
     "totals": {
       "coverage": "{priced} of {total, plural, =1 {# item} other {# items}} priced",
       "bidTotal": "Bid total",
-      "landedCost": "Landed cost",
-      "margin": "Margin"
+      "landedCost": "Cost to us",
+      "margin": "Profit"
     },
     "noQuotes": "Nothing recorded against this item yet.",
     "select": "Select",
@@ -465,7 +465,7 @@
     "title": "People",
     "description": "Everyone in the org. Accounts exist only by invitation — there is no sign-up page.",
     "members": "Members",
-    "orgAdmin": "Org Admin",
+    "orgAdmin": "Administrator",
     "disabled": "Disabled",
     "invite": {
       "title": "Invite a colleague",
@@ -475,7 +475,7 @@
       "submitting": "Sending…",
       "status": {
         "sent": "Invitation sent. They set their own password from the link.",
-        "not_admin": "Only an Org Admin can invite.",
+        "not_admin": "Only an Administrator can invite.",
         "already_invited": "That address already has an account.",
         "send_failed": "The invitation could not be sent. Check the email settings.",
         "incomplete": "Enter both a name and an email address."
@@ -487,7 +487,7 @@
       "save": "Save",
       "status": {
         "saved": "Saved",
-        "not_admin": "Only an Org Admin can change this.",
+        "not_admin": "Only an Administrator can change this.",
         "not_found": "That person is not in your org.",
         "taken": "Another member already has that userid."
       },
@@ -496,18 +496,18 @@
         "sending": "Posting…",
         "status": {
           "sent": "Posted to the group. Ask them to confirm they were @mentioned — WeCom accepts a wrong userid without complaint.",
-          "not_admin": "Only an Org Admin can send this.",
+          "not_admin": "Only an Administrator can send this.",
           "not_found": "That person is not in your org.",
           "no_userid": "Save their WeCom userid first.",
           "send_failed": "WeCom would not take the message. Nobody was notified — try again.",
-          "no_robot": "No Group Robot is set up yet, so nothing can be sent."
+          "no_robot": "No WeCom group is set up yet, so nothing can be sent."
         }
       }
     }
   },
   "groupRobot": {
-    "title": "Group Robot",
-    "description": "The WeCom group robot every reminder, outcome and daily Digest is posted through. One per org.",
+    "title": "WeCom group",
+    "description": "The WeCom group every reminder, outcome and daily summary is posted through. One per org.",
     "configured": "Set up. Last changed {when}.",
     "notConfigured": "Not set up yet — nobody is being notified of anything.",
     "label": "Webhook URL",
@@ -519,8 +519,8 @@
     "status": {
       "saved": "Saved. Send a test @mention from the People screen to check it reaches someone.",
       "cleared": "Removed. Nothing will be posted to the group until a new one is saved.",
-      "not_admin": "Only an Org Admin can change this.",
-      "not_a_wecom_webhook": "That is not a WeCom group robot webhook. It should start https://qyapi.weixin.qq.com/ and carry a key.",
+      "not_admin": "Only an Administrator can change this.",
+      "not_a_wecom_webhook": "That is not a WeCom group webhook. It should start https://qyapi.weixin.qq.com/ and carry a key.",
       "save_failed": "That could not be saved. The webhook is unchanged — try again."
     }
   }
