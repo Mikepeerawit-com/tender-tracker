@@ -327,6 +327,18 @@ describe.each(locales)("%s wording", (locale) => {
 });
 
 /**
+ * ICU arguments are named in English out of necessity — `{owner}` is a variable, not a
+ * word anybody reads — so they come out before a sentence is read for the words in it.
+ *
+ * Shared by the two blocks below, both of which decide what a Chinese message is about by
+ * reading the English one: `{product}` is no more the English word for the goods than
+ * `{owner}` is the English word for the role.
+ */
+function sentence(message: string): string {
+  return message.replace(/\{\s*\w+/g, "{");
+}
+
+/**
  * Two roles, two Chinese words, and neither borrowed by the other.
  *
  * 负责人 read as both Owner and Assignee for as long as both roles existed, and that is a
@@ -352,14 +364,6 @@ describe.each(locales)("%s wording", (locale) => {
 describe("the two roles in Chinese", () => {
   const english = flatten(messages("en"));
   const chinese = flatten(messages("zh-Hans"));
-
-  /**
-   * ICU arguments are named in English out of necessity — `{owner}` is a variable, not a
-   * word anybody reads — so they come out before a sentence is read for the words in it.
-   */
-  function sentence(message: string): string {
-    return message.replace(/\{\s*\w+/g, "{");
-  }
 
   const names = {
     owner: (message: string) => /\bowners?\b/i.test(sentence(message)),
@@ -455,6 +459,143 @@ describe("the two roles in Chinese", () => {
       .sort();
 
     expect(glossed).toEqual([]);
+  });
+});
+
+/**
+ * One Chinese word for a Tender, and one for a Tender Item.
+ *
+ * The Tender answered to 招标, 投标 and 标书; the Tender Item to 招标明细, 条目 and bare
+ * 产品. Six words for two things, and not one of them wrong on the screen it appeared on —
+ * which is why it survived. A reader met 明细 on the edit screen, 条目 in the picture
+ * gallery and 产品项 on the comparison sheet, and was left to work out for themselves that
+ * all three are the row they are quoting against. Nothing renders as a key, nothing reads
+ * as a mistranslation, and the app is harder to hold in your head for every extra word.
+ *
+ * 标书 was the worst of the six, and not by degree. It names the bid *document we send
+ * back*, so `quotes.error.not_assignee` — 请先把自己加入该标书 — asked somebody to add
+ * themselves to our own submission when it meant the client's enquiry. It pointed at the
+ * opposite end of the exchange from the thing it named.
+ *
+ * After this, `CONTEXT.md` reads back off the screen: **Tender is 招标, Tender Item is
+ * 产品项**. 投标 survives, but as the act of bidding — a different concept, not a second
+ * name for this one — which is what the second assertion is here to hold apart.
+ *
+ * Three of the words are retired outright rather than only where English names an Item,
+ * and that is the lesson of the strings this ticket had to fix by hand. The four
+ * `quotes.noSupplier.*` refusals say "you could not source this" in English: they name
+ * the row with a pronoun, so a rule keyed on the English word "item" would have had
+ * nothing to say about the very sentences that carried the fault. An outright absence has
+ * no such blind spot. The cost is that a screen wanting 明细 for something else — a
+ * landed-cost breakdown is 成本明细 and is the one use we can foresee — goes red, and
+ * whoever writes it amends the check and says which concept the word is naming. That is
+ * the trade this repo wants: a check somebody must consciously argue past, over one that
+ * is quiet about the strings most likely to go wrong.
+ *
+ * English still decides for the two words that stay in use, for the reason it does one
+ * block above: it is where the strings are written first, and it has never used one word
+ * for two concepts here. `\bitems?\b` and `\bproducts?\b` are what separate the row from
+ * the goods, and English keeps them apart even in the one message that names both — "A
+ * tender asks for at least one product. Add an item."
+ *
+ * **There is deliberately no check that Chinese says 产品项 everywhere English says
+ * "item",** which is the mirror of the third assertion one block above and would be wrong
+ * here. Chinese counts with a classifier: `tenders.item.numbered` is 第 {number} 项 and
+ * `tenders.row.unsourced` is {total} 项中有 {count} 项尚未询价. That 项 is grammar, not a
+ * seventh name for the concept, and a check demanding the noun in front of it would be
+ * demanding worse Chinese in the name of consistency. The one place it *is* demanded is
+ * the last assertion, where a message names the row and the goods both and the bare word
+ * cannot be told which of them it is doing.
+ */
+describe("one word for a Tender, one for its Items, in Chinese", () => {
+  const english = flatten(messages("en"));
+  const chinese = flatten(messages("zh-Hans"));
+
+  const names = {
+    item: (message: string) => /\bitems?\b/i.test(sentence(message)),
+    product: (message: string) => /\bproducts?\b/i.test(sentence(message)),
+    // `submi` rather than a whole word: the English says "bid", "submitted" and
+    // "submission" for the one act, and it is the act that licenses the word.
+    bid: (message: string) => /\bbids?\b|submi/i.test(sentence(message)),
+  };
+
+  /**
+   * Every key whose Chinese still says a word, for the assertions that retire one.
+   *
+   * Returned whole and sorted rather than counted, so a failure names the strings to go
+   * and read — the fault is always in a particular sentence, never in a total.
+   */
+  function saying(word: string): string[] {
+    return [...chinese]
+      .filter(([, message]) => message.includes(word))
+      .map(([key]) => key)
+      .sort();
+  }
+
+  /** The same, for a word that keeps a use: where its English does not license it. */
+  function unlicensed(word: RegExp, licence: (english: string) => boolean): string[] {
+    return [...chinese]
+      .filter(([, message]) => word.test(message))
+      .filter(([key]) => !licence(english.get(key) ?? ""))
+      .map(([key]) => key)
+      .sort();
+  }
+
+  it("has no 标书 left to name the client's enquiry, or anything else", () => {
+    // The Bid document, which this app has never had a screen for: every one of the five
+    // occurrences was the Tender wearing the name of the thing we send back.
+    expect(saying("标书")).toEqual([]);
+  });
+
+  it("has no 条目 left to name a Tender Item", () => {
+    // Four, all in the reference-image gallery, which was the only screen calling the row
+    // this — so the gallery was the one place a reader had to guess that the thing a
+    // picture is "of" is the thing they are quoting against.
+    expect(saying("条目")).toEqual([]);
+  });
+
+  it("has no 明细 left to name a Tender Item", () => {
+    // Seventeen, and the widest-travelled of the three: the edit screen, the worklist
+    // hints, five validation errors and every outcome sentence.
+    expect(saying("明细")).toEqual([]);
+  });
+
+  it("spends 投标 on the act of bidding and never on the client's enquiry", () => {
+    // The one neighbouring word that is not retired — 投标 is right in all eighteen places
+    // it stands, and this is what stops it drifting back into the nineteenth. Goes red on
+    // 本次投标的负责人 for "the tender's owner", which is the substitution a reader who has
+    // just been told 标书 is wrong will reach for next.
+    expect(unlicensed(/投标/, names.bid)).toEqual([]);
+  });
+
+  it("spends bare 产品 on the goods and 产品项 on the row", () => {
+    // The subtlest of the five, because 产品项 contains 产品 — the lookahead is what makes
+    // this a check on the bare word rather than one that passes on every string it is
+    // pointed at. Goes red on `tenders.sourcing.source` (为该产品询价 for "Source this
+    // item") and on the four `quotes.noSupplier.*` refusals, which recorded a supplier
+    // that could not be found for a *product* when what they are filed against is a row.
+    expect(unlicensed(/产品(?!项)/, names.product)).toEqual([]);
+  });
+
+  it("names the row too, in the one message that is about both", () => {
+    // The licence above is granted per message, and a message can be about two things.
+    // `tenders.error.no_items` — "A tender asks for at least one product. Add an item." —
+    // names the goods in English and so may keep its 产品, which leaves the check above
+    // blind on exactly the half of that sentence this ticket is for: 请添加产品 for "Add
+    // an item" names the row with the bare word and stays green.
+    //
+    // So where English names both, the Chinese has to name both too. It is the narrowest
+    // form of the "wherever English says item" rule that the block comment rules out in
+    // general, and it is safe here for the reason the general form is not: a sentence
+    // already using 产品 for the goods cannot fall back on the bare classifier for the
+    // row without saying the same word twice for two things.
+    const rowUnnamed = [...english]
+      .filter(([, message]) => names.item(message) && names.product(message))
+      .filter(([key]) => !(chinese.get(key) ?? "").includes("产品项"))
+      .map(([key]) => key)
+      .sort();
+
+    expect(rowUnnamed).toEqual([]);
   });
 });
 
