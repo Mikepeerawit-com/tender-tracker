@@ -87,6 +87,10 @@ describe("pricing inline in the Item's row", () => {
 
     // Per unit and on the line alike: nothing has been added for shipping, duty or
     // handling, so both figures understate the cost.
+    //
+    // **Two, and never three.** The row used to mark this state a second time, with a
+    // chip of its own beside the landed-cost field, and the count is what keeps a second
+    // marker from coming back: one state is marked once, on the Margin.
     expect(screen.getAllByText("Provisional")).toHaveLength(2);
     expect(screen.queryByText("THB 80.00")).toBeNull();
   });

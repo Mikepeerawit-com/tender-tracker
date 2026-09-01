@@ -836,3 +836,115 @@ describe("the words the English says", () => {
     expect(stillSaying(/\borg admins?\b/i)).toEqual([]);
   });
 });
+
+/**
+ * One state, one label.
+ *
+ * A Landed Cost still sitting at its pre-filled value was marked twice in the same row,
+ * in two different words. An amber "Unconfirmed" chip sat beside the field's caption, and
+ * "Provisional" stood where the Margin derived from that cost would otherwise have been a
+ * number — a reader was left to work out for themselves that the two were about the same
+ * figure, and neither word told them so.
+ *
+ * **"Provisional" wins**, and it wins on the Margin rather than on the field: a cost with
+ * no shipping, duty or handling added is only misleading through the profit it implies,
+ * and the profit is the figure somebody bids on. It also says what the figure *is* rather
+ * than what nobody has got round to doing to it, which is the whole of `CONTEXT.md`'s
+ * `_Label_` line for this term.
+ *
+ * **The domain term stays Unconfirmed.** `landed_cost_confirmed_at`, `landedCostConfirmed`
+ * and every sentence in ADR-0014 keep the word, because it is the one that says what the
+ * column records. A key is a name we say to each other; a message is a name we say to
+ * somebody else — the same split the block above draws for five other terms.
+ *
+ * The checks name the retired words rather than demanding the surviving one, for the
+ * reason that block gives: "Provisional" appearing somewhere proves nothing about a
+ * second label three keys away, and it is the survivor this is about.
+ *
+ * The English half is a `stillSaying` in all but name, and it stays here rather than
+ * joining the five in the block above, which is where the helper lives. That block is
+ * about English words a reader could not have known; this one is about *one word too
+ * many*, and its two halves only mean something as a pair — retiring the English label
+ * while 未确认 stayed on the Chinese screen would leave the fault this is for entirely
+ * intact, in the language most of the readers use. Keeping the pair together costs four
+ * lines of filter and is the reason a failure in either half is read beside the other.
+ */
+describe("one label for a cost that is not final", () => {
+  const english = flatten(messages("en"));
+  const chinese = flatten(messages("zh-Hans"));
+
+  it("has no Unconfirmed left in the English", () => {
+    // One, on the pricing row: `comparison.pricing.unconfirmed`, rendered by a chip in
+    // `item-pricing.tsx` that goes with it. The key could not simply be re-pointed at
+    // "Provisional" — that would leave the row marking one state twice, in one word.
+    const stillSaying = [...english]
+      .filter(([, message]) => /\bunconfirmed\b/i.test(sentence(message)))
+      .map(([key]) => key)
+      .sort();
+
+    expect(stillSaying).toEqual([]);
+  });
+
+  it("has no 未确认 left in the Chinese", () => {
+    // Retired the same way and for the same reason, beside a 暂估 that was already
+    // saying it. Chinese would otherwise be free to keep the second label after English
+    // had dropped it, and nothing else in this file would notice.
+    const saying = [...chinese]
+      .filter(([, message]) => message.includes("未确认"))
+      .map(([key]) => key)
+      .sort();
+
+    expect(saying).toEqual([]);
+  });
+});
+
+/**
+ * Sourcing is something an Assignee did, not a state somebody set on them.
+ *
+ * No Supplier Found is a record with a person's name on it (ADR-0004: Assignees compete
+ * rather than divide, so one of them failing to find a supplier is a fact about their
+ * suppliers and not a verdict on the Item). The control and its reversal are what say so
+ * — "I could not source this" and "I found one after all" — and they are a pair on
+ * purpose: one decision somebody is allowed to change their mind about, rather than a
+ * status and an undo.
+ *
+ * Both were already written this way in both locales when this check was added, which is
+ * exactly when a wording rule is cheapest to hold and easiest to lose. The section
+ * heading above them stays impersonal and is not checked here: it names the kind of
+ * record, and the hint under it — kept deliberately, because it is what teaches the
+ * difference between "nobody could supply this" and "nobody tried" — speaks about the
+ * reader rather than for them.
+ */
+describe("the sourcing refusal reads as something the Assignee did", () => {
+  const pair = ["quotes.noSupplier.record", "quotes.noSupplier.clear"];
+
+  // What the first person looks like in each script, on a control this short: English
+  // opens with the pronoun, Chinese with 我. The two locales are named rather than taken
+  // from `locales`, because these are assertions about two particular languages' grammar.
+  const firstPerson: Record<string, RegExp> = { en: /^I\b/, "zh-Hans": /^我/ };
+
+  it("knows what the first person looks like in every locale the app ships", () => {
+    // The table is written out by hand, which is what makes it readable and what would
+    // otherwise make it quietly incomplete: a third locale added to `locales` would not
+    // be checked by the assertion below, and this block would go on reporting green
+    // about two languages while a third said whatever it liked. Naming the locales is
+    // the right call — a pronoun is a fact about a particular language — so the cost of
+    // naming them is a check that they are all named.
+    expect(Object.keys(firstPerson).sort()).toEqual([...locales].sort());
+  });
+
+  it.each(Object.keys(firstPerson))(
+    "says both of them in the first person in %s",
+    (locale) => {
+      const flat = flatten(messages(locale));
+
+      // Both, never one: a "No supplier found" button whose reversal still says "I found
+      // one after all" reads as two different mechanisms rather than one decision.
+      const impersonal = pair.filter(
+        (key) => !firstPerson[locale].test(flat.get(key) ?? ""),
+      );
+
+      expect(impersonal).toEqual([]);
+    },
+  );
+});
