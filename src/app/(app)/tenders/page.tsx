@@ -50,7 +50,7 @@ export default async function TendersPage() {
   const filled = sections.filter((section) => section.tenders.length > 0);
 
   return (
-    <Screen>
+    <Screen width="max-w-7xl">
       <ScreenHeader
         heading={t("title")}
         actions={

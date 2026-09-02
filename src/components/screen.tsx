@@ -28,6 +28,10 @@ import { currentUser } from "@/lib/auth/session";
  * type being satisfied rather than a case that arises: nothing renders a `Screen` without
  * having passed that gate, and the admin menu is all it would decide.
  *
+ * **`width` reaches the bar as well as the body**, and that is the whole of what a
+ * content-aligned app bar needs from this file (#97). One number, stated once by the page,
+ * so the two halves of a screen cannot disagree about where its left edge is.
+ *
  * The two screens that stand in for a page — `(app)/loading.tsx` and `(app)/error.tsx` —
  * do not use this. They draw their own `AppHeader` in the wordmark shape, because at that
  * moment nobody knows which record is coming, and their bodies compose {@link ScreenBody}
@@ -49,7 +53,11 @@ export async function Screen({
 
   return (
     <>
-      <AppHeader isOrgAdmin={user?.isOrgAdmin ?? false} location={location} />
+      <AppHeader
+        isOrgAdmin={user?.isOrgAdmin ?? false}
+        location={location}
+        width={width}
+      />
       <ScreenBody width={width} gap={gap}>
         {children}
       </ScreenBody>

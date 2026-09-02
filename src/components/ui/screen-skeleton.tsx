@@ -35,9 +35,18 @@ import { ScreenHeader } from "@/components/ui/screen-header";
  *
  * That is also why this composes {@link ScreenBody} rather than `Screen`: `Screen` draws
  * the bar, and a fallback that used it would put a second one under `loading.tsx`'s. The
- * wrapper below it is the same wrapper every page gets, at the same default width, which
- * is what keeps the fallback and the screen it stands in for from disagreeing about where
- * the page starts.
+ * wrapper below it is the same wrapper every page gets, at its default width — which is
+ * what keeps this and the bar above it agreeing about where the page starts.
+ *
+ * **On the Owner's two screens it is narrower than what replaces it**, and that is the
+ * accepted cost of one fallback for eight screens. Since #97 the tender list and the
+ * Tender detail are composed at the desk's 1280 while this stays at the phone's 768, so a
+ * monitor sees a narrow skeleton widen when the page lands. It cannot be fixed here:
+ * `loading.tsx` is one file above every route under `(app)` and cannot see which page is
+ * coming — the same fact that makes it draw the wordmark rather than a record — and a
+ * per-route fallback is four files to hold in step for a few hundred milliseconds of grey
+ * boxes. Widening *this* instead would put the jump on the six screens that are narrow,
+ * which is the same fault more often.
  */
 export function ScreenSkeleton() {
   const t = useTranslations("app");

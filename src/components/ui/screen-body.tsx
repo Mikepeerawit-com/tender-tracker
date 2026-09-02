@@ -5,8 +5,21 @@ import type { ReactNode } from "react";
  *
  * Full Tailwind class names rather than names of our own, so that a page states its
  * measurement in the same words the stylesheet does and the scanner can see it. Three
- * values because three is what the app really uses: the reading width, the narrower one
- * a single form gets, and the working sheet's.
+ * values because three is what the app really uses, and since #97 each names a device
+ * rather than a screen:
+ *
+ * - `max-w-3xl` — **the phone's column, 768px.** My work and the quote form are composed
+ *   at 390px and this is the width they are allowed to grow to on the way out (ADR-0021).
+ *   It is also the default, and so what the two screens standing in for a page get.
+ * - `max-w-2xl` — the same column, tighter, for the one screen that is a short form and
+ *   nothing else.
+ * - `max-w-7xl` — **the desk, 1280px.** The tender list and the Tender detail, which are
+ *   the Owner's two screens: comparing Quotes and typing prices at a monitor. It was the
+ *   working sheet's alone until #97, when the list stopped being a centred phone column
+ *   on a 1440px screen.
+ *
+ * They are caps, not widths: below the number the column is whatever the viewport leaves,
+ * which is why one design carries both devices rather than two.
  */
 export type ScreenWidth = "max-w-2xl" | "max-w-3xl" | "max-w-7xl";
 
@@ -23,10 +36,16 @@ export type ScreenGap = "gap-6" | "gap-8";
  * `(app)/error.tsx` instead (#73). `ScreenError` is also a Client Component, and `Screen`
  * reaches for the session, so it could not import from there at all.
  *
- * **Width and gap are the seam.** The eight screens under `(app)` were not one shape: five
- * are the common pair, the record form is tighter, the Group Robot screen is narrower and
- * the Tender detail is wide because the comparison sheet needs the room at 1280 (ADR-0009).
- * Hardcoding one width here would have forced three of them back out of the component.
+ * **Width and gap are the seam.** The screens under `(app)` are not one shape: the
+ * Assignee's are the phone's column, the Group Robot screen is narrower, and the Owner's
+ * two are the desk's (ADR-0021). Hardcoding one width here would have forced them back
+ * out of the component.
+ *
+ * **The same width reaches the bar**, which is what makes the two agree about where the
+ * page's edge is. `Screen` hands this value to `AppHeader` too, and the `p-6` below is the
+ * padding that bar matches — change one and the other has to move with it, which is why
+ * `screens.layout.test.tsx` measures the two columns against each other rather than
+ * trusting that they were kept in step.
  *
  * `gap` reaches the `main` and not the `div` above it, and the `gap-8` on that `div` is
  * inert — it has one child, so there is no pair of siblings for it to sit between. It is

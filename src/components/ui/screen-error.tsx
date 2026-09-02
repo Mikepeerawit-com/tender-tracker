@@ -28,7 +28,9 @@ import { ScreenHeader } from "@/components/ui/screen-header";
  * their own. `Screen` draws the app bar, and `(app)/error.tsx` draws its own above this —
  * a screen that threw is exactly where the way back to the list must still be there. And
  * `Screen` reaches for the session, which a Client Component cannot do. What is shared is
- * the wrapper, at the same default width every page gets.
+ * the wrapper, at its default width — the phone's column, which since #97 is narrower than
+ * the two Owner screens this may stand in for. `screen-skeleton.tsx` says why one fallback
+ * for eight screens is the right trade.
  */
 export function ScreenError({
   digest,

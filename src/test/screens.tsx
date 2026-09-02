@@ -2,7 +2,7 @@ import { NextIntlClientProvider, useTranslations } from "next-intl";
 
 import "@/app/globals.css";
 
-import { AppHeader } from "@/components/app-header";
+import { AppHeader, type AppLocation } from "@/components/app-header";
 import { BottomNav } from "@/components/app-nav";
 import { ImageCountBadge } from "@/components/images/image-count-badge";
 import { EditQuoteForm } from "@/components/quotes/edit-quote-form";
@@ -17,6 +17,7 @@ import { TenderFacts } from "@/components/tenders/tender-facts";
 import { TenderGroup } from "@/components/tenders/tender-group";
 import { QuoteForm } from "@/components/quotes/quote-form";
 import { Button } from "@/components/ui/button";
+import { ScreenBody, type ScreenWidth } from "@/components/ui/screen-body";
 import { ScreenError } from "@/components/ui/screen-error";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { ScreenSkeleton } from "@/components/ui/screen-skeleton";
@@ -45,9 +46,9 @@ import zhHans from "@/messages/zh-Hans.json";
  *
  * Each entry is a screen as the router really assembles it: the page's own `AppHeader` —
  * carrying the location shape that screen really draws, since #73 — then the page's body
- * underneath, inside the page's own wrapper div, and the bottom bar `(app)/layout.tsx`
- * draws beneath every one of them since #96. An org admin is used throughout, because
- * that is the fullest menu and the worst case for the bar.
+ * underneath, inside `ScreenBody` — the wrapper every page draws it in — and the bottom
+ * bar `(app)/layout.tsx` draws beneath every one of them since #96. An org admin is used
+ * throughout, because that is the fullest menu and the worst case for the bar.
  *
  * The bottom bar is **not** in any of them, and that is the point: it belongs to
  * `(app)/layout.tsx` rather than to a page, so {@link Screen} draws it once for all of
@@ -87,7 +88,7 @@ export function screens(m: Messages) {
     // straight to the quote form. Composed at 390px, which is the width it is designed
     // for rather than one it merely has to survive.
     "my work": (
-      <Body width="max-w-3xl" bar={<AppHeader isOrgAdmin />}>
+      <Body width="max-w-3xl">
         <ScreenHeader heading={m.myWork.title}>
           <p className="text-muted-foreground text-sm break-words">
             {m.myWork.description}
@@ -100,7 +101,7 @@ export function screens(m: Messages) {
     // the one above with rows removed: it draws one sentence and no list at all, and the
     // list reaching zero is the requirement this destination is built around.
     "my work, finished": (
-      <Body width="max-w-3xl" bar={<AppHeader isOrgAdmin />}>
+      <Body width="max-w-3xl">
         <ScreenHeader heading={m.myWork.title}>
           <p className="text-muted-foreground text-sm break-words">
             {m.myWork.description}
@@ -110,7 +111,7 @@ export function screens(m: Messages) {
       </Body>
     ),
     "the tender list": (
-      <Body width="max-w-3xl" bar={<AppHeader isOrgAdmin />}>
+      <Body width="max-w-7xl">
         <ScreenHeader
           heading={m.tenders.title}
           actions={<Button className="h-11">{m.tenders.record}</Button>}
@@ -134,7 +135,7 @@ export function screens(m: Messages) {
       </Body>
     ),
     "a tender": (
-      <Body width="max-w-7xl" bar={<AppHeader isOrgAdmin location={tenderBar} />}>
+      <Body width="max-w-7xl" location={tenderBar}>
         <ScreenHeader
           heading={tender.clientName}
           actions={
@@ -164,7 +165,7 @@ export function screens(m: Messages) {
     // and the Outcome panel taken out and a list of your own sourcing put in, and that
     // list is markup no other screen draws.
     "a tender somebody else owns": (
-      <Body width="max-w-7xl" bar={<AppHeader isOrgAdmin location={tenderBar} />}>
+      <Body width="max-w-7xl" location={tenderBar}>
         <ScreenHeader
           heading={tender.clientName}
           actions={
@@ -195,7 +196,7 @@ export function screens(m: Messages) {
       </Body>
     ),
     "sourcing an item": (
-      <Body width="max-w-3xl" bar={<AppHeader isOrgAdmin location={itemBar} />}>
+      <Body width="max-w-3xl" location={itemBar}>
         {/* The brief, with the client's pictures in it — the block #75 put above the
             form so an Assignee can check they are pricing the right thing. */}
         <ItemBrief
@@ -236,7 +237,7 @@ export function screens(m: Messages) {
     // it is composed whole here, down to the form and the refusal box the Owner's copy
     // above leaves out.
     "sourcing an item on a tender somebody else owns": (
-      <Body width="max-w-3xl" bar={<AppHeader isOrgAdmin location={itemBar} />}>
+      <Body width="max-w-3xl" location={itemBar}>
         <ItemBrief
           productName={gloves.productName}
           quantity={gloves.quantity}
@@ -301,7 +302,7 @@ export function screens(m: Messages) {
       </Body>
     ),
     "correcting a quote": (
-      <Body width="max-w-3xl" bar={<AppHeader isOrgAdmin location={itemBar} />}>
+      <Body width="max-w-3xl" location={itemBar}>
         <header className="flex flex-col gap-2">
           <span className="text-muted-foreground text-xs break-words">
             {`${tender.reference} · Nitrile examination glove, powder-free, size M`}
@@ -378,26 +379,38 @@ export function Screen({
 /**
  * A whole `(app)` page: its own app bar, then the wrapper it draws its body inside.
  *
- * The bar is a prop rather than something this renders itself, because since #73 each
- * page draws the bar shape that names *where it is* — the list gets the wordmark, a
- * Tender and the sourcing screen get the record form with a reference and a client name
- * in it. Composing the wrong one here would measure a screen the router never assembles.
+ * **`Screen`'s two lines, without the session read.** It drew its own copy of the
+ * wrapper's markup until #97, which was a copy that could drift from the component every
+ * page really uses — and the thing #97 changed is exactly that markup, so a suite
+ * measuring the copy would have measured nothing. `ScreenBody` and `AppHeader` are both
+ * sync and reach for nothing, so this composes them; only `currentUser` is out of a
+ * browser's reach, and `isOrgAdmin` stands in for it.
+ *
+ * `location` is a prop rather than something chosen here, because since #73 each page
+ * draws the bar shape that names *where it is* — the list gets the wordmark, a Tender and
+ * the sourcing screen get the record form with a reference and a client name in it.
+ * Composing the wrong one would measure a screen the router never assembles.
+ *
+ * **`width` is one value and reaches both halves**, exactly as `Screen` hands it to both:
+ * a fixture that told the bar one number and the body another could pass an alignment
+ * check that the app fails.
  */
 export function Body({
   width,
-  bar,
+  location,
   children,
 }: {
-  width: string;
-  bar: React.ReactNode;
+  width?: ScreenWidth;
+  location?: AppLocation;
   children: React.ReactNode;
 }) {
   return (
     <>
-      {bar}
-      <div className="flex flex-1 flex-col gap-8 p-6">
-        <main className={`mx-auto flex w-full flex-col gap-8 ${width}`}>{children}</main>
-      </div>
+      {/* An org admin, always: it is the widest the bar ever is — the menu behind it
+          carries People and Group Robot as well as Sign out — and the bar's own suite is
+          where the ordinary member's is measured. */}
+      <AppHeader isOrgAdmin location={location} width={width} />
+      <ScreenBody width={width}>{children}</ScreenBody>
     </>
   );
 }
