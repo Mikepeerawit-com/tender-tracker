@@ -108,6 +108,11 @@
       "failed": "That could not be saved. Try again."
     }
   },
+  "myWork": {
+    "title": "My work",
+    "description": "The items you still owe a price on. Enter a quote, or say you could not source it, and the row goes.",
+    "empty": "Nothing outstanding. Every item you are sourcing has an answer against it."
+  },
   "tenders": {
     "title": "Tenders",
     "description": "What needs doing, grouped by what is wrong with each tender.",

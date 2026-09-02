@@ -302,6 +302,43 @@ export function rowStatus(tender: ClassifiedTender, today: string): RowStatus {
   };
 }
 
+/** What one Item on **My work** says about the deadline it is counting down to. */
+export type SourcingDeadlineStatus = { tone: LampTone; days: number };
+
+/**
+ * How far off an Assignee's own deadline is on one Item they still owe a price on, and
+ * how loudly the row says so.
+ *
+ * **One deadline, and always the Internal Quote Deadline.** Every row of My work is an
+ * Item this reader has neither Quoted nor given up on, and the day their answer is due is
+ * the internal one — the Client Submission Deadline is the Owner's to meet and naming it
+ * here would put somebody else's date on an Assignee's list. So there is no *which
+ * deadline* to work out, and this takes the day rather than the Tender.
+ *
+ * **A day gone by is an alarm, where {@link rowStatus} would call it calm**, and the two
+ * agree rather than differ. On the worklist a passed internal deadline with an Item
+ * nobody has answered for is already an alarm — it takes the `unsourced` branch above,
+ * which outranks the date. Every row here is exactly that case, per reader: the Item is
+ * Not Yet Sourced *by them*, so a deadline behind them is Sourcing Overdue and theirs.
+ * The `calm` reading in `rowStatus` is for a date already spent on a Tender somebody has
+ * dealt with, and no such Item reaches this list.
+ *
+ * Alarm is time and only time (ADR-0019). Both readings here are dates.
+ */
+export function sourcingDeadlineStatus(
+  internalQuoteDeadline: string,
+  today: string,
+): SourcingDeadlineStatus {
+  const days = daysBetween(today, internalQuoteDeadline);
+
+  return {
+    // Inside the rolling window something is expected of the reader; beyond it the lamp
+    // is drawn hollow, exactly as it is on a tender row.
+    tone: days < 0 ? "alarm" : days <= comingUpDays ? "signal" : "calm",
+    days,
+  };
+}
+
 /**
  * The soonest deadline still ahead, or — when both are spent — the client's.
  *

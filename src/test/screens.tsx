@@ -9,6 +9,7 @@ import { ItemBrief } from "@/components/quotes/item-brief";
 import { NoSupplierFoundForm } from "@/components/quotes/no-supplier-found-form";
 import { QuoteList } from "@/components/quotes/quote-list";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
+import { MyWorkList } from "@/components/tenders/my-work-list";
 import { OutstandingBand } from "@/components/tenders/outstanding-band";
 import { SourcingList } from "@/components/tenders/sourcing-list";
 import { TenderFacts } from "@/components/tenders/tender-facts";
@@ -23,6 +24,7 @@ import type { ReferenceImage } from "@/lib/images/reference-images";
 import type { Member } from "@/lib/org/members";
 import { blankQuote, quoteAsSubmitted } from "@/lib/quotes/quote-form";
 import type { NoSupplierFound, Quote } from "@/lib/quotes/quotes";
+import type { MyWorkRow } from "@/lib/tenders/my-work";
 import type { OutstandingItem, SourcingItem } from "@/lib/tenders/tender-screen";
 import type { Tender, TenderItem } from "@/lib/tenders/tenders";
 import { yourQuotes } from "@/lib/tenders/viewer";
@@ -73,6 +75,32 @@ export type Messages = typeof en;
  */
 export function screens(m: Messages) {
   return {
+    // The screen an Assignee actually opens (ADR-0021): their own Items, each linking
+    // straight to the quote form. Composed at 390px, which is the width it is designed
+    // for rather than one it merely has to survive.
+    "my work": (
+      <Body width="max-w-3xl" bar={<AppHeader isOrgAdmin />}>
+        <ScreenHeader heading={m.myWork.title}>
+          <p className="text-muted-foreground text-sm break-words">
+            {m.myWork.description}
+          </p>
+        </ScreenHeader>
+        <MyWorkList items={myWorkRows} />
+      </Body>
+    ),
+    // The same screen with the work done, which is a screen in its own right rather than
+    // the one above with rows removed: it draws one sentence and no list at all, and the
+    // list reaching zero is the requirement this destination is built around.
+    "my work, finished": (
+      <Body width="max-w-3xl" bar={<AppHeader isOrgAdmin />}>
+        <ScreenHeader heading={m.myWork.title}>
+          <p className="text-muted-foreground text-sm break-words">
+            {m.myWork.description}
+          </p>
+        </ScreenHeader>
+        <MyWorkList items={[]} />
+      </Body>
+    ),
     "the tender list": (
       <Body width="max-w-3xl" bar={<AppHeader isOrgAdmin />}>
         <ScreenHeader
@@ -507,6 +535,51 @@ const items: TenderItem[] = [
 
 /** The Item both sourcing screens are about, named rather than indexed at five sites. */
 const gloves = items[0];
+
+/**
+ * My work's rows: three Items one Assignee has not answered for, at the three urgencies
+ * the row can carry.
+ *
+ * Built from `items` rather than written out again, so the product names here and the
+ * ones the sourcing screens draw cannot come to disagree. Two of the three are the
+ * unbroken runs a client really supplies — a row that has to break a 53-character product
+ * name *and* a reference with no space in it is the case that pushes this screen sideways
+ * at 390px, and it is the ordinary case rather than the invented one.
+ *
+ * The alarm row is a deadline already gone by, which is the reading `sourcingDeadlineStatus`
+ * gives an Item its own Assignee is late on. Its lamp and its sentence are the loudest
+ * thing here and they are drawn together, so a screen that lost one would be measured
+ * with the other still in it.
+ */
+const myWorkRows: MyWorkRow[] = [
+  {
+    itemId: items[0].id,
+    tenderId: "8f14e45f-ceea-4d67-b4a7-4c5e2f6a1b90",
+    productName: items[0].productName,
+    clientName: "ChulalongkornMemorialHospitalProcurementDepartment",
+    reference: "TR20260142MOPHDMSCENTRALPROCUREMENT0098",
+    internalQuoteDeadline: "2026-08-07",
+    status: { tone: "alarm", days: -5 },
+  },
+  {
+    itemId: items[1].id,
+    tenderId: "8f14e45f-ceea-4d67-b4a7-4c5e2f6a1b90",
+    productName: items[1].productName,
+    clientName: "Bangkok Metropolitan Administration",
+    reference: "TR-2026-0142",
+    internalQuoteDeadline: "2026-08-13",
+    status: { tone: "signal", days: 1 },
+  },
+  {
+    itemId: items[2].id,
+    tenderId: "1c9d3b77-0a52-4c1e-9f88-2b6d4e7a5c31",
+    productName: items[2].productName,
+    clientName: "Siriraj Hospital, Faculty of Medicine",
+    reference: "TR-2026-0151",
+    internalQuoteDeadline: "2026-09-30",
+    status: { tone: "calm", days: 49 },
+  },
+];
 
 
 export const tender: Tender = {

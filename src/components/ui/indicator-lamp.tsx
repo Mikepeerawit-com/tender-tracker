@@ -47,3 +47,23 @@ export function IndicatorLamp({
     </svg>
   );
 }
+
+/**
+ * The same three meanings as the lamp, said in type rather than in a dot.
+ *
+ * A row states its urgency twice on purpose — a lamp and a sentence — and this is what
+ * colours the sentence, so the two cannot end up disagreeing about which of the three a
+ * row is in. Kept beside {@link IndicatorLamp} because the tone vocabulary is one thing:
+ * a fourth tone added to `LampTone` should have exactly one place to be drawn wrong.
+ *
+ * Colour is still never the only copy of the meaning (ADR-0019) — the sentence these
+ * classes colour says it in words, which is why `alarm` and `signal` add weight rather
+ * than relying on hue alone.
+ */
+export function toneTextClass(tone: LampTone): string {
+  return {
+    alarm: "text-alarm-ink font-medium",
+    signal: "text-signal-ink font-medium",
+    calm: "text-ink-faint",
+  }[tone];
+}
