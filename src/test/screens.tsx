@@ -173,6 +173,10 @@ export function screens(m: Messages) {
           callerId={quotes[0].sourcedByUserId}
           ownerUserId="user-somchai"
           selectedQuoteId={quotes[0].id}
+          // The Owner's view of the Item, which is the one with two Quotes side by side
+          // in it and therefore the one worth measuring. What a non-Owner gets is this
+          // list one row shorter — fewer rows, identical markup.
+          yourQuotesOnly={false}
         />
         <QuoteForm
           tenderId={tender.id}

@@ -42,6 +42,7 @@ export function QuoteList({
   callerId,
   ownerUserId,
   selectedQuoteId,
+  yourQuotesOnly,
 }: {
   tenderId: string;
   tenderItemId: string;
@@ -54,12 +55,25 @@ export function QuoteList({
   ownerUserId: string;
   /** The Item's Selected Quote, whose deletion costs a decision and so asks twice. */
   selectedQuoteId: string | null;
+  /**
+   * Whether `quotes` is the reader's own work rather than the Item's whole record
+   * (ADR-0020) — which changes only the sentence drawn when there are none of them.
+   *
+   * Required rather than defaulted, because the wrong answer is a sentence about the Item
+   * that is not true: "nothing recorded against this item yet", said to somebody whose
+   * colleague recorded a price this morning.
+   */
+  yourQuotesOnly: boolean;
 }) {
   const t = useTranslations("quotes");
   const format = useFormatter();
 
   if (quotes.length === 0) {
-    return <p className="text-muted-foreground text-sm">{t("none")}</p>;
+    return (
+      <p className="text-muted-foreground text-sm">
+        {yourQuotesOnly ? t("yours.none") : t("none")}
+      </p>
+    );
   }
 
   return (

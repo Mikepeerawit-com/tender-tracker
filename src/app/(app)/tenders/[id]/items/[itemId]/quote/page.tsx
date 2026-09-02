@@ -62,14 +62,35 @@ export default async function ItemSourcingPage({
   // One call, and every read inside it that can run alongside another does. It is a
   // function rather than a run of awaits here because that ordering has a silent failure
   // in it — see `loadItemSourcingScreen`, which is where it is explained and tested.
-  const { quotes, photos, refusals, referenceImages, timezone, members, selectedQuoteId } =
-    await loadItemSourcingScreen(
+  //
+  // `quotes` is whose it is allowed to be, decided in there rather than here (ADR-0020,
+  // #93): the Owner is handed every Quote on the Item and everybody else their own. The
+  // list below draws whatever it gets, and that is the point — nothing here filters a
+  // price out, because a rival's price never arrives to be filtered. `yourQuotesOnly` is
+  // only ever read for words — which heading to draw, and which sentence `QuoteList`
+  // draws in place of the list when it is empty.
+  const {
+    quotes,
+    yourQuotesOnly,
+    photos,
+    refusals,
+    referenceImages,
+    timezone,
+    members,
+    selectedQuoteId,
+  } = await loadItemSourcingScreen(
+    {
+      tenderId: tender.id,
+      tenderItemId: item.id,
       // The org's members are read only for the enrol-yourself control below, and that
       // control is drawn on exactly one branch of this page. An Assignee — who is who
       // this screen is for — never sees it, and now never pays for it either.
-      { tenderId: tender.id, tenderItemId: item.id, withMembers: !isAssignee },
-      store,
-    );
+      withMembers: !isAssignee,
+      ownerUserId: tender.ownerUserId,
+      callerId: user.id,
+    },
+    store,
+  );
 
   // The day the org is having, not the one the server is having: Vercel runs UTC, which
   // would default a Bangkok evening's Quote to yesterday. The instant is resolved once
@@ -114,8 +135,18 @@ export default async function ItemSourcingPage({
       />
 
       <section className="flex flex-col gap-4">
+        {/* The heading counts what is in the list beneath it, and says whose it is. A
+            non-Owner reads "2 quotes from you" over their two, rather than "2 quotes
+            recorded" — which would be this screen making a claim about the Item that
+            ADR-0020 has just decided this reader does not get told.
+
+            No sentence here explaining the rule: #92 says it on the Tender detail, one
+            tap back, and this is the screen somebody opens several times per Item. Said
+            on every visit it would be furniture. */}
         <h2 className="text-sm font-medium">
-          {t("recorded", { count: quotes.length })}
+          {yourQuotesOnly
+            ? t("yours.recorded", { count: quotes.length })
+            : t("recorded", { count: quotes.length })}
         </h2>
         <QuoteList
           tenderId={tender.id}
@@ -125,6 +156,7 @@ export default async function ItemSourcingPage({
           callerId={user.id}
           ownerUserId={tender.ownerUserId}
           selectedQuoteId={selectedQuoteId}
+          yourQuotesOnly={yourQuotesOnly}
         />
       </section>
 
