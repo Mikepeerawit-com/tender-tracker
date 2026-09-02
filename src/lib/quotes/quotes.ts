@@ -652,6 +652,51 @@ export async function countItemSourcing(
 }
 
 /**
+ * Which of these Items **one Assignee** has already answered for — Quoted, or marked No
+ * Supplier Found.
+ *
+ * The per-reader half of the sourcing read, and it lives here beside
+ * {@link countItemSourcing} for the reason `worklist.ts` gives about its own half: the
+ * third sourcing state is defined in this module, so every question about it is asked
+ * here. What My work needs is the same two tables narrowed by one column each —
+ * `created_by_user_id` on the Quote, `user_id` on the refusal — and that column is the
+ * whole of the difference between the two screens.
+ *
+ * **A set rather than counts, and the two folded together**, which is where this parts
+ * company with `countItemSourcing`. That one keeps Quotes and refusals apart because the
+ * worklist has to tell "nobody could supply this" from "nobody tried", and Sourcing
+ * Overdue is exactly the difference. Here the distinction has already been made, by the
+ * reader, and either answer ends their row: both are answers and only silence is not.
+ */
+export async function answeredBy(
+  itemIds: string[],
+  userId: string,
+  store: SessionCookieStore,
+): Promise<Set<string>> {
+  if (itemIds.length === 0) return new Set();
+
+  const supabase = createSessionClient(store);
+  // Independent of each other, so they go together rather than one after the other.
+  const [quotes, refusals] = await Promise.all([
+    supabase
+      .from("quotes")
+      .select("tender_item_id")
+      .in("tender_item_id", itemIds)
+      .eq("created_by_user_id", userId),
+    supabase
+      .from("no_supplier_found")
+      .select("tender_item_id")
+      .in("tender_item_id", itemIds)
+      .eq("user_id", userId),
+  ]);
+
+  return new Set([
+    ...(quotes.data ?? []).map((quote) => quote.tender_item_id),
+    ...(refusals.data ?? []).map((refusal) => refusal.tender_item_id),
+  ]);
+}
+
+/**
  * A supplier by name within the org, created if this is the first time anybody rang
  * them.
  *

@@ -8,6 +8,7 @@ import {
   isSubmissionMissed,
   notYetSourcedCount,
   rowStatus,
+  sourcingDeadlineStatus,
   tenderProgress,
   worklistGroup,
   worklistGroups,
@@ -547,5 +548,30 @@ describe("rowStatus", () => {
       "submission_missed",
       "unsourced",
     ]);
+  });
+});
+
+describe("sourcingDeadlineStatus", () => {
+  // The day everything below is placed around, as everywhere else in this file.
+  const today = "2026-08-10";
+
+  it("counts the days to the Assignee's own deadline, forwards and backwards", () => {
+    expect(sourcingDeadlineStatus("2026-08-12", today).days).toBe(2);
+    expect(sourcingDeadlineStatus("2026-08-10", today).days).toBe(0);
+    expect(sourcingDeadlineStatus("2026-08-07", today).days).toBe(-3);
+  });
+
+  it("holds the rolling window at seven days, inclusive, and goes quiet beyond it", () => {
+    // The boundary a fixture-based test cannot reach twice: the seventh day is still
+    // inside the window and the eighth is not, and the difference is one lamp.
+    expect(sourcingDeadlineStatus("2026-08-17", today).tone).toBe("signal");
+    expect(sourcingDeadlineStatus("2026-08-18", today).tone).toBe("calm");
+  });
+
+  it("calls a day already gone by an alarm, because the Item is this reader's and late", () => {
+    // Where `rowStatus` reads a spent date as calm, it is talking about a Tender
+    // somebody has dealt with. Every row of My work is an Item its reader has not.
+    expect(sourcingDeadlineStatus("2026-08-09", today)).toEqual({ tone: "alarm", days: -1 });
+    expect(sourcingDeadlineStatus("2026-08-10", today).tone).toBe("signal");
   });
 });

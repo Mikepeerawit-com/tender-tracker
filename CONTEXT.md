@@ -80,9 +80,18 @@ A Tender Item an Assignee has neither Quoted nor marked No Supplier Found. The t
 sourcing state, and the only one that is overdue: an Item nobody has touched means
 different work from one somebody has already given up on.
 
-It has a screen of its own: **My work** lists exactly the Items an Assignee is Not Yet
-Sourced on, and nothing else. The list is finishable — marking No Supplier Found removes
-a row just as entering a Quote does, because both are answers and only silence is not.
+It has a screen of its own: **My work** lists the Items an Assignee is Not Yet Sourced
+on, and nothing else anybody could still answer for. The list is finishable — marking No
+Supplier Found removes a row just as entering a Quote does, because both are answers and
+only silence is not.
+
+Two things end a row without the Assignee doing anything, and they are the price of
+finishable: an Item whose **Outcome** has been recorded, and one on a Tender whose **Bid
+has gone out**. Neither is still work — the client pulled it, or it was bid without their
+price — and a row nobody is asking for is one no honest act of theirs could ever clear.
+Leaving them on would mean an Assignee reaching zero only by claiming they could not
+source something that was never wanted.
+
 _Label_: the screen is "My work"; a row is never headed "pending".
 _Avoid_: no quote, missing, blank, pending
 

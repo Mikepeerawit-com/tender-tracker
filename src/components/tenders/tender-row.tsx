@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { IndicatorLamp } from "@/components/ui/indicator-lamp";
+import { deadlineReading } from "@/components/tenders/deadline-reading";
+import { IndicatorLamp, toneTextClass } from "@/components/ui/indicator-lamp";
+import { RowChevron } from "@/components/ui/row-chevron";
 import {
   calendarDate,
   calendarDateFormat,
@@ -67,11 +69,7 @@ export function TenderRow({
     internal_quote: tender.internalQuoteDeadline,
     client_submission: tender.clientSubmissionDeadline,
   };
-  const tone = {
-    alarm: "text-alarm-ink font-medium",
-    signal: "text-signal-ink font-medium",
-    calm: "text-ink-faint",
-  }[tender.status.tone];
+  const tone = toneTextClass(tender.status.tone);
 
   // `prefetch={false}` because the prefetch is bought and then thrown away. Every route
   // here is dynamic, so Next prefetches the shell down to `(app)/loading.tsx` — which
@@ -119,22 +117,7 @@ export function TenderRow({
         </div>
       </div>
 
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden="true"
-        className="text-border mt-3 shrink-0"
-      >
-        <path
-          d="M9 5l7 7-7 7"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+      <RowChevron />
     </Link>
   );
 }
@@ -142,10 +125,9 @@ export function TenderRow({
 /**
  * The one sentence the row states, chosen from what {@link rowStatus} worked out.
  *
- * The *today / tomorrow / a date* reading is made here rather than in the rules because
- * it is a wording decision: "tomorrow" is a word, and which day counts as tomorrow is
- * arithmetic somebody else already did. A date already gone by gets its own reading
- * rather than a negative number of days — nobody says a deadline is due in minus six.
+ * The *today / tomorrow / a date* reading is made beside the message keys rather than in
+ * the rules because it is a wording decision — see `deadline-reading.ts`, which holds it
+ * for this row and for My work's, since both say the sentence off the same four keys.
  *
  * The keys are built rather than written out, so `messages.test.ts` cannot see them by
  * scanning the source. That is what the walk over `deadlineKinds` × the four readings is
@@ -174,16 +156,7 @@ function statusSentence(
     return t("row.awaitingDecision", { date: instantDay(tender.submittedAt!) });
   }
 
-  const when =
-    status.days < 0
-      ? "passed"
-      : status.days === 0
-        ? "today"
-        : status.days === 1
-          ? "tomorrow"
-          : "on";
-
-  return t(`row.due.${status.deadline}.${when}`, {
+  return t(`row.due.${status.deadline}.${deadlineReading(status.days)}`, {
     date: day(deadlines[status.deadline]),
   });
 }
