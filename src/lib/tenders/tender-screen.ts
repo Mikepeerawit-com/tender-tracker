@@ -8,7 +8,7 @@ import { getOrgSettings } from "@/lib/org/org";
 import type { NoSupplierFound, Quote } from "@/lib/quotes/quotes";
 import type { SessionCookieStore } from "@/lib/supabase/session-client";
 import { getTender, type Tender } from "@/lib/tenders/tenders";
-import { ownsTender } from "@/lib/tenders/viewer";
+import { ownsTender, yourQuotes } from "@/lib/tenders/viewer";
 
 /** Everything screen 5 draws whoever is reading it. */
 type TenderScreenFacts = {
@@ -95,12 +95,16 @@ export type SourcingItem = {
   /**
    * This reader's own "I could not source this", or null if they have not said it.
    *
-   * Their own, and not a count of everybody's — the same rule as the Quotes, applied to
-   * the refusals for the same reason. A colleague's refusal is a fact about their job,
-   * and this screen is about yours. (#93 takes the same question on the item sourcing
-   * screen, where the refusal notes actually live and where the answer may differ:
-   * "somebody else could not source this either" is worth knowing where you are about to
-   * ring the same suppliers.)
+   * Their own, and not a count of everybody's — because here a refusal is one line of a
+   * per-Item summary of *your* work, and a colleague's belongs in nobody's summary but
+   * theirs.
+   *
+   * **#93 answered the same question the other way, deliberately.** On the item sourcing
+   * screen the refusal notes are shown whole, to everybody: that is where they are
+   * written, and "I rang everybody I know and none of them stock it" is the most useful
+   * sentence on the page for the reader about to ring the same suppliers. A refusal is
+   * not a price and there is nothing in one to undercut, so ADR-0020 does not reach it.
+   * See `refusals` in `@/lib/quotes/item-sourcing-screen` for the decision in full.
    */
   yourNoSupplierFound: NoSupplierFound | null;
 };
@@ -199,8 +203,9 @@ export async function loadTenderScreen(
  * The Tender's Items with everything but this reader's own work taken off them.
  *
  * The subtraction is done once, here, over the sheet the batch already read — so there is
- * exactly one place that decides what survives into the reduced shape, and it is a place
- * a test can call. Adding a field to {@link SourcingItem} is an edit to this function; a
+ * exactly one place that decides what survives into {@link SourcingItem}, and it is a
+ * place a test can call. *Which* Quotes survive is not decided here at all: that is
+ * `yourQuotes` in `./viewer`, the one sentence the item sourcing screen asks too. Adding a field to {@link SourcingItem} is an edit to this function; a
  * field added to the sheet reaches nobody until somebody edits it.
  */
 function yourWorkOnly(
@@ -212,7 +217,7 @@ function yourWorkOnly(
     productName: item.productName,
     quantity: item.quantity,
     unit: item.unit,
-    yourQuotes: item.quotes.filter((quote) => quote.sourcedByUserId === callerId),
+    yourQuotes: yourQuotes(item.quotes, callerId),
     yourNoSupplierFound:
       item.sourcing.noSupplierFound.find((refusal) => refusal.userId === callerId) ??
       null,

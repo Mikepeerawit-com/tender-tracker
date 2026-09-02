@@ -288,6 +288,10 @@
     "asked": "What the client asked for",
     "recorded": "{count, plural, =1 {# quote recorded} other {# quotes recorded}}",
     "none": "Nothing recorded against this item yet.",
+    "yours": {
+      "recorded": "{count, plural, =1 {# quote from you} other {# quotes from you}}",
+      "none": "You have not recorded a quote on this item yet."
+    },
     "add": "Add a quote",
     "addHint": "In the currency and the unit the supplier actually gave you. The conversion is ours to do, not yours.",
     "notAssignee": "Only an assignee can enter quotes on this tender — they are the one who rang the supplier. Add yourself below and the form appears.",

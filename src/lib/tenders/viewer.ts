@@ -8,8 +8,12 @@
  * at somebody else's Tender is a reader like any other, exactly as `mayCorrectQuote` has
  * it, and that is the sentence this file exists to make hard to write differently twice.
  *
- * It is deliberately *not* `server-only`. `loadTenderScreen` asks it on the server and
- * `mayCorrectQuote` asks it from a module the Quote list and the edit page both reach in a
+ * Two sentences live here: who owns a Tender, and which Quotes are yours. Both screens
+ * that reduce — `loadTenderScreen` (#92) and `loadItemSourcingScreen` (#93) — ask them
+ * rather than restating them, which is the whole point of the file.
+ *
+ * It is deliberately *not* `server-only`. The loaders ask on the server, and
+ * `mayCorrectQuote` asks from a module the Quote list and the edit page both reach in a
  * browser test — the same reason `mayCorrectQuote` itself lives outside
  * `@/lib/quotes/quotes` rather than beside the writes it guards.
  *
@@ -35,4 +39,29 @@ export function ownsTender({
   callerId: string;
 }): boolean {
   return ownerUserId !== null && ownerUserId === callerId;
+}
+
+/**
+ * The Quotes among these that this reader sourced, and no others.
+ *
+ * The other half of ADR-0020, and here for the reason `ownsTender` is: two screens
+ * subtract, and a rule written out twice is a rule that gets fixed in one of the two.
+ * `loadTenderScreen` asks it of one Item's Quotes off the comparison sheet and
+ * `loadItemSourcingScreen` of the Item it is about, and both are asking the same thing —
+ * **a Quote is yours if you rang the supplier**. `sourcedByUserId` is a column, never
+ * derived from anything, which is what makes that answerable at all.
+ *
+ * Filtering rather than flagging, deliberately: what comes back is the list the screen
+ * draws, so a rival's price is absent from the shape rather than sitting in it behind a
+ * boolean somebody has to remember to read.
+ *
+ * Generic over the row rather than typed to `Quote`, so that asking it costs no import
+ * from `@/lib/quotes/quotes` — which is `server-only`, and would drag this file into
+ * being so too.
+ */
+export function yourQuotes<T extends { sourcedByUserId: string }>(
+  quotes: T[],
+  callerId: string,
+): T[] {
+  return quotes.filter((quote) => quote.sourcedByUserId === callerId);
 }
