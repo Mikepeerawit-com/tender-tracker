@@ -94,15 +94,21 @@ export function QuoteList({
               : "border-border"
           }`}
         >
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <span className="font-medium">{quote.supplierName}</span>
+          <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
+            {/* A supplier's own registered name, which is a string nobody here chose
+                the width of and which regularly arrives as one unbroken run. */}
+            <span className="min-w-0 font-medium break-words">{quote.supplierName}</span>
             <span className="text-muted-foreground text-xs">
               {t("sourcedBy", { name: quote.sourcedByName })}
             </span>
           </div>
 
           {quote.matchType === "alternative" ? (
-            <p className="text-sm">
+            // `break-words`, like every other name a supplier or a client supplies:
+            // what was actually priced is the supplier's own product string, and an
+            // unbroken 60-character run of one is ordinary. Without this the row pushes
+            // the page sideways at 390px, which is ADR-0009's bar.
+            <p className="min-w-0 text-sm break-words">
               <span className="field-label bg-flag-wash text-flag-ink mr-2 rounded px-1.5 py-0.5 text-[0.7rem] font-medium">
                 {t("matchType.alternative")}
               </span>

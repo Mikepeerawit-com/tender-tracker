@@ -37,6 +37,10 @@ vi.mock("@/app/actions/quotes", () => ({
   createQuoteAction: async () => ({}),
   updateQuoteAction: async () => ({}),
   deleteQuoteAction: async () => ({}),
+  // The reduced sourcing screen draws `NoSupplierFoundForm`, which reaches for both of
+  // these through `useActionState` — an undefined action there throws on render.
+  recordNoSupplierFoundAction: async () => ({}),
+  clearNoSupplierFoundAction: async () => ({}),
 }));
 // `QuoteList` draws each Quote's photo controls, which reach for these.
 vi.mock("@/app/actions/quote-photos", () => ({
