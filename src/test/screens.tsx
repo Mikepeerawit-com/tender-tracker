@@ -1,10 +1,12 @@
-import { NextIntlClientProvider } from "next-intl";
+import { NextIntlClientProvider, useTranslations } from "next-intl";
 
 import "@/app/globals.css";
 
 import { AppHeader } from "@/components/app-header";
+import { ImageCountBadge } from "@/components/images/image-count-badge";
 import { EditQuoteForm } from "@/components/quotes/edit-quote-form";
 import { ItemBrief } from "@/components/quotes/item-brief";
+import { NoSupplierFoundForm } from "@/components/quotes/no-supplier-found-form";
 import { QuoteList } from "@/components/quotes/quote-list";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { OutstandingBand } from "@/components/tenders/outstanding-band";
@@ -20,9 +22,10 @@ import type { QuotePhoto } from "@/lib/images/quote-photos";
 import type { ReferenceImage } from "@/lib/images/reference-images";
 import type { Member } from "@/lib/org/members";
 import { blankQuote, quoteAsSubmitted } from "@/lib/quotes/quote-form";
-import type { Quote } from "@/lib/quotes/quotes";
-import type { SourcingItem } from "@/lib/tenders/tender-screen";
-import type { Tender } from "@/lib/tenders/tenders";
+import type { NoSupplierFound, Quote } from "@/lib/quotes/quotes";
+import type { OutstandingItem, SourcingItem } from "@/lib/tenders/tender-screen";
+import type { Tender, TenderItem } from "@/lib/tenders/tenders";
+import { yourQuotes } from "@/lib/tenders/viewer";
 import type { WorklistRow } from "@/lib/tenders/worklist";
 import en from "@/messages/en.json";
 import zhHans from "@/messages/zh-Hans.json";
@@ -106,9 +109,10 @@ export function screens(m: Messages) {
         >
           <p className="text-muted-foreground text-sm break-words">{tender.title}</p>
         </ScreenHeader>
-        {/* Two Items with nothing to break in their names, which is the row this band
-            has that can be any width — a product name is whatever the client called it. */}
-        <OutstandingBand tenderId={tender.id} items={outstanding} />
+        {/* The two Items the Owner has neither priced nor given up on, both named with
+            nothing in them to break at — which is the row this band has that can be any
+            width, because a product name is whatever the client called it. */}
+        <OutstandingBand tenderId={tender.id} items={yourOutstanding(tender.ownerUserId)} />
         <TenderFacts tender={tender} />
         <AssigneeControls
           tenderId={tender.id}
@@ -135,11 +139,13 @@ export function screens(m: Messages) {
         >
           <p className="text-muted-foreground text-sm break-words">{tender.title}</p>
         </ScreenHeader>
-        <OutstandingBand tenderId={tender.id} items={outstanding.slice(0, 1)} />
+        {/* The one Item this reader still owes, which is the whole of what the band
+            says to somebody who has already priced two of the three. */}
+        <OutstandingBand tenderId={tender.id} items={yourOutstanding("user-nok")} />
         <TenderFacts tender={tender} />
         <SourcingList
           tenderId={tender.id}
-          items={sourcingItems}
+          items={yourSourcing("user-nok")}
           photos={quotePhotos}
           referenceImages={referenceImages}
         />
@@ -157,32 +163,105 @@ export function screens(m: Messages) {
         {/* The brief, with the client's pictures in it — the block #75 put above the
             form so an Assignee can check they are pricing the right thing. */}
         <ItemBrief
-          productName="NitrileExaminationGlovesPowderFreeSizeMediumNonSterile"
-          quantity={40000}
-          unit="piece"
-          description="Non-sterile, TFDA registration number to be quoted alongside every line."
-          internalQuoteDeadline="2026-08-20"
+          productName={gloves.productName}
+          quantity={gloves.quantity}
+          unit={gloves.unit}
+          description={gloves.description}
+          internalQuoteDeadline={tender.internalQuoteDeadline}
         />
         <QuoteList
           tenderId={tender.id}
-          tenderItemId="item-gloves"
-          quotes={quotes}
+          tenderItemId={gloves.id}
+          quotes={gloveQuotes}
           photos={new Map()}
-          // The reader sourced these, so the row draws its edit and delete controls —
-          // which is the crowded case, and the one worth measuring at 390px.
-          callerId={quotes[0].sourcedByUserId}
-          ownerUserId="user-somchai"
-          selectedQuoteId={quotes[0].id}
-          // The Owner's view of the Item, which is the one with two Quotes side by side
-          // in it and therefore the one worth measuring. What a non-Owner gets is this
-          // list one row shorter — fewer rows, identical markup.
+          // The Owner is reading, and a Quote is correctable by whoever sourced it or by
+          // them (`mayCorrectQuote`) — so every row draws its edit and delete controls,
+          // which is the crowded case and the one worth measuring at 390px.
+          callerId={tender.ownerUserId}
+          ownerUserId={tender.ownerUserId}
+          selectedQuoteId={selectedGloveQuoteId}
+          // Every Quote on the Item, both Assignees' — the Owner's view, and the widest
+          // this list gets. What a non-Owner reads is the screen below rather than this
+          // one with rows removed: it counts the list differently and carries a form this
+          // one does not (#94).
           yourQuotesOnly={false}
         />
         <QuoteForm
           tenderId={tender.id}
-          tenderItemId="item-gloves"
-          defaults={blankQuote({ unit: "piece", today: "2026-08-12" })}
+          tenderItemId={gloves.id}
+          defaults={blankQuote({ unit: gloves.unit, today: "2026-08-12" })}
         />
+      </Body>
+    ),
+    // The same route, drawn for an Assignee who does not own the Tender (ADR-0020, #93):
+    // their own Quotes and nobody else's, counted in words that say whose they are. This
+    // is the screen the reduction is really for — an Assignee opens it several times per
+    // Item off a run of supplier calls, and it is the one place they type anything — so
+    // it is composed whole here, down to the form and the refusal box the Owner's copy
+    // above leaves out.
+    "sourcing an item on a tender somebody else owns": (
+      <Body width="max-w-3xl" bar={<AppHeader isOrgAdmin location={itemBar} />}>
+        <ItemBrief
+          productName={gloves.productName}
+          quantity={gloves.quantity}
+          unit={gloves.unit}
+          description={gloves.description}
+          internalQuoteDeadline={tender.internalQuoteDeadline}
+          // What the client sent, narrowed to this Item as `loadItemSourcingScreen`
+          // narrows it — an Assignee shows their supplier the picture of the thing they
+          // are being asked to price, and a picture of another Item is not it. The badge
+          // draws nothing at all when there are none, so no guard is written here.
+          images={
+            <ReferenceImages label={gloves.productName} images={imagesOn(gloves.id)} />
+          }
+        />
+
+        <section className="flex flex-col gap-4">
+          {/* "2 quotes from you", never "2 quotes recorded": the heading counts this
+              reader's own work rather than making a claim about the Item that ADR-0020
+              has just decided they do not get told. */}
+          <YourQuotesHeading count={yourGloveQuotes.length} />
+          <QuoteList
+            tenderId={tender.id}
+            tenderItemId={gloves.id}
+            quotes={yourGloveQuotes}
+            photos={quotePhotos}
+            callerId="user-nok"
+            ownerUserId={tender.ownerUserId}
+            // The Owner picked somebody else's Quote, so the loader drops the id rather
+            // than pointing it at a row this reader was never handed.
+            selectedQuoteId={null}
+            yourQuotesOnly
+          />
+        </section>
+
+        <section className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-sm font-medium">{m.quotes.add}</h2>
+            <p className="text-muted-foreground text-xs">{m.quotes.addHint}</p>
+          </div>
+          <QuoteForm
+            tenderId={tender.id}
+            tenderItemId={gloves.id}
+            defaults={blankQuote({ unit: gloves.unit, today: "2026-08-12" })}
+          />
+        </section>
+
+        {/* The third state, in the dashed box the page gives it: an Assignee saying
+            they could not source this at all. It draws the form rather than a record,
+            because nobody has given up on the gloves — this reader has not, and the two
+            colleagues who could have have both priced them instead. A colleague's note,
+            when there is one, is shown as fact and is measured on the Tender detail. */}
+        <section className="border-border rounded-lg border border-dashed p-4">
+          <NoSupplierFoundForm
+            tenderId={tender.id}
+            tenderItemId={gloves.id}
+            mine={null}
+            others={refusalsOn(gloves.id).filter(
+              (refusal) => refusal.userId !== "user-nok",
+            )}
+          />
+        </section>
       </Body>
     ),
     "correcting a quote": (
@@ -195,12 +274,12 @@ export function screens(m: Messages) {
         </header>
         <EditQuoteForm
           tenderId={tender.id}
-          tenderItemId="item-gloves"
-          quoteId={quotes[0].id}
+          tenderItemId={gloves.id}
+          quoteId={gloveQuotes[0].id}
           // A non-THB Quote, so the read-only currency cell is drawn carrying a real
           // currency rather than the reporting one it would default to.
-          currency={quotes[0].currency}
-          defaults={quoteAsSubmitted(quotes[0])}
+          currency={gloveQuotes[0].currency}
+          defaults={quoteAsSubmitted(gloveQuotes[0])}
         />
       </Body>
     ),
@@ -275,6 +354,39 @@ export function Body({
   );
 }
 
+/**
+ * The heading the sourcing screen draws over one reader's own Quotes: "2 quotes from
+ * you", never "2 quotes recorded".
+ *
+ * A component rather than a string read off `m`, because it is a counted sentence —
+ * `{count, plural, …}` — and the raw message pasted into the markup would draw its ICU
+ * source rather than the words a reader sees, which is a different screen to measure and
+ * a worse one to photograph. {@link ReferenceImages} is here for the same reason.
+ */
+function YourQuotesHeading({ count }: { count: number }) {
+  const t = useTranslations("quotes");
+
+  return <h2 className="text-sm font-medium">{t("yours.recorded", { count })}</h2>;
+}
+
+/** The client's own pictures for one Item, as the sourcing page hands them to the brief. */
+function ReferenceImages({
+  label,
+  images,
+}: {
+  label: string;
+  images: ReferenceImage[];
+}) {
+  const t = useTranslations("tenders.referenceImages");
+
+  return (
+    <ImageCountBadge
+      openLabel={t("openCount", { label, count: images.length })}
+      images={images}
+    />
+  );
+}
+
 /** The two record bars, carrying the unbroken strings a client really supplies. */
 const tenderBar = {
   kind: "record",
@@ -297,6 +409,8 @@ const members: Member[] = [
   { id: "user-somchai", name: "Somchai Prasertkul" },
   { id: "user-nok", name: "Nok Wattanapong" },
   { id: "user-wei", name: "Wei Zhang" },
+  // Not on this Tender, so the enrol-yourself picker has somebody left to name.
+  { id: "user-ploy", name: "Ploy Sirikanya" },
 ];
 
 const rowBase = {
@@ -351,13 +465,49 @@ const deadRow: WorklistRow = {
   status: { kind: "submission_missed", tone: "alarm", days: 128 },
 };
 
-const outstanding = [
-  { id: "item-gloves", productName: "Nitrile examination glove, powder-free, size M" },
+/**
+ * The Tender's Items — several of them, because a Tender with one on it is not the case
+ * the Assignee's reduced screens are for (#94).
+ *
+ * Everything below that is about an Item is derived from these rather than written out
+ * again beside them: a `SourcingItem` is one of these carrying one reader's own work, and
+ * the outstanding band names two of them. Held once, they cannot come to disagree about
+ * what the client asked for.
+ */
+const items: TenderItem[] = [
+  {
+    id: "item-gloves",
+    productName: "NitrileExaminationGlovesPowderFreeSizeMediumNonSterile",
+    description:
+      "Non-sterile, TFDA registration number to be quoted alongside every line.",
+    quantity: 40000,
+    unit: "piece",
+    outcome: null,
+    outcomeAt: null,
+  },
   {
     id: "item-masks",
     productName: "SurgicalFaceMaskThreePlyTypeIIRWithEarloopsNonSterile",
+    description: null,
+    quantity: 2000,
+    unit: "box of 50",
+    outcome: null,
+    outcomeAt: null,
+  },
+  {
+    id: "item-syringes",
+    productName: "Disposable syringe, 5ml, luer lock",
+    description: null,
+    quantity: 12000,
+    unit: "piece",
+    outcome: null,
+    outcomeAt: null,
   },
 ];
+
+/** The Item both sourcing screens are about, named rather than indexed at five sites. */
+const gloves = items[0];
+
 
 export const tender: Tender = {
   id: "8f14e45f-ceea-4d67-b4a7-4c5e2f6a1b90",
@@ -374,11 +524,34 @@ export const tender: Tender = {
   // Free text somebody typed, which is the fact on this grid that can be any length.
   notes:
     "Client asked for the TFDA registration numbers alongside every line, and confirmation that gloves are non-sterile.",
-  items: [],
-  assignees: [{ id: "user-nok", name: "Nok Wattanapong" }],
+  items,
+  // Three, and the Owner is one of them. Two non-Owner Assignees are what make the
+  // reduction visible at all — ADR-0020 hides a colleague's price, and a Tender with one
+  // Assignee on it has no colleague to hide — and the Owner is here because only an
+  // Assignee may enter a Quote (`CONTEXT.md`, **Assignee**). Without that, the Owner's
+  // sourcing screen below draws a form the page would have refused them, and precedence
+  // is settled: a user who is both sees everything.
+  assignees: [
+    { id: "user-somchai", name: "Somchai Prasertkul" },
+    { id: "user-nok", name: "Nok Wattanapong" },
+    { id: "user-wei", name: "Wei Zhang" },
+  ],
 };
 
-const quotes: Quote[] = [
+/**
+ * Every Quote on the Tender, from both of its Assignees — the Item's whole record, which
+ * is what the Owner is handed and what the two reduced screens are a subset of (ADR-0020).
+ *
+ * Several on each Item, and two people's on the Item both sourcing screens draw, because
+ * that is the only arrangement in which the reduction is a visible thing at all: the
+ * Owner's copy of the gloves screen lists three, and an Assignee's lists the two that are
+ * theirs. A fixture with one Quote on it would photograph the same screen twice.
+ *
+ * Every rate is frozen into the row as a real one is, and the THB figure is
+ * `unitPrice × fxRateApplied` — the product the database computes, so that nothing here
+ * is a number the app could not have produced.
+ */
+const everyQuote: Quote[] = [
   {
     id: "q1a",
     tenderItemId: "item-gloves",
@@ -386,7 +559,7 @@ const quotes: Quote[] = [
     unitPrice: 0.42,
     currency: "CNY",
     quotedUnit: "piece",
-    unitPriceThb: 2.124,
+    unitPriceThb: 2.124864,
     fxRateMid: 4.96,
     fxRateApplied: 5.0592,
     fxRateAsOf: "2026-08-11",
@@ -396,52 +569,240 @@ const quotes: Quote[] = [
     alternativeProductName: null,
     detailNotes: null,
     quotedAt: "2026-08-12",
+    sourcedByUserId: "user-nok",
+    sourcedByName: "Nok Wattanapong",
+  },
+  /* An alternative, which is the widest row either quote list has: it carries a second
+     product name under the supplier's — what the supplier actually priced, in their
+     words, and therefore a string nobody here chose the length of. */
+  {
+    id: "q1b",
+    tenderItemId: "item-gloves",
+    supplierName: "Top Glove (Thailand) Co., Ltd.",
+    unitPrice: 2.35,
+    currency: "THB",
+    quotedUnit: "piece",
+    // A THB Quote stores both rates as 1 and is not converted at all.
+    unitPriceThb: 2.35,
+    fxRateMid: 1,
+    fxRateApplied: 1,
+    fxRateAsOf: "2026-08-13",
+    fxRateIsStale: false,
+    leadTimeDays: 21,
+    matchType: "alternative",
+    alternativeProductName:
+      "NitrileExaminationGlovePowderFreeSizeMediumBlueTFDARegistered",
+    detailNotes: null,
+    quotedAt: "2026-08-13",
+    sourcedByUserId: "user-nok",
+    sourcedByName: "Nok Wattanapong",
+  },
+  /* The other Assignee's, on the same Item — the row the Owner reads and the reduced
+     screen never receives. It is here to be subtracted. */
+  {
+    id: "q1c",
+    tenderItemId: "item-gloves",
+    supplierName: "GuangzhouImproveMedicalInstrumentsCoLtd",
+    unitPrice: 0.062,
+    currency: "USD",
+    quotedUnit: "piece",
+    unitPriceThb: 2.074272,
+    fxRateMid: 32.8,
+    fxRateApplied: 33.456,
+    fxRateAsOf: "2026-08-10",
+    fxRateIsStale: false,
+    leadTimeDays: 45,
+    matchType: "exact",
+    alternativeProductName: null,
+    detailNotes: null,
+    quotedAt: "2026-08-11",
+    sourcedByUserId: "user-wei",
+    sourcedByName: "Wei Zhang",
+  },
+  {
+    id: "q2a",
+    tenderItemId: "item-masks",
+    supplierName: "AnhuiZhongkeMedicalDevicesManufacturingCoLtd",
+    unitPrice: 62.5,
+    currency: "CNY",
+    quotedUnit: "box of 50",
+    unitPriceThb: 316.2,
+    fxRateMid: 4.96,
+    fxRateApplied: 5.0592,
+    fxRateAsOf: "2026-08-11",
+    fxRateIsStale: false,
+    leadTimeDays: 25,
+    matchType: "exact",
+    alternativeProductName: null,
+    detailNotes: null,
+    quotedAt: "2026-08-12",
+    sourcedByUserId: "user-wei",
+    sourcedByName: "Wei Zhang",
+  },
+  {
+    id: "q2b",
+    tenderItemId: "item-masks",
+    supplierName: "Bangkok Safety Supplies Co., Ltd.",
+    unitPrice: 340,
+    currency: "THB",
+    quotedUnit: "box of 50",
+    unitPriceThb: 340,
+    fxRateMid: 1,
+    fxRateApplied: 1,
+    fxRateAsOf: "2026-08-14",
+    fxRateIsStale: false,
+    leadTimeDays: 7,
+    matchType: "exact",
+    alternativeProductName: null,
+    detailNotes: null,
+    quotedAt: "2026-08-14",
+    sourcedByUserId: "user-wei",
+    sourcedByName: "Wei Zhang",
+  },
+  {
+    id: "q3a",
+    tenderItemId: "item-syringes",
+    supplierName: "Zhejiang Kangfu Medical Devices Co., Ltd.",
+    unitPrice: 1.15,
+    currency: "CNY",
+    quotedUnit: "piece",
+    unitPriceThb: 5.81808,
+    fxRateMid: 4.96,
+    fxRateApplied: 5.0592,
+    fxRateAsOf: "2026-08-11",
+    fxRateIsStale: false,
+    leadTimeDays: 35,
+    matchType: "exact",
+    alternativeProductName: null,
+    detailNotes: null,
+    quotedAt: "2026-08-12",
+    sourcedByUserId: "user-wei",
+    sourcedByName: "Wei Zhang",
+  },
+  /* The Owner's own, and the only Item they have priced — which is what leaves them
+     owing the two the outstanding band names on their screen. */
+  {
+    id: "q3b",
+    tenderItemId: "item-syringes",
+    supplierName: "Siam Pharma Supply Co., Ltd.",
+    unitPrice: 5.4,
+    currency: "THB",
+    quotedUnit: "piece",
+    unitPriceThb: 5.4,
+    fxRateMid: 1,
+    fxRateApplied: 1,
+    fxRateAsOf: "2026-08-14",
+    fxRateIsStale: false,
+    leadTimeDays: 10,
+    matchType: "exact",
+    alternativeProductName: null,
+    detailNotes: null,
+    quotedAt: "2026-08-14",
     sourcedByUserId: "user-somchai",
     sourcedByName: "Somchai Prasertkul",
   },
 ];
 
-/**
- * The three states an Item is in on the reduced screen, each carrying the string on it
- * that nobody chose the width of.
- *
- * One Item quoted — a supplier's full registered name beside a price and a photo count —
- * one given up on with a note somebody typed, and one untouched. The widest row on this
- * screen is the refusal note, because it is the only free text on it.
- */
-const sourcingItems: SourcingItem[] = [
-  {
-    id: "item-gloves",
-    productName: "NitrileExaminationGlovesPowderFreeSizeMediumNonSterile",
-    quantity: 40000,
-    unit: "piece",
-    yourQuotes: [quotes[0]],
-    yourNoSupplierFound: null,
-  },
-  {
-    id: "item-masks",
-    productName: "SurgicalFaceMaskThreePlyTypeIIRWithEarloopsNonSterile",
-    quantity: 2000,
-    unit: "box of 50",
-    yourQuotes: [],
-    yourNoSupplierFound: {
-      userId: "user-nok",
-      name: "Nok Wattanapong",
-      note: "Discontinued by the manufacturer; the two importers left both quote a minimum order of ten thousand.",
-      createdAt: "2026-08-13T04:00:00Z",
-    },
-  },
-  {
-    id: "item-syringes",
-    productName: "Disposable syringe, 5ml, luer lock",
-    quantity: 12000,
-    unit: "piece",
-    yourQuotes: [],
-    yourNoSupplierFound: null,
-  },
-];
+/** One Item's Quotes in entry order — unranked, the way `listQuotes` leaves them. */
+function quotesOn(tenderItemId: string): Quote[] {
+  return everyQuote.filter((quote) => quote.tenderItemId === tenderItemId);
+}
 
-/** Three photos on the one Quote, so the badge draws a count rather than nothing. */
+/** The gloves Item's whole record: the Owner's list, and the Quote the edit screen corrects. */
+const gloveQuotes = quotesOn(gloves.id);
+
+/**
+ * The Item's Selected Quote: the Owner picked Wei's, neither of Nok's.
+ *
+ * Which is why the reduced screen is handed `null` in its place —
+ * `loadItemSourcingScreen` drops a selection naming a Quote the reader was not given,
+ * because an id pointing into a list it is not in is a dangling reference and the row it
+ * warns about is not on the screen.
+ */
+const selectedGloveQuoteId = "q1c";
+
+/**
+ * The same Item narrowed to one Assignee, asked through the predicate the loaders narrow
+ * with rather than written out by hand — so this fixture cannot draw somebody a row the
+ * real screen would have taken away.
+ */
+const yourGloveQuotes = yourQuotes(gloveQuotes, "user-nok");
+
+/**
+ * Who said they could not source what.
+ *
+ * Keyed by Item because a `NoSupplierFound` does not carry one: it is read per Item and is
+ * one Assignee's own within it. Assignees compete rather than divide (ADR-0004), so one of
+ * them failing is a fact about their suppliers and never a verdict on the Item — which is
+ * why the masks carry a refusal and two Quotes at once.
+ */
+const refusals = new Map<string, NoSupplierFound[]>([
+  [
+    "item-masks",
+    [
+      {
+        userId: "user-nok",
+        name: "Nok Wattanapong",
+        note: "Discontinued by the manufacturer; the two importers left both quote a minimum order of ten thousand.",
+        createdAt: "2026-08-13T04:00:00Z",
+      },
+    ],
+  ],
+]);
+
+function refusalsOn(tenderItemId: string): NoSupplierFound[] {
+  return refusals.get(tenderItemId) ?? [];
+}
+
+/**
+ * What one reader still owes on this Tender: an Item they have neither Quoted nor given
+ * up on, which is what an {@link OutstandingItem} is.
+ *
+ * Worked out here rather than listed, because the band and the sourcing below it are two
+ * views of the same facts: a band naming an Item whose Quotes are drawn a few inches
+ * under it is a screen the loader would never hand anybody. Nothing on this fixture is
+ * decided and nothing is submitted, so the two conditions `outstandingFor` also applies
+ * are not asked here.
+ */
+function yourOutstanding(callerId: string): OutstandingItem[] {
+  return items
+    .filter(
+      (item) =>
+        yourQuotes(quotesOn(item.id), callerId).length === 0 &&
+        !refusalsOn(item.id).some((refusal) => refusal.userId === callerId),
+    )
+    .map((item) => ({ id: item.id, productName: item.productName }));
+}
+
+/**
+ * The Tender's Items as one Assignee meets them on the reduced detail screen: their own
+ * Quotes, their own refusal, and nothing of anybody else's — the shape `loadTenderScreen`
+ * hands that screen, built the way it builds it.
+ *
+ * It is also the three states an Item is in there, each carrying the string on it nobody
+ * chose the width of. For Nok: one Item with two Quotes on it — a supplier's full
+ * registered name beside a price and a photo count — one given up on with a note they
+ * typed, and one untouched. The refusal note is the only free text on the screen, and the
+ * supplier names beside it are the only other strings the client and the supplier chose
+ * the length of.
+ */
+function yourSourcing(callerId: string): SourcingItem[] {
+  return items.map((item) => ({
+    id: item.id,
+    productName: item.productName,
+    quantity: item.quantity,
+    unit: item.unit,
+    yourQuotes: yourQuotes(quotesOn(item.id), callerId),
+    yourNoSupplierFound:
+      refusalsOn(item.id).find((refusal) => refusal.userId === callerId) ?? null,
+  }));
+}
+
+/**
+ * Three photos on one of this reader's own Quotes, so the badge draws a count rather than
+ * nothing — and none on the others, which is the map the loader really answers: a Quote
+ * with no photos is absent from it rather than present and empty.
+ */
 const quotePhotos = new Map<string, QuotePhoto[]>([
   [
     "q1a",
@@ -453,6 +814,11 @@ const quotePhotos = new Map<string, QuotePhoto[]>([
     })),
   ],
 ]);
+
+/** The client's own pictures for one Item, as both loaders hand them over. */
+function imagesOn(tenderItemId: string): ReferenceImage[] {
+  return referenceImages.filter((image) => image.tenderItemId === tenderItemId);
+}
 
 /** What the client sent, placed on the Item it is of. */
 const referenceImages: ReferenceImage[] = [
