@@ -27,6 +27,21 @@ import { matchTypes, type MatchType, type SubmittedQuote } from "@/lib/quotes/qu
  * because changing it changes what the stored price means (ADR-0018). Passing the cell in
  * is what keeps "there is no currency input on the edit form" a fact about the markup
  * rather than a `disabled` attribute a posted form could ignore.
+ *
+ * **No field here carries a hint of its own.** Every input used to have a sentence under
+ * it — nine things to read to write down one price, every visit, by everybody. #91's rule
+ * is what settles which survive: **a hint attached to a field goes, a hint attached to a
+ * section stays.** A field hint is re-read by everyone every time and says nothing the
+ * label did not; a section hint teaches a concept once, at the top of the group where it
+ * is used. What is left on this screen is three sentences, none of them under an input:
+ * what a Quote is entered in, above the form; what an Alternative is, above the radio
+ * group; and when the photos upload, above the picker.
+ *
+ * The Alternative's own name is the one that argues for an exception and does not get one.
+ * It is a field like the others, and the sentence above the radio group — "an alternative
+ * is a different product from the one asked for; it carries its own name" — is where that
+ * concept is taught, once, on the beat somebody chooses it. `quote-hints.test.tsx` counts
+ * what the form draws and `messages.test.ts` holds the retired strings out of the files.
  */
 export function QuoteFieldInputs({
   fields,
@@ -46,7 +61,7 @@ export function QuoteFieldInputs({
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field id="supplierName" label={t("supplier")} hint={t("supplierHint")}>
+        <Field id="supplierName" label={t("supplier")}>
           <Input
             id="supplierName"
             name="supplierName"
@@ -56,7 +71,7 @@ export function QuoteFieldInputs({
           />
         </Field>
 
-        <Field id="quotedAt" label={t("quotedAt")} hint={t("quotedAtHint")}>
+        <Field id="quotedAt" label={t("quotedAt")}>
           <Input
             id="quotedAt"
             name="quotedAt"
@@ -85,7 +100,7 @@ export function QuoteFieldInputs({
 
         {currency}
 
-        <Field id="quotedUnit" label={t("quotedUnit")} hint={t("quotedUnitHint")}>
+        <Field id="quotedUnit" label={t("quotedUnit")}>
           <Input
             id="quotedUnit"
             name="quotedUnit"
@@ -123,11 +138,7 @@ export function QuoteFieldInputs({
           QUOTED PRODUCT column is where a reviewer finds out they are being shown a
           different product, and it reads this column and nothing else. */}
       {matchType === "alternative" ? (
-        <Field
-          id="alternativeProductName"
-          label={t("alternativeProductName")}
-          hint={t("alternativeProductHint")}
-        >
+        <Field id="alternativeProductName" label={t("alternativeProductName")}>
           <Input
             id="alternativeProductName"
             name="alternativeProductName"
@@ -139,7 +150,7 @@ export function QuoteFieldInputs({
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field id="leadTimeDays" label={t("leadTimeDays")} hint={t("leadTimeHint")}>
+        <Field id="leadTimeDays" label={t("leadTimeDays")}>
           <Input
             id="leadTimeDays"
             name="leadTimeDays"
@@ -152,7 +163,7 @@ export function QuoteFieldInputs({
           />
         </Field>
 
-        <Field id="detailNotes" label={t("detailNotes")} hint={t("detailNotesHint")}>
+        <Field id="detailNotes" label={t("detailNotes")}>
           <Textarea id="detailNotes" name="detailNotes" defaultValue={fields.detailNotes} />
         </Field>
       </div>
@@ -161,28 +172,30 @@ export function QuoteFieldInputs({
 }
 
 /**
- * One labelled input with its hint underneath.
+ * One labelled input.
  *
  * Exported because the currency cell is passed in from outside — the entry form's picker
  * and the correction form's read-only value have to sit in the same grid column, wearing
  * the same label and spacing, or the two screens stop looking like one form.
+ *
+ * It took an optional `hint` until #91, and the prop went with the last string that used
+ * it. Leaving it would have left the form one prop away from filling back up, which is
+ * the whole of what that ticket was about; a field that genuinely needs a sentence can
+ * have the prop back, and whoever adds it has to say why this one is different.
  */
 export function Field({
   id,
   label,
-  hint,
   children,
 }: {
   id: string;
   label: string;
-  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-2">
       <Label htmlFor={id}>{label}</Label>
       {children}
-      {hint ? <p className="text-muted-foreground text-xs">{hint}</p> : null}
     </div>
   );
 }
