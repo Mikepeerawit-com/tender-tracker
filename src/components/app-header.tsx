@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { AppMenu } from "@/components/app-menu";
+import { TopNav } from "@/components/app-nav";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Button } from "@/components/ui/button";
 
@@ -32,6 +33,13 @@ export type AppLocation =
  * button and the member's name — so a reader could not tell the Tender detail from the
  * list without reading the body. Now the list carries the wordmark, a Tender carries its
  * reference and client, and the sourcing screen carries those and the Item.
+ *
+ * **It also carries the two destinations, above `md` and only there.** Below `md` they
+ * are a bottom bar instead, reachable with a thumb inside the WeCom webview; above it a
+ * bottom bar would be a phone control stranded at the foot of a monitor (ADR-0021). The
+ * two renderings read one list, in `app-nav.tsx`. Nothing is added to the phone's row
+ * here: `TopNav` is `hidden md:flex`, which is why the one-row assertion below still
+ * holds at 390px.
  *
  * **One row, at every width.** #56 found six buttons here on a 390px phone with nothing
  * able to wrap — `Button` is `shrink-0 whitespace-nowrap`, so not one of them gives up a
@@ -119,6 +127,9 @@ export function AppHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
+        {/* Above `md` only. Below it the same two destinations are a bottom bar, drawn by
+            `(app)/layout.tsx` where a thumb reaches them (ADR-0021). */}
+        <TopNav />
         <LocaleSwitcher compact />
         <AppMenu isOrgAdmin={isOrgAdmin} />
       </div>

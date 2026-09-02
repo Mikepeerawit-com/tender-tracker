@@ -86,6 +86,7 @@
     "signOut": "退出登录",
     "people": "成员",
     "groupRobot": "群机器人",
+    "destinations": "主导航",
     "menu": "菜单",
     "back": "返回",
     "itemLocation": "{client}·{item}"

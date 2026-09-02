@@ -3,6 +3,7 @@ import { NextIntlClientProvider, useTranslations } from "next-intl";
 import "@/app/globals.css";
 
 import { AppHeader } from "@/components/app-header";
+import { BottomNav } from "@/components/app-nav";
 import { ImageCountBadge } from "@/components/images/image-count-badge";
 import { EditQuoteForm } from "@/components/quotes/edit-quote-form";
 import { ItemBrief } from "@/components/quotes/item-brief";
@@ -44,8 +45,15 @@ import zhHans from "@/messages/zh-Hans.json";
  *
  * Each entry is a screen as the router really assembles it: the page's own `AppHeader` —
  * carrying the location shape that screen really draws, since #73 — then the page's body
- * underneath, inside the page's own wrapper div. An org admin is used throughout, because
+ * underneath, inside the page's own wrapper div, and the bottom bar `(app)/layout.tsx`
+ * draws beneath every one of them since #96. An org admin is used throughout, because
  * that is the fullest menu and the worst case for the bar.
+ *
+ * The bottom bar is **not** in any of them, and that is the point: it belongs to
+ * `(app)/layout.tsx` rather than to a page, so {@link Screen} draws it once for all of
+ * them — including the two that replace a page. A `loading.tsx` or an `error.tsx` keeps
+ * it, and a fallback that took the way out with it would strand somebody on a screen that
+ * could not load.
  *
  * `OutcomePanel` is the one part of the detail screen missing: it is an `async` Server
  * Component that awaits `tenderVerdict`, so it cannot be rendered in a browser at all.
@@ -334,10 +342,19 @@ export function screens(m: Messages) {
 }
 
 /**
- * A screen wrapped in the provider every one of them needs.
+ * A screen wrapped in the provider every one of them needs, inside the box the real
+ * `body` gives it.
  *
  * Both renderers need exactly this and nothing more, so the wrapping lives here rather
  * than being retyped either side.
+ *
+ * **The full-height flex column is `body`, and the bottom bar is what it is here for.**
+ * `app/layout.tsx` gives `body` a full-height flex column and every screen's wrapper takes
+ * `flex-1` inside it; `min-h-dvh` is that height stated against the viewport, since this
+ * div has no `html` above it to inherit one from. Without the column the `flex-1` measures
+ * nothing and the bar lands directly under the last row of a short screen instead of at
+ * the foot of the phone, where a thumb finds it — and the bar is drawn here, once, exactly
+ * as `(app)/layout.tsx` draws it beneath every page.
  */
 export function Screen({
   locale,
@@ -350,7 +367,10 @@ export function Screen({
 }) {
   return (
     <NextIntlClientProvider locale={locale} messages={messages} timeZone="Asia/Bangkok">
-      {children}
+      <div className="flex min-h-dvh flex-col">
+        {children}
+        <BottomNav />
+      </div>
     </NextIntlClientProvider>
   );
 }
@@ -398,13 +418,7 @@ function YourQuotesHeading({ count }: { count: number }) {
 }
 
 /** The client's own pictures for one Item, as the sourcing page hands them to the brief. */
-function ReferenceImages({
-  label,
-  images,
-}: {
-  label: string;
-  images: ReferenceImage[];
-}) {
+function ReferenceImages({ label, images }: { label: string; images: ReferenceImage[] }) {
   const t = useTranslations("tenders.referenceImages");
 
   return (
@@ -580,7 +594,6 @@ const myWorkRows: MyWorkRow[] = [
     status: { tone: "calm", days: 49 },
   },
 ];
-
 
 export const tender: Tender = {
   id: "8f14e45f-ceea-4d67-b4a7-4c5e2f6a1b90",

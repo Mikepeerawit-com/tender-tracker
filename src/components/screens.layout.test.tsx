@@ -67,6 +67,15 @@ describe(`a whole screen at ${phone.width}×${phone.height}`, () => {
 
     // The bar stays one row on every screen, not just when measured on its own.
     expect(controlRows(document.querySelector("header")!)).toBe(1);
+
+    // And both destinations are on every screen behind the login, including the two that
+    // replace a page (ADR-0021). Exactly one of each is *drawn* at 390px — `getAllByRole`
+    // does not see the copy on the app bar, which is `display: none` below `md` — so this
+    // fails both ways: on a screen the bottom bar never reached, and on one where the two
+    // bars were somehow drawn at once.
+    for (const destination of [messages.myWork.title, messages.tenders.title]) {
+      expect(screen.getAllByRole("link", { name: destination })).toHaveLength(1);
+    }
   });
 });
 
