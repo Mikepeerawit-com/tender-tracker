@@ -357,22 +357,22 @@ async function aQuotePhoto(quoteId: string, as: SessionCookieStore): Promise<voi
 /**
  * The two shapes the loader answers with, asserted as such.
  *
- * `viewer` is a discriminant rather than a permission flag, so reaching either half of
+ * `screen` is a discriminant rather than a permission flag, so reaching either half of
  * the union means saying which half you expected — which is the assertion, not a
  * formality on the way to one. A test that meant to read the Owner's sheet and was handed
  * the reduced shape fails here rather than three lines later on `undefined`.
  */
 function ownersScreen(screen: TenderScreenData) {
-  if (screen.viewer !== "owner") {
-    throw new Error(`expected the Owner's screen, got the ${screen.viewer}'s`);
+  if (screen.screen !== "comparison") {
+    throw new Error(`expected the comparison sheet, got the ${screen.screen} screen`);
   }
 
   return screen;
 }
 
 function reducedScreen(screen: TenderScreenData) {
-  if (screen.viewer !== "assignee") {
-    throw new Error(`expected the reduced screen, got the ${screen.viewer}'s`);
+  if (screen.screen !== "sourcing") {
+    throw new Error(`expected the sourcing screen, got the ${screen.screen} screen`);
   }
 
   return screen;
@@ -535,6 +535,25 @@ describe("loading the tender screen", () => {
  * nobody else, so "none of the other Assignee's" is a string search rather than a count.
  *
  * It is never mutated by the tests that read it, except the last two, which say so.
+ *
+ * **How these were verified able to fail** (ADR-0016). Reverting the loader to its old
+ * unconditional shape is not enough on its own and is worth saying why: the narrowing
+ * helpers above throw on the discriminant, so every test below would go red before a
+ * single leak assertion ran — a green-to-red that proves the split exists and nothing
+ * about what it hides. So each narrowing was reverted *separately*, and the count of
+ * failures recorded:
+ *
+ * | what was reverted in `tender-screen.ts`        | tests red |
+ * | ---------------------------------------------- | --------- |
+ * | `yourQuotes` left as `item.quotes`              | 3         |
+ * | the photo map passed through unfiltered         | 1         |
+ * | the Item's Landed Cost and Selling price kept   | 2         |
+ * | the first refusal taken instead of this reader's| 1         |
+ * | `ownsTender` forced to `true` (everyone Owner)  | 10        |
+ * | `ownsTender` forced to `false` (nobody Owner)   | 3         |
+ *
+ * Every row is a leak this file would notice, and none of the first four touches the
+ * discriminant at all — which is the point of listing them.
  */
 describe("what each viewer is handed", () => {
   const priced = { landedCost: 7654.25, sellingPrice: 98765.5 };

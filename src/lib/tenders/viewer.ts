@@ -8,10 +8,10 @@
  * at somebody else's Tender is a reader like any other, exactly as `mayCorrectQuote` has
  * it, and that is the sentence this file exists to make hard to write differently twice.
  *
- * It is deliberately *not* `server-only`. The Tender detail asks it on the server, the
- * item sourcing screen asks it on the server, and the components that draw either have to
- * be mountable in a browser test — the same reason `mayCorrectQuote` lives outside
- * `@/lib/quotes/quotes`.
+ * It is deliberately *not* `server-only`. `loadTenderScreen` asks it on the server and
+ * `mayCorrectQuote` asks it from a module the Quote list and the edit page both reach in a
+ * browser test — the same reason `mayCorrectQuote` itself lives outside
+ * `@/lib/quotes/quotes` rather than beside the writes it guards.
  *
  * **This is not what makes anything safe.** It shapes what a loader returns, so that the
  * hidden data is absent from the payload rather than present behind a flag. Org isolation

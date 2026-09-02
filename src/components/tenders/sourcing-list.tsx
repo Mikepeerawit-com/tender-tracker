@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import type { QuotePhoto } from "@/lib/images/quote-photos";
 import type { ReferenceImage } from "@/lib/images/reference-images";
 import type { Quote } from "@/lib/quotes/quotes";
-import type { AssigneeItem } from "@/lib/tenders/tender-screen";
+import type { SourcingItem } from "@/lib/tenders/tender-screen";
 
 /**
  * The Tender detail for somebody who does not own it: the Items, and their own work on
@@ -36,7 +36,7 @@ export function SourcingList({
   referenceImages,
 }: {
   tenderId: string;
-  items: AssigneeItem[];
+  items: SourcingItem[];
   /** This reader's own Quotes' photos, keyed by Quote. */
   photos: Map<string, QuotePhoto[]>;
   referenceImages: ReferenceImage[];
@@ -77,7 +77,7 @@ function Item({
   referenceImages,
 }: {
   tenderId: string;
-  item: AssigneeItem;
+  item: SourcingItem;
   photos: Map<string, QuotePhoto[]>;
   referenceImages: ReferenceImage[];
 }) {

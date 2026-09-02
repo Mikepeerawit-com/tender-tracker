@@ -21,7 +21,7 @@ import type { ReferenceImage } from "@/lib/images/reference-images";
 import type { Member } from "@/lib/org/members";
 import { blankQuote, quoteAsSubmitted } from "@/lib/quotes/quote-form";
 import type { Quote } from "@/lib/quotes/quotes";
-import type { AssigneeItem } from "@/lib/tenders/tender-screen";
+import type { SourcingItem } from "@/lib/tenders/tender-screen";
 import type { Tender } from "@/lib/tenders/tenders";
 import type { WorklistRow } from "@/lib/tenders/worklist";
 import en from "@/messages/en.json";
@@ -139,7 +139,7 @@ export function screens(m: Messages) {
         <TenderFacts tender={tender} />
         <SourcingList
           tenderId={tender.id}
-          items={assigneeItems}
+          items={sourcingItems}
           photos={quotePhotos}
           referenceImages={referenceImages}
         />
@@ -405,7 +405,7 @@ const quotes: Quote[] = [
  * one given up on with a note somebody typed, and one untouched. The widest row on this
  * screen is the refusal note, because it is the only free text on it.
  */
-const assigneeItems: AssigneeItem[] = [
+const sourcingItems: SourcingItem[] = [
   {
     id: "item-gloves",
     productName: "NitrileExaminationGlovesPowderFreeSizeMediumNonSterile",

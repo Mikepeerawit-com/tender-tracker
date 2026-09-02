@@ -1,3 +1,5 @@
+import { ownsTender } from "@/lib/tenders/viewer";
+
 import type { QuoteProblem } from "./quotes";
 
 /**
@@ -189,6 +191,11 @@ export function quoteAsSubmitted(quote: {
  * The screens asking is not what makes it safe. `updateQuote` and `deleteQuote` ask again
  * against the stored row; hiding the controls is so nobody is *invited* to correct a Quote
  * that is not theirs.
+ *
+ * The Owner half is {@link ownsTender} rather than a comparison written out here. This
+ * was the app's only Owner check until ADR-0020 gave the Tender detail a second one, and
+ * two copies of "is this reader the Owner" is exactly how a visibility rule and an editing
+ * rule drift into disagreeing about the same person.
  */
 export function mayCorrectQuote({
   sourcedByUserId,
@@ -200,5 +207,5 @@ export function mayCorrectQuote({
   /** The Owner of the Tender the Quote's Item belongs to; null when it cannot be read. */
   ownerUserId: string | null;
 }): boolean {
-  return sourcedByUserId === callerId || ownerUserId === callerId;
+  return sourcedByUserId === callerId || ownsTender({ ownerUserId, callerId });
 }

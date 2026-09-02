@@ -39,26 +39,28 @@ type TenderScreenFacts = {
  * payload, and it is one forgotten `if` away from being drawn. What is not in the object
  * cannot be rendered by mistake.
  *
- * `viewer` is the discriminant that makes the two halves reachable, which is a different
+ * `screen` is the discriminant that makes the two halves reachable, which is a different
  * thing from a permission field — it is how the page says which screen it is drawing, and
  * TypeScript refuses to let it read `sheet` without asking.
  *
- * **`assignee` names the reader the reduced screen exists for, not a check that was
- * run.** Anybody who is not the Owner gets it: the Assignees it was designed for, a
- * colleague who has not enrolled on this Tender yet, an Org Admin — who gets nothing
- * extra for being one, because the tier here is Owner-versus-everybody-else on *one
- * Tender* and never a rank in the organisation.
+ * **It names the two screens, not two roles.** `CONTEXT.md` fixes **Assignee** as a user
+ * working a Tender, and `sourcing` is handed to more people than that: the Assignees it
+ * was designed for, a colleague who has not enrolled on this Tender yet, an Org Admin —
+ * who gets nothing extra for being one, because the tier here is Owner-versus-
+ * everybody-else on *one Tender* and never a rank in the organisation. Calling the shape
+ * after a role it does not always describe would be borrowing a glossary word to mean
+ * something looser than the glossary means.
  */
 export type TenderScreenData =
   | (TenderScreenFacts & {
-      viewer: "owner";
+      screen: "comparison";
       /** The whole Tender's commercial apparatus: every Quote ranked, and the money. */
       sheet: ComparisonSheet;
     })
   | (TenderScreenFacts & {
-      viewer: "assignee";
+      screen: "sourcing";
       /** Every Item on the Tender, carrying this reader's own work and nobody else's. */
-      items: AssigneeItem[];
+      items: SourcingItem[];
       /**
        * The photos on this reader's own Quotes, keyed by Quote.
        *
@@ -79,8 +81,11 @@ export type TenderScreenData =
  * it — `landedCostPerUnit`, `sellingPricePerUnit` and `selectedQuoteId` are absent here
  * because none of them is any of this reader's business, and there is no path by which
  * they arrive anyway.
+ *
+ * "This reader" and not "this Assignee": whoever is not the Owner gets this, and some of
+ * them are Assignees on nothing.
  */
-export type AssigneeItem = {
+export type SourcingItem = {
   id: string;
   productName: string;
   quantity: number;
@@ -184,10 +189,10 @@ export async function loadTenderScreen(
   // the reduced shape. Fail-closed is the right default even on a path where the page is
   // about to call `notFound()` and draw neither.
   if (!ownsTender({ ownerUserId: tender?.ownerUserId ?? null, callerId })) {
-    return { ...facts, viewer: "assignee", ...yourWorkOnly(callerId, sheet) };
+    return { ...facts, screen: "sourcing", ...yourWorkOnly(callerId, sheet) };
   }
 
-  return { ...facts, viewer: "owner", sheet };
+  return { ...facts, screen: "comparison", sheet };
 }
 
 /**
@@ -195,13 +200,13 @@ export async function loadTenderScreen(
  *
  * The subtraction is done once, here, over the sheet the batch already read — so there is
  * exactly one place that decides what survives into the reduced shape, and it is a place
- * a test can call. Adding a field to {@link AssigneeItem} is an edit to this function; a
+ * a test can call. Adding a field to {@link SourcingItem} is an edit to this function; a
  * field added to the sheet reaches nobody until somebody edits it.
  */
 function yourWorkOnly(
   callerId: string,
   sheet: ComparisonSheet,
-): { items: AssigneeItem[]; photos: Map<string, QuotePhoto[]> } {
+): { items: SourcingItem[]; photos: Map<string, QuotePhoto[]> } {
   const items = sheet.items.map((item) => ({
     id: item.id,
     productName: item.productName,
