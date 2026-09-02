@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { BottomNav } from "@/components/app-nav";
 import { currentUser } from "@/lib/auth/session";
 
 /**
@@ -17,6 +18,14 @@ import { currentUser } from "@/lib/auth/session";
  * could never name which Tender this is. Each page draws its own; `currentUser` is
  * wrapped in React `cache()`, so the gate below is what the pages' calls are answered
  * from and none of them costs a round trip.
+ *
+ * **The bottom bar is drawn here, and it is the one piece of navigation that can be.** It
+ * says where a reader may *go*, which is the same answer on every screen — unlike the app
+ * bar, which says where they *are*. Putting it here is what makes both destinations
+ * reachable from every screen behind the login including the two that replace a page,
+ * `loading.tsx` and `error.tsx`: a fallback that took the way out with it would strand
+ * somebody on a screen that could not load. Above `md` it is absent and the same two
+ * destinations sit on the app bar instead (ADR-0021).
  */
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await currentUser(await cookies());
@@ -24,5 +33,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   if (!user) redirect("/login");
   if (!user.locale) redirect("/choose-language");
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <BottomNav />
+    </>
+  );
 }

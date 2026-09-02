@@ -36,13 +36,36 @@ export function expectNoSidewaysScroll(): void {
  * a header allowed to wrap never overflows, it just gets taller, and #56's first fix did
  * exactly that and cost three rows on a phone. Measuring the outcome rather than the
  * `flex-wrap` property keeps the assertion about what a reader sees.
+ *
+ * **Controls that are not {@link drawn} are not counted.** Since #96 the app bar carries
+ * the two destinations at `md` and up and hides them below it, and a `display: none`
+ * element reports `offsetTop` of `0` — so an undrawn control would invent a second row on
+ * a phone out of a bar that renders one.
  */
 export function controlRows(root: HTMLElement): number {
-  const tops = [...root.querySelectorAll<HTMLElement>("a, button")].map(
-    (control) => control.offsetTop,
-  );
+  const tops = [...root.querySelectorAll<HTMLElement>("a, button")]
+    .filter(drawn)
+    .map((control) => control.offsetTop);
 
   return new Set(tops).size;
+}
+
+/**
+ * Whether an element was given a box on the page at all.
+ *
+ * The question every measurement here is really asking — *did a reader see this* — and
+ * since #96 it is a question with two answers at one width: the two destinations exist
+ * twice in the markup, on the app bar and in the bottom bar, and exactly one of the pair
+ * is drawn at any viewport.
+ *
+ * `checkVisibility`, not `offsetParent !== null`. The two agree on `display: none`, which
+ * is the case this exists for, and disagree on `position: fixed` — which has no offset
+ * parent and is nonetheless on the screen. Nothing in the app is fixed today, and a helper
+ * that would quietly stop counting it the day something is would be a budget with a hole
+ * in it (#98 sets budgets with `controlRows`).
+ */
+export function drawn(element: HTMLElement | undefined | null): boolean {
+  return element != null && element.checkVisibility();
 }
 
 /**
