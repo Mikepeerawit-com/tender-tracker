@@ -8,6 +8,7 @@ import { ItemBrief } from "@/components/quotes/item-brief";
 import { QuoteList } from "@/components/quotes/quote-list";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { OutstandingBand } from "@/components/tenders/outstanding-band";
+import { SourcingList } from "@/components/tenders/sourcing-list";
 import { TenderFacts } from "@/components/tenders/tender-facts";
 import { TenderGroup } from "@/components/tenders/tender-group";
 import { QuoteForm } from "@/components/quotes/quote-form";
@@ -15,9 +16,12 @@ import { Button } from "@/components/ui/button";
 import { ScreenError } from "@/components/ui/screen-error";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { ScreenSkeleton } from "@/components/ui/screen-skeleton";
+import type { QuotePhoto } from "@/lib/images/quote-photos";
+import type { ReferenceImage } from "@/lib/images/reference-images";
 import type { Member } from "@/lib/org/members";
 import { blankQuote, quoteAsSubmitted } from "@/lib/quotes/quote-form";
 import type { Quote } from "@/lib/quotes/quotes";
+import type { SourcingItem } from "@/lib/tenders/tender-screen";
 import type { Tender } from "@/lib/tenders/tenders";
 import type { WorklistRow } from "@/lib/tenders/worklist";
 import en from "@/messages/en.json";
@@ -112,6 +116,39 @@ export function screens(m: Messages) {
           members={members}
           callerId="user-somchai"
           isOwner
+        />
+      </Body>
+    ),
+    // The same route, drawn for somebody who does not own the Tender (ADR-0020, #92).
+    // A screen in its own right rather than a variant of the one above: it has the sheet
+    // and the Outcome panel taken out and a list of your own sourcing put in, and that
+    // list is markup no other screen draws.
+    "a tender somebody else owns": (
+      <Body width="max-w-7xl" bar={<AppHeader isOrgAdmin location={tenderBar} />}>
+        <ScreenHeader
+          heading={tender.clientName}
+          actions={
+            <Button variant="outline" className="h-11">
+              {m.tenders.edit}
+            </Button>
+          }
+        >
+          <p className="text-muted-foreground text-sm break-words">{tender.title}</p>
+        </ScreenHeader>
+        <OutstandingBand tenderId={tender.id} items={outstanding.slice(0, 1)} />
+        <TenderFacts tender={tender} />
+        <SourcingList
+          tenderId={tender.id}
+          items={sourcingItems}
+          photos={quotePhotos}
+          referenceImages={referenceImages}
+        />
+        <AssigneeControls
+          tenderId={tender.id}
+          assignees={tender.assignees}
+          members={members}
+          callerId="user-nok"
+          isOwner={false}
         />
       </Body>
     ),
@@ -357,5 +394,69 @@ const quotes: Quote[] = [
     quotedAt: "2026-08-12",
     sourcedByUserId: "user-somchai",
     sourcedByName: "Somchai Prasertkul",
+  },
+];
+
+/**
+ * The three states an Item is in on the reduced screen, each carrying the string on it
+ * that nobody chose the width of.
+ *
+ * One Item quoted — a supplier's full registered name beside a price and a photo count —
+ * one given up on with a note somebody typed, and one untouched. The widest row on this
+ * screen is the refusal note, because it is the only free text on it.
+ */
+const sourcingItems: SourcingItem[] = [
+  {
+    id: "item-gloves",
+    productName: "NitrileExaminationGlovesPowderFreeSizeMediumNonSterile",
+    quantity: 40000,
+    unit: "piece",
+    yourQuotes: [quotes[0]],
+    yourNoSupplierFound: null,
+  },
+  {
+    id: "item-masks",
+    productName: "SurgicalFaceMaskThreePlyTypeIIRWithEarloopsNonSterile",
+    quantity: 2000,
+    unit: "box of 50",
+    yourQuotes: [],
+    yourNoSupplierFound: {
+      userId: "user-nok",
+      name: "Nok Wattanapong",
+      note: "Discontinued by the manufacturer; the two importers left both quote a minimum order of ten thousand.",
+      createdAt: "2026-08-13T04:00:00Z",
+    },
+  },
+  {
+    id: "item-syringes",
+    productName: "Disposable syringe, 5ml, luer lock",
+    quantity: 12000,
+    unit: "piece",
+    yourQuotes: [],
+    yourNoSupplierFound: null,
+  },
+];
+
+/** Three photos on the one Quote, so the badge draws a count rather than nothing. */
+const quotePhotos = new Map<string, QuotePhoto[]>([
+  [
+    "q1a",
+    [1, 2, 3].map((n) => ({
+      id: `p${n}`,
+      url: "",
+      uploadedAt: "2026-08-12T07:00:00Z",
+      uploadedByName: "Nok Wattanapong",
+    })),
+  ],
+]);
+
+/** What the client sent, placed on the Item it is of. */
+const referenceImages: ReferenceImage[] = [
+  {
+    id: "ref-1",
+    tenderItemId: "item-gloves",
+    url: "",
+    uploadedAt: "2026-08-02T03:00:00Z",
+    uploadedByName: "Somchai Prasertkul",
   },
 ];
