@@ -1,13 +1,17 @@
 import "server-only";
 
 import { getComparisonSheet, type ComparisonSheet } from "@/lib/comparison/sheet";
+import type { QuotePhoto } from "@/lib/images/quote-photos";
 import { listReferenceImages, type ReferenceImage } from "@/lib/images/reference-images";
 import { listMembers, type Member } from "@/lib/org/members";
 import { getOrgSettings } from "@/lib/org/org";
+import type { NoSupplierFound, Quote } from "@/lib/quotes/quotes";
 import type { SessionCookieStore } from "@/lib/supabase/session-client";
 import { getTender, type Tender } from "@/lib/tenders/tenders";
+import { ownsTender } from "@/lib/tenders/viewer";
 
-export type TenderScreenData = {
+/** Everything screen 5 draws whoever is reading it. */
+type TenderScreenFacts = {
   /** Null when there is no such Tender *for this caller* — see the note below. */
   tender: Tender | null;
   members: Member[];
@@ -15,7 +19,6 @@ export type TenderScreenData = {
   referenceImages: ReferenceImage[];
   /** The ones nobody has said which Item they are of. Split here so the screen does not. */
   unassignedImages: ReferenceImage[];
-  sheet: ComparisonSheet;
   /**
    * The Items **this reader** has neither Quoted nor recorded No Supplier Found on.
    *
@@ -23,6 +26,78 @@ export type TenderScreenData = {
    * Tender, and for a Tender whose Bid has gone out — see {@link outstandingFor}.
    */
   outstandingForYou: OutstandingItem[];
+};
+
+/**
+ * Screen 5, in the two shapes it has — **and they are shapes, not permissions**.
+ *
+ * ADR-0020: on a Tender they are an Assignee but not the Owner of, a user sees their own
+ * Quotes and no money at all. The rule is expressed here, once, by the loader answering a
+ * different shape rather than the same shape with parts of it flagged. There is no
+ * `canSeeMoney: false` beside a Landed Cost anywhere below, because a flag beside the
+ * money is still the money: it reaches the component, it is serialised into the client
+ * payload, and it is one forgotten `if` away from being drawn. What is not in the object
+ * cannot be rendered by mistake.
+ *
+ * `viewer` is the discriminant that makes the two halves reachable, which is a different
+ * thing from a permission field — it is how the page says which screen it is drawing, and
+ * TypeScript refuses to let it read `sheet` without asking.
+ *
+ * **`assignee` names the reader the reduced screen exists for, not a check that was
+ * run.** Anybody who is not the Owner gets it: the Assignees it was designed for, a
+ * colleague who has not enrolled on this Tender yet, an Org Admin — who gets nothing
+ * extra for being one, because the tier here is Owner-versus-everybody-else on *one
+ * Tender* and never a rank in the organisation.
+ */
+export type TenderScreenData =
+  | (TenderScreenFacts & {
+      viewer: "owner";
+      /** The whole Tender's commercial apparatus: every Quote ranked, and the money. */
+      sheet: ComparisonSheet;
+    })
+  | (TenderScreenFacts & {
+      viewer: "assignee";
+      /** Every Item on the Tender, carrying this reader's own work and nobody else's. */
+      items: AssigneeItem[];
+      /**
+       * The photos on this reader's own Quotes, keyed by Quote.
+       *
+       * Narrowed with the Quotes rather than passed through: these are signed read URLs
+       * good for the hour, and a map still keyed by a colleague's Quote would hand one
+       * out to somebody the rest of this shape was built to keep it from.
+       */
+      photos: Map<string, QuotePhoto[]>;
+    });
+
+/**
+ * One Tender Item as somebody sourcing it sees it: what the client asked for, and what
+ * **they themselves** have found so far.
+ *
+ * Deliberately not a {@link import("@/lib/comparison/sheet").SheetItem} with fields
+ * removed. It is a smaller thing with a different job, and writing it out is what makes
+ * adding a money column to the sheet a decision about this type rather than a leak into
+ * it — `landedCostPerUnit`, `sellingPricePerUnit` and `selectedQuoteId` are absent here
+ * because none of them is any of this reader's business, and there is no path by which
+ * they arrive anyway.
+ */
+export type AssigneeItem = {
+  id: string;
+  productName: string;
+  quantity: number;
+  unit: string;
+  /** Only the Quotes this reader entered. Another Assignee's never reach this shape. */
+  yourQuotes: Quote[];
+  /**
+   * This reader's own "I could not source this", or null if they have not said it.
+   *
+   * Their own, and not a count of everybody's — the same rule as the Quotes, applied to
+   * the refusals for the same reason. A colleague's refusal is a fact about their job,
+   * and this screen is about yours. (#93 takes the same question on the item sourcing
+   * screen, where the refusal notes actually live and where the answer may differ:
+   * "somebody else could not source this either" is worth knowing where you are about to
+   * ring the same suppliers.)
+   */
+  yourNoSupplierFound: NoSupplierFound | null;
 };
 
 /** One Item a reader still owes an answer on, and enough of it to name and link to. */
@@ -56,6 +131,21 @@ export type OutstandingItem = { id: string; productName: string };
  * The caller's id arrives as an argument for that reason — the "outstanding for you" band
  * is per-viewer, and asking again in here would undo the arrangement above.
  *
+ * **The viewer decides the shape, not the reads** (ADR-0020, #92). The same five queries
+ * run for everybody; what changes is what is assembled out of them, and a non-Owner is
+ * handed an object with no comparison sheet and no money in it. Reading the sheet and
+ * then narrowing it looks wasteful and is the honest arrangement: an Assignee's own
+ * Quotes, their own refusals and the "outstanding for you" band are all read out of it,
+ * so the alternative is three narrower queries in place of one — more round trips on the
+ * slowest screen in the app, to save none.
+ *
+ * **Not enforced in RLS, deliberately.** Org isolation stays exactly as it is: one policy
+ * per table on `current_org_id()`, fail-closed. This is a per-Tender viewer distinction
+ * inside a single org, and expressing it as policy would mean an Owner and an Assignee
+ * needing different policies on the same rows. The Owner check belongs in the query layer
+ * where it already lives — `mayCorrectQuote` is the precedent, and `ownsTender` is now the
+ * one sentence both it and this ask.
+ *
  * A function rather than the top of the page, for the reason `vitest.config.mts` gives:
  * an `async` Server Component behind `currentUser` is reachable by no test in this repo,
  * so the ordering would otherwise be guarded by nothing at all.
@@ -73,7 +163,7 @@ export async function loadTenderScreen(
     getComparisonSheet(tenderId, store),
   ]);
 
-  return {
+  const facts = {
     tender,
     members,
     // The org's timezone, because `submitted_at` and `outcome_at` are instants and the day
@@ -81,13 +171,55 @@ export async function loadTenderScreen(
     timezone: settings.timezone,
     referenceImages,
     unassignedImages: referenceImages.filter((image) => image.tenderItemId === null),
-    sheet,
     // A filter over data already in hand, not a sixth read. The sheet carries every
     // Quote's `sourcedByUserId` and every No Supplier Found record's `userId` because the
     // screen already draws both — so who owes what is a question the batch can already
     // answer, and asking the database again would put a round trip back on the slowest
     // screen in the app to learn something it had just been told.
     outstandingForYou: outstandingFor(callerId, tender, sheet),
+  };
+
+  // `tender?.ownerUserId ?? null` rather than a separate check for the 404: a Tender
+  // nobody can read is nobody's to own, so a bad link and another org's id both fall to
+  // the reduced shape. Fail-closed is the right default even on a path where the page is
+  // about to call `notFound()` and draw neither.
+  if (!ownsTender({ ownerUserId: tender?.ownerUserId ?? null, callerId })) {
+    return { ...facts, viewer: "assignee", ...yourWorkOnly(callerId, sheet) };
+  }
+
+  return { ...facts, viewer: "owner", sheet };
+}
+
+/**
+ * The Tender's Items with everything but this reader's own work taken off them.
+ *
+ * The subtraction is done once, here, over the sheet the batch already read — so there is
+ * exactly one place that decides what survives into the reduced shape, and it is a place
+ * a test can call. Adding a field to {@link AssigneeItem} is an edit to this function; a
+ * field added to the sheet reaches nobody until somebody edits it.
+ */
+function yourWorkOnly(
+  callerId: string,
+  sheet: ComparisonSheet,
+): { items: AssigneeItem[]; photos: Map<string, QuotePhoto[]> } {
+  const items = sheet.items.map((item) => ({
+    id: item.id,
+    productName: item.productName,
+    quantity: item.quantity,
+    unit: item.unit,
+    yourQuotes: item.quotes.filter((quote) => quote.sourcedByUserId === callerId),
+    yourNoSupplierFound:
+      item.sourcing.noSupplierFound.find((refusal) => refusal.userId === callerId) ??
+      null,
+  }));
+
+  const yours = new Set(items.flatMap((item) => item.yourQuotes.map((quote) => quote.id)));
+
+  return {
+    items,
+    photos: new Map(
+      [...sheet.photos].filter(([quoteId]) => yours.has(quoteId)),
+    ),
   };
 }
 

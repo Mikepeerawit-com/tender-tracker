@@ -185,6 +185,11 @@
       "title": "Waiting on you",
       "hint": "You have neither entered a quote nor recorded no supplier found on these items."
     },
+    "yourItems": {
+      "title": "Items on this tender",
+      "hint": "Your own quotes are here. Comparing everyone's is the owner's job.",
+      "yourQuotes": "Your quotes"
+    },
     "item": {
       "plural": "Tender items",
       "hint": "A tender always asks for at least one product, and several is normal.",
