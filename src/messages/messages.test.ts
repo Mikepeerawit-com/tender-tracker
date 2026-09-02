@@ -948,3 +948,49 @@ describe("the sourcing refusal reads as something the Assignee did", () => {
     },
   );
 });
+
+/**
+ * A hint teaches a section; a field carries none.
+ *
+ * The quote form had a sentence under nearly every input, and an Assignee off the phone
+ * read all nine to write down one price — every visit, and in whichever language they
+ * chose. #91's rule is what tells the useful ones from the rest: **a hint attached to a
+ * field goes, a hint attached to a section stays.** A field hint is re-read by everyone
+ * every time and says nothing the label did not; a section hint teaches a concept once,
+ * at the top of the group where it is used.
+ *
+ * `quote-hints.test.tsx` counts what the form draws, which is the half a reader meets.
+ * This is the other half: a message file may keep a string long after the last thing
+ * rendering it is gone, and an unrendered hint is exactly what the next person writing
+ * this form reaches for — it is already translated, already reviewed, and re-attaching it
+ * is one prop.
+ *
+ * The keys are named rather than the sentences, unlike #88's and #89's checks. Those
+ * retired *words*, which reappear under any key at all; this retires five particular
+ * strings, and a check on their wording would go red on the day somebody legitimately
+ * writes "Optional." somewhere else.
+ *
+ * Both locales, walked separately rather than trusting key parity to imply the second.
+ * Parity is asserted one block up and could itself be the thing that broke.
+ */
+describe.each(locales)("%s hints", (locale) => {
+  const flat = flatten(messages(locale));
+
+  it("carries no hint for a quote field that lost one", () => {
+    // Supplier, quoted-on, priced-per, lead time, notes and the Alternative's own name.
+    // What they have in common is that each sat under a labelled input, and the last is
+    // the one that most looks like an exception: its field appears only once somebody has
+    // chosen Alternative, but the concept it explained is already taught by the sentence
+    // above the radio group, which is where that choice is made.
+    const retired = [
+      "quotes.supplierHint",
+      "quotes.quotedAtHint",
+      "quotes.quotedUnitHint",
+      "quotes.alternativeProductHint",
+      "quotes.leadTimeHint",
+      "quotes.detailNotesHint",
+    ];
+
+    expect(retired.filter((key) => flat.has(key))).toEqual([]);
+  });
+});
