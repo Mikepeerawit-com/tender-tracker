@@ -11,6 +11,7 @@ import { tenderOutcome } from "./outcome";
 import {
   addAssignee,
   addTenderItem,
+  byNameThenId,
   createTender,
   getTender,
   listTenders,
@@ -41,11 +42,6 @@ const service = createServiceClient();
 const owner = { id: "", email: `owner-${run}@example.test` };
 const mate = { id: "", email: `mate-${run}@example.test` };
 const outsider = { id: "", email: `outsider-${run}@example.test` };
-/** Two colleagues who really do share a name, which is the only thing they are for. */
-const twins = [
-  { id: "", email: `twin-a-${run}@example.test` },
-  { id: "", email: `twin-b-${run}@example.test` },
-];
 
 let orgId = "";
 let otherOrgId = "";
@@ -89,11 +85,7 @@ async function createOrg(name: string): Promise<string> {
   return data.id;
 }
 
-async function createMember(
-  org: string,
-  who: { id: string; email: string },
-  name = who.email,
-) {
+async function createMember(org: string, who: { id: string; email: string }) {
   const { data, error } = await service.auth.admin.createUser({
     email: who.email,
     password,
@@ -106,7 +98,7 @@ async function createMember(
 
   const { error: profileError } = await service
     .from("users")
-    .insert({ id: who.id, org_id: org, name, email: who.email });
+    .insert({ id: who.id, org_id: org, name: who.email, email: who.email });
 
   if (profileError) throw profileError;
 }
@@ -130,7 +122,6 @@ beforeAll(async () => {
   await createMember(orgId, mate);
   await createMember(otherOrgId, outsider);
 
-  for (const twin of twins) await createMember(orgId, twin, "Somchai Wong");
 });
 
 afterEach(async () => {
@@ -141,9 +132,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  const ids = [owner.id, mate.id, outsider.id, ...twins.map((t) => t.id)].filter(
-    Boolean,
-  );
+  const ids = [owner.id, mate.id, outsider.id].filter(Boolean);
 
   await service.from("users").delete().in("id", ids);
 
@@ -575,6 +564,31 @@ describe("Tender Items", () => {
   });
 });
 
+describe("byNameThenId", () => {
+  // The order Assignees are read in, tested as a rule rather than through the read.
+  //
+  // The read cannot answer for it: `tender_assignees` is keyed `(tender_id, user_id)`,
+  // so an untiebroken embed comes back ascending by `user_id` or in heap order depending
+  // on the plan Postgres picks, and the two are the same answer often enough that a
+  // database test with the `id` key removed went green 11 times in 25 (#105). That is a
+  // check reporting on the planner, not on the ordering. Here the failing case is two
+  // lines long and it fails every time.
+  const somchai = { id: "22222222-0000-0000-0000-000000000000", name: "Somchai Wong" };
+  const alsoSomchai = { id: "11111111-0000-0000-0000-000000000000", name: "Somchai Wong" };
+
+  it("puts two colleagues who share a name in a fixed order rather than an arbitrary one", () => {
+    expect([somchai, alsoSomchai].sort(byNameThenId)).toEqual([alsoSomchai, somchai]);
+  });
+
+  it("still lets the name decide whenever it can", () => {
+    // `id` is the last resort, never the key: Anong sorts first on her name despite the
+    // higher id, or the picker would be ordered by something nobody can see.
+    const anong = { id: "99999999-0000-0000-0000-000000000000", name: "Anong Srisai" };
+
+    expect([somchai, anong].sort(byNameThenId)).toEqual([anong, somchai]);
+  });
+});
+
 describe("Assignees", () => {
   it("lets the Owner add and remove someone", async () => {
     const tenderId = await aTender();
@@ -589,25 +603,6 @@ describe("Assignees", () => {
       ok: true,
     });
     expect((await getTender(tenderId, store))?.assignees).toEqual([]);
-  });
-
-  it("keeps two Assignees who share a name in the same order on every read", async () => {
-    // `localeCompare` calls these two equal, so the name cannot order them and `id` has
-    // to. Enrolled in the *opposite* order to the one asserted — which is knowable here
-    // because the ids already exist — so that the order the embed hands back untouched
-    // is the wrong answer. Drop the `id` key from `getTender` and this goes red every
-    // run rather than half of them (ADR-0016).
-    const [first, second] = [...twins].sort((a, b) => a.id.localeCompare(b.id));
-    const tenderId = await aTender();
-    const store = await signedInAs(owner.email);
-
-    expect(await addAssignee({ tenderId, userId: second.id }, store)).toEqual({ ok: true });
-    expect(await addAssignee({ tenderId, userId: first.id }, store)).toEqual({ ok: true });
-
-    expect((await getTender(tenderId, store))?.assignees).toEqual([
-      { id: first.id, name: "Somchai Wong" },
-      { id: second.id, name: "Somchai Wong" },
-    ]);
   });
 
   it("lets anyone add themselves without waiting to be asked", async () => {

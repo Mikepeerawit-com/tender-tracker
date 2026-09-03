@@ -626,15 +626,32 @@ export async function getTender(
       outcome: item.outcome,
       outcomeAt: item.outcome_at,
     })),
-    // The embed comes back in no order at all, so this sort is the whole of the list's
-    // order. Two colleagues can share a name and `localeCompare` calls them equal, which
-    // a stable sort settles by handing back the heap — the same fault `listTenders` has
-    // on its dates. `id` is the last resort behind the name, as it is for the Items above.
     assignees: data.assignees
       .map((row) => row.user)
       .filter((user) => user !== null)
-      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)),
+      .sort(byNameThenId),
   };
+}
+
+/**
+ * The order Assignees are read in: by name, and by `id` where two share one.
+ *
+ * The embed this sorts comes back in no order at all, so this comparator is the whole of
+ * the list's order — and `localeCompare` calls two colleagues who share a name equal,
+ * which a stable sort settles by handing back the heap. `id` is the last resort behind
+ * the name, as it is for the Items above.
+ *
+ * Exported because it is a rule rather than a step, and a rule has to be checkable. The
+ * database cannot answer for this one: an untiebroken read of `tender_assignees` returns
+ * ascending `user_id` or heap order depending on which plan Postgres picks that morning,
+ * so a test that removed the `id` key and watched the read went green 11 times in 25
+ * (#105). Here the failing case is a two-line array, and it fails every time.
+ */
+export function byNameThenId(
+  a: { id: string; name: string },
+  b: { id: string; name: string },
+): number {
+  return a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
 }
 
 /** snake_case off the wire to the camelCase the app speaks, in one place for both reads. */
