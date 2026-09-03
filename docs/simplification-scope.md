@@ -86,18 +86,28 @@ designs were close, the more reversible one was chosen; and the human acceptance
 available as a gate.
 
 **What replaces it is a machine check, and it must be able to fail** ([ADR-0016](adr/0016-a-check-must-be-able-to-fail.md)).
-The harness already exists and is unused for this: `vitest.config.mts` runs a `layout`
+The harness already existed and was unused for this: `vitest.config.mts` runs a `layout`
 project in headless Chromium at 390×844, and `src/test/layout.ts` exports
 `expectNoSidewaysScroll()` and **`controlRows()`, which counts distinct `offsetTop` among
-links and buttons** — a density metric that has never been used as a budget.
+links and buttons** — a density metric that had never been used as a budget.
 
-- Assert `/tenders/[id]` stays under a control-row budget **for a non-Owner Assignee
-  viewer**, on a fixture Tender with several Items and several Quotes each.
-- Assert the same for the quote form.
-- Set both budgets at what the *new* design produces, so the test locks the reduction in
-  rather than describing today.
-- Add desktop assertions above 1280px, which currently do not exist — the one wide test in
-  the repo asserts only that nothing overflows.
+It is one now. `src/components/density.layout.test.tsx` (#98) holds three:
+
+- `/tenders/[id]` **for a non-Owner Assignee viewer**, on the several-Item,
+  several-Quote fixture — **8 rows**, in both locales.
+- The sourcing screen an Assignee records a price on — **10 rows** in English, **9** in
+  `zh-Hans`, where two photo buttons that wrap in English do not.
+- The quote form within it — **2 rows**, in both locales. The screen's total alone would
+  sit still while a row moved from a Quote onto the form.
+
+All three are set at what the *new* design produces, with no headroom, so the test locks
+the reduction in rather than describing today. They are asserted as exact counts and not
+as ceilings: a ceiling goes on passing when a screen quietly stops drawing something, and
+at that moment it is a budget above what the screen renders. Each was confirmed able to
+fail by producing the failure — a control added, and one taken away — rather than by
+reading for it. The desktop assertions above 1280px, which did not exist when this was
+written, arrived with #97 — `screens.layout.test.tsx` now pins the column each screen
+commits to at 1440×900 rather than only asserting that nothing overflows.
 
 This measures density, not comprehension. It is a proxy and a crude one. It is also the
 only thing that will tell anyone in three months whether this work helped.
