@@ -6,7 +6,7 @@ import { page } from "vitest/browser";
 import { QuoteForm } from "@/components/quotes/quote-form";
 import { blankQuote } from "@/lib/quotes/quote-form";
 import { Body, itemBar, locales, Screen, screens, tender } from "@/test/screens";
-import { controlRows, desk, expectNoSidewaysScroll, phone } from "@/test/layout";
+import { column, controlRows, desk, expectNoSidewaysScroll, phone } from "@/test/layout";
 
 /**
  * **Whole screens, header and body together** — the shape hand-check 1 of #48 actually
@@ -152,9 +152,7 @@ describe(`a whole screen at ${desk.width}×${desk.height}`, () => {
       </Screen>,
     );
 
-    expect(document.querySelector("main")!.getBoundingClientRect().width).toBe(
-      columnAtADesk[name],
-    );
+    expect(column().getBoundingClientRect().width).toBe(columnAtADesk[name]);
 
     // The header stops disagreeing with the page about where its left edge is, which is
     // the other half of #97 and the half only a wide viewport can see: below the cap the
@@ -194,7 +192,7 @@ function appBar(): HTMLElement {
  */
 function expectOneColumn(): void {
   const bar = appBar().querySelector("div")!.getBoundingClientRect();
-  const body = document.querySelector("main")!.getBoundingClientRect();
+  const body = column().getBoundingClientRect();
 
   expect([bar.left, bar.right]).toEqual([body.left, body.right]);
 }

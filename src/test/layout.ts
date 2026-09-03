@@ -27,6 +27,33 @@ export { phone } from "./phone.mjs";
  */
 export const desk = { width: 1440, height: 900 };
 
+/**
+ * The `main` a screen's body is drawn inside, without the bars the shell draws around it.
+ *
+ * The column each screen commits to a width for: `max-w-7xl` at the Owner's desk and
+ * `max-w-3xl` on a phone, the `ScreenWidth` that `ScreenBody` caps it at. The signed-out
+ * screens are the exception worth naming — `AuthScreen` draws its own `main` at
+ * `max-w-sm`, with no shell around it at all — and they are measured through this too,
+ * because it is the same element the suites want either way.
+ *
+ * Not `body`, which is taken twice over — `document.body` is what
+ * {@link expectNoSidewaysScroll} measures, and `Body` is the page wrapper
+ * `@/test/screens` exports.
+ *
+ * **Exactly one `main` on the page** is the assumption, and today the tag carries it on
+ * its own. `screens.layout.test.tsx` cannot say that of its `appBar()`: `ScreenHeader`
+ * and `AuthScreen` both draw a `header` *inside* the column, so finding the bar means
+ * asking which `header` is outside a `main` rather than which comes first. Nothing else
+ * on a screen is a `main`, so this needs no such question — and asking it in one place
+ * is what makes the day a screen draws a second column, or a fallback draws none, a
+ * single edit here rather than three suites quietly disagreeing about what they measured.
+ *
+ * The element, not its rect. The two width suites take `getBoundingClientRect()` at the
+ * call site; one that handed back a `DOMRect` could not serve `controlRows(column())`.
+ */
+export function column(): HTMLElement {
+  return document.querySelector("main")!;
+}
 
 /**
  * ADR-0009's bar, as every layout suite states it: nothing on the page scrolls sideways.

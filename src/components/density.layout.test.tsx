@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { controlRows, phone } from "@/test/layout";
+import { column, controlRows, phone } from "@/test/layout";
 import { locales, type Locale, Screen, screens } from "@/test/screens";
 
 /**
@@ -173,15 +173,3 @@ describe(`the control-row budgets at ${phone.width}×${phone.height}`, () => {
     expect(controlRows(save.closest("form")!)).toBe(budget.quoteForm[locale]);
   });
 });
-
-/**
- * The screen's own column, without the two bars the shell draws around it.
- *
- * Not `body`, which is taken twice over: `document.body` is what `expectNoSidewaysScroll`
- * measures, and `Body` is the page wrapper `@/test/screens` exports. Three other suites in
- * this project reach for this `main` the same way, and the fourth copy is the point at
- * which it earns a place in `@/test/layout` beside the measurements they share.
- */
-function column(): HTMLElement {
-  return document.querySelector("main")!;
-}
