@@ -9,6 +9,7 @@ import { setPasswordErrors } from "@/lib/auth/password";
 import { setupErrors } from "@/lib/auth/setup";
 import { inviteStatuses, wecomUserIdStatuses } from "@/lib/auth/invite";
 import { pricingProblems, selectionProblems } from "@/lib/comparison/sheet";
+import { membershipDisableStatuses } from "@/lib/org/members";
 import { imageProblems } from "@/lib/images/images";
 import { matchTypes, quoteProblems } from "@/lib/quotes/quotes";
 import { tenderOutcomes } from "@/lib/tenders/outcome";
@@ -263,6 +264,18 @@ describe.each(locales)("%s wording", (locale) => {
   it("reports how every WeCom userid save ended", () => {
     const missing = wecomUserIdStatuses.filter(
       (status) => !flat.has(`people.wecom.status.${status}`),
+    );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("reports how every end and restart of a Membership ended", () => {
+    // The two successes are opposite sentences — one says a colleague can no longer sign
+    // in, the other that they can again — and `last_admin` is the only place the app ever
+    // explains why an org must keep an Administrator (ADR-0017). As a raw key it is a
+    // button that appears to do nothing.
+    const missing = membershipDisableStatuses.filter(
+      (status) => !flat.has(`people.membership.status.${status}`),
     );
 
     expect(missing).toEqual([]);

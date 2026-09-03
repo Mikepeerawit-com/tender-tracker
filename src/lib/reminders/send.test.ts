@@ -719,6 +719,39 @@ describe("who a reminder @s", () => {
     expect(message?.payload.text.content).toContain("客户投标截止");
     expect(message?.payload.text.mentioned_list).toEqual([owner.wecom]);
   });
+
+  it("says nothing to an Assignee who has since been Disabled", async () => {
+    // ADR-0005: a Disabled colleague reads nothing and can act on none of it, so @-ing
+    // them puts a name in the company group that answers to nobody — and leaves the
+    // sourcing looking chased when it is not. The filter has been in `wecomUserids` since
+    // the send was written and nothing could fail on its absence until now.
+    const tender = await aTender({
+      internalQuoteDeadline: "2026-08-11",
+      clientSubmissionDeadline: "2026-09-01",
+      assignees: [nok, anong],
+    });
+    const reference = await referenceOf(tender.id);
+    const robot = recordingRobot();
+
+    await service
+      .from("users")
+      .update({ disabled_at: "2026-08-09T00:00:00Z" })
+      .eq("id", anong.id);
+
+    try {
+      await sendDailyPosts(runInstant, robot);
+    } finally {
+      // Restored here rather than in an `afterEach`: every other test in this file shares
+      // these three members and expects all of them active.
+      await service.from("users").update({ disabled_at: null }).eq("id", anong.id);
+    }
+
+    const message = mine(robot).find((sent) =>
+      sent.payload.text.content.includes(reference),
+    );
+
+    expect(message?.payload.text.mentioned_list).toEqual([nok.wecom]);
+  });
 });
 
 describe("the in-app notifications the bell will read", () => {
