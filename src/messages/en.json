@@ -511,6 +511,18 @@
           "no_robot": "No WeCom group is set up yet, so nothing can be sent."
         }
       }
+    },
+    "membership": {
+      "disable": "Disable",
+      "restore": "Restore",
+      "status": {
+        "disabled": "Disabled. They can no longer sign in, and they are gone from the Owner and Assignee pickers. Everything they own stays as it is.",
+        "readmitted": "Restored. They can sign in again.",
+        "not_admin": "Only an Administrator can change this.",
+        "not_found": "That person is not in your org.",
+        "last_admin": "This is the only Administrator. Somebody else has to be made one first, or nobody would be able to invite anyone again.",
+        "failed": "That did not save. Try again."
+      }
     }
   },
   "groupRobot": {

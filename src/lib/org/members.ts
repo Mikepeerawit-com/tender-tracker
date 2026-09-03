@@ -1,5 +1,7 @@
 import "server-only";
 
+import { currentUser } from "@/lib/auth/session";
+import { createServiceClient } from "@/lib/supabase/service-client";
 import {
   createSessionClient,
   type SessionCookieStore,
@@ -126,4 +128,124 @@ export function ownerOptions(
   if (!owner?.id || options.some((option) => option.id === owner.id)) return options;
 
   return [...options, { ...owner, former: true }];
+}
+
+export const membershipDisableRefusals = [
+  "not_admin",
+  "not_found",
+  "last_admin",
+  "failed",
+] as const;
+
+export type MembershipDisableRefusal = (typeof membershipDisableRefusals)[number];
+
+/**
+ * How ending or restoring a Membership can end, as the Org Admin sees it.
+ *
+ * The two successes are separate because they are opposite sentences: one says a
+ * colleague can no longer sign in, the other says they can again. A single "Saved" would
+ * leave the admin reading the same word whichever way the row went, on the one screen
+ * where getting it backwards locks somebody out. Walked by `messages.test.ts`.
+ */
+export const membershipDisableStatuses = [
+  ...membershipDisableRefusals,
+  "disabled",
+  "readmitted",
+] as const;
+
+export type MembershipDisableStatus = (typeof membershipDisableStatuses)[number];
+
+/**
+ * End a colleague's Membership, or re-admit one who came back.
+ *
+ * The write side of {@link listMemberships}, and it lives beside the reads because
+ * Disabling is defined by what those reads then do: the person keeps every row they own
+ * and leaves every picker that would give them new work. Users are never deleted —
+ * a departing colleague owns Tenders and entered Quotes the comparison view is built on.
+ *
+ * `disabledAt` is the value written rather than a flag, so the instant is the one the
+ * request boundary read (ADR-0010); `null` is the readmission.
+ *
+ * Admin-gated, and enforced here rather than in the screen that draws the control,
+ * because a server action is a public endpoint that anyone signed in can POST to. The
+ * service client does the write for the same reason `setWecomUserid` does: this is a
+ * column on somebody else's row, and it is scoped to the caller's own org by hand.
+ *
+ * **A known and accepted race:** the last-Org-Admin check and the write are two
+ * statements rather than one, so two Org Admins Disabling *each other* within the same
+ * moment could both pass a check that counted the other, and land an org with none. It
+ * needs two admins, acting concurrently, in opposite directions — an org has exactly one
+ * unless somebody ran the dashboard `update` in README §6 to make a second, which is the
+ * same dashboard the recovery runs from. Closing it properly means a constraint trigger
+ * or an RPC, which is a migration and a second home for the rule, and neither is worth it
+ * for a screen fewer than ten people can open. Revisit if promoting an admin ever becomes
+ * something the app itself can do.
+ */
+export async function setMembershipDisabled(
+  { userId, disabledAt }: { userId: string; disabledAt: Date | null },
+  store: SessionCookieStore,
+): Promise<{ ok: true } | { ok: false; reason: MembershipDisableRefusal }> {
+  const caller = await currentUser(store);
+
+  if (!caller?.isOrgAdmin) return { ok: false, reason: "not_admin" };
+
+  const service = createServiceClient();
+
+  // Read the person before writing them, so "they are not yours to Disable" is answered
+  // as `not_found` rather than by the rule below happening to look at the wrong org.
+  const { data: target } = await service
+    .from("users")
+    .select("is_org_admin")
+    .eq("id", userId)
+    .eq("org_id", caller.orgId)
+    .maybeSingle();
+
+  if (!target) return { ok: false, reason: "not_found" };
+
+  if (
+    disabledAt !== null &&
+    target.is_org_admin &&
+    !(await anotherAdminRemains(userId, caller.orgId))
+  ) {
+    return { ok: false, reason: "last_admin" };
+  }
+
+  const { data, error } = await service
+    .from("users")
+    .update({ disabled_at: disabledAt === null ? null : disabledAt.toISOString() })
+    .eq("id", userId)
+    .eq("org_id", caller.orgId)
+    .select("id");
+
+  // A write that failed is not a person who is not here. The row was read a moment ago,
+  // so `not_found` at this point would be a sentence naming a colleague whose row the
+  // admin is looking at — false, and the kind of false that sends somebody to check the
+  // wrong thing.
+  if (error !== null) return { ok: false, reason: "failed" };
+
+  return data.length === 1 ? { ok: true } : { ok: false, reason: "not_found" };
+}
+
+/**
+ * Whether the org would still have an Org Admin without this one.
+ *
+ * ADR-0017: an organisation must always keep at least one, because the alternative is an
+ * org nobody can ever invite anybody into again, with no route back inside the app.
+ *
+ * It counts **the Org Admins who would be left** rather than reading the flag on the row
+ * in front of it. Read the other way the rule becomes "an Org Admin can never be
+ * Disabled", which is a different and wrong one — an admin among several may leave like
+ * anybody else. Disabled admins do not count: one who has themselves been Disabled can
+ * invite nobody, so they leave the org exactly as stranded as no second admin at all.
+ */
+async function anotherAdminRemains(userId: string, orgId: string): Promise<boolean> {
+  const { count } = await createServiceClient()
+    .from("users")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", orgId)
+    .eq("is_org_admin", true)
+    .is("disabled_at", null)
+    .neq("id", userId);
+
+  return (count ?? 0) > 0;
 }

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { InviteForm } from "@/components/admin/invite-form";
+import { MembershipControls } from "@/components/admin/membership-controls";
 import { TestMentionButton } from "@/components/admin/test-mention-button";
 import { WecomUseridForm } from "@/components/admin/wecom-userid-form";
 import { Screen } from "@/components/screen";
@@ -70,6 +71,12 @@ export default async function PeoplePage() {
                   userId={member.id}
                   hasUserid={Boolean(member.wecomUserid)}
                 />
+                {/* Drawn on the admin's own row too. In the org this ships as — one Org
+                    Admin, because promoting a second is a dashboard `update` — that row is
+                    where the last-Administrator refusal gets read, and it is the only place
+                    the app ever explains why an org must keep one. Hiding it would trade a
+                    mis-click nobody has made for a question nobody can get answered. */}
+                <MembershipControls userId={member.id} disabledAt={member.disabledAt} />
               </div>
             </li>
           ))}

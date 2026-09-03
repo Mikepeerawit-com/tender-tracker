@@ -1,6 +1,6 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import {
@@ -9,6 +9,11 @@ import {
   type InviteStatus,
   type WecomUserIdStatus,
 } from "@/lib/auth/invite";
+import {
+  setMembershipDisabled,
+  type MembershipDisableStatus,
+} from "@/lib/org/members";
+import { runInstantFromHeaders } from "@/lib/run-instant";
 import { setGroupRobot, type GroupRobotSaveStatus } from "@/lib/wecom/group-robot";
 import { sendTestMention, type TestMentionStatus } from "@/lib/wecom/test-mention";
 
@@ -82,6 +87,39 @@ export async function sendTestMentionAction(
   return result.reason === "send_failed"
     ? { status: result.reason, detail: result.detail }
     : { status: result.reason };
+}
+
+export type MembershipState = { status?: MembershipDisableStatus };
+
+/**
+ * End a colleague's Membership when they leave, or restore it when they come back.
+ *
+ * One action for both directions, told apart by the intent the button carries, because
+ * they are the same write with two values — and a screen that could only end one would
+ * make coming back a database job.
+ *
+ * The instant is resolved here and passed down, never read inside the write (ADR-0010).
+ */
+export async function setMembershipDisabledAction(
+  _previous: MembershipState,
+  formData: FormData,
+): Promise<MembershipState> {
+  const userId = String(formData.get("userId") ?? "");
+  const readmitting = String(formData.get("intent") ?? "") === "readmit";
+
+  const result = await setMembershipDisabled(
+    {
+      userId,
+      disabledAt: readmitting ? null : runInstantFromHeaders(await headers()),
+    },
+    await cookies(),
+  );
+
+  if (!result.ok) return { status: result.reason };
+
+  revalidatePath("/admin/people");
+
+  return { status: readmitting ? "readmitted" : "disabled" };
 }
 
 export type GroupRobotState = {

@@ -341,6 +341,34 @@ update users set is_org_admin = true where email = '<email>';
 If the database somehow has no `orgs` row, `/setup` says so rather than guessing — the row
 is seeded by the schema migration, so its absence means §2 has not run.
 
+### 7. When somebody leaves
+
+**Disable them at `/admin/people`, and never delete them.** A departing colleague owns
+Tenders and entered the Quotes the comparison view is built on; deleting the row would
+orphan the history the whole screen is made of. Disabling ends the Membership and leaves
+every one of those rows readable.
+
+It takes effect on their very next request rather than when a cookie expires: RLS makes a
+Disabled member read nothing, including their own row, so the live session stops working
+immediately, their next sign-in is refused, and they leave the Owner and Assignee pickers
+and every group-robot @mention. A Tender they own still names them, marked as the former
+Owner, so nothing quietly changes hands. **Restore** on the same screen puts all of it
+back.
+
+The one case the screen refuses is **Disabling the org's last remaining Administrator**,
+because an org with none is one nobody can ever invite anybody into again, with no way
+back inside the app (ADR-0017). Promote somebody first with the `update` in §6 — that is
+still a dashboard job — and then Disable. With one Administrator, which is what a
+deployment starts with, that refusal is also what stops them Disabling themselves.
+
+Where an org does have two, either can Disable the other, and an Administrator can Disable
+their own account. Doing so signs them out on their next request; the way back is the other
+Administrator pressing **Restore**.
+
+Nothing checks WeCom membership automatically, so this is a step somebody has to remember
+on the day. Clearing their WeCom userid is not a substitute: it stops the @mentions and
+leaves the account able to sign in.
+
 ## Before launch
 
 Five checks need a real phone and cannot be run from CI: density and 44px tap targets at
