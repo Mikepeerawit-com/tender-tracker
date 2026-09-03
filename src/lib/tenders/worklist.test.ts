@@ -209,20 +209,28 @@ describe("listWorklist", () => {
   });
 
   it("puts every Tender in exactly one group, and sorts each by the client's deadline", async () => {
-    const missed = await aTender({
-      internalQuoteDeadline: "2026-08-01",
-      clientSubmissionDeadline: "2026-08-05",
-    });
-    // Overdue on sourcing, but that is a fact about the *row* now. It groups by Progress
-    // like everything else, and its Progress is `new`.
-    const overdue = await aTender({ internalQuoteDeadline: "2026-08-05" });
-    const quiet = await aTender({ clientSubmissionDeadline: "2026-09-05" });
-    const alsoQuiet = await aTender({ clientSubmissionDeadline: "2026-08-30" });
+    // Six Tenders at once. Built one after another this was the slowest test in the
+    // repo — 5039 ms in a full parallel run, *past* vitest's 5000 ms and reported green
+    // only because the clock and the assertion were racing (#105). Every group below is
+    // decided by dates and Quote rows, never by the order the six arrived in, so the
+    // waiting is all this gives up.
+    const [missed, overdue, quiet, alsoQuiet, priced, sent] = await Promise.all([
+      aTender({
+        internalQuoteDeadline: "2026-08-01",
+        clientSubmissionDeadline: "2026-08-05",
+      }),
+      // Overdue on sourcing, but that is a fact about the *row* now. It groups by
+      // Progress like everything else, and its Progress is `new`.
+      aTender({ internalQuoteDeadline: "2026-08-05" }),
+      aTender({ clientSubmissionDeadline: "2026-09-05" }),
+      aTender({ clientSubmissionDeadline: "2026-08-30" }),
+      aTender({ items: [anItem(), anItem("Surgical masks")] }),
+      aTender(),
+    ]);
 
-    const priced = await aTender({ items: [anItem(), anItem("Surgical masks")] });
+    // These two are what make `priced` and `sent` the groups they are named for, so they
+    // wait for the Tenders rather than joining them.
     await aQuote(priced.itemIds[0]);
-
-    const sent = await aTender();
     await recordSubmission(
       { tenderId: sent.id, submittedAt: new Date("2026-08-08T09:00:00Z") },
       await signedInAs(owner.email),
@@ -277,16 +285,21 @@ describe("listWorklist", () => {
     // toss rather than a red — the very fault this issue is about, rebuilt inside its own
     // check. With five the heap has one arrangement in 120 that would let it pass, and
     // pulling the key out was watched go red (ADR-0016).
-    const twins = [];
-
-    for (let index = 0; index < 5; index += 1) {
-      twins.push(
-        await aTender({
+    //
+    // Built all at once: five sequential `aTender` calls are five sign-ins and five
+    // writes end to end, which measured 4577 ms of vitest's 5000 ms in a full parallel
+    // run — a test one slow round trip from failing on the clock rather than on the
+    // ordering it is about (#105). Nothing here wants a known insert order, unlike the
+    // tie test above: what is asserted is ascending `id`, which the ids answer for
+    // themselves however they arrived.
+    const twins = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        aTender({
           internalQuoteDeadline: "2026-08-22",
           clientSubmissionDeadline: "2026-09-12",
         }),
-      );
-    }
+      ),
+    );
 
     const grouped = (await worklist()).filter((section) => section.tenders.length > 0);
 

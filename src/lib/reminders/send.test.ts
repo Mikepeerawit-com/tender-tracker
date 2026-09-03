@@ -481,23 +481,39 @@ describe("rule 4: one message per Tender per run", () => {
     // The measured case from ticket 14: ten open Tenders after a three-day outage. Four
     // rows are owed on each — two offsets on each milestone — so a run that looped the
     // pending rows would post forty against a webhook capped at twenty a minute.
-    const tenders = [];
-
-    for (let index = 0; index < 10; index += 1) {
-      tenders.push(
-        await aTender({
+    //
+    // Built all at once rather than one after another, and that is the whole of #105.
+    // Ten sequential `aTender` calls are ten sign-ins and ten writes end to end: 2445 ms
+    // of the 5000 ms vitest allows, spent before the engine under test had done
+    // anything, on an *idle* machine. A runner with the other suites writing beside it
+    // has nowhere near twice that to spare, so this failed on the clock while saying
+    // nothing about pacing. Concurrent it measures 549-682 ms across five runs, which is
+    // the margin every other test in this file has rather than a bespoke timeout.
+    //
+    // Nothing is given up for it. What the run posts is decided by the rows that exist,
+    // never by the order they arrived in. And concurrency here is safe by the schema's
+    // own design: `assign_tender_reference` issues references through
+    // `insert … on conflict do update`, so ten inserts queue on one row lock rather than
+    // racing for a number.
+    const tenders = await Promise.all(
+      Array.from({ length: 10 }, () =>
+        aTender({
           internalQuoteDeadline: "2026-08-11",
           clientSubmissionDeadline: "2026-08-13",
         }),
-      );
-    }
+      ),
+    );
 
     const robot = recordingRobot();
 
     await sendDailyPosts(runInstant, robot);
 
-    for (const tender of tenders) {
-      expect(reminderFor(robot, await referenceOf(tender.id))).not.toBe("");
+    const references = await Promise.all(
+      tenders.map((tender) => referenceOf(tender.id)),
+    );
+
+    for (const reference of references) {
+      expect(reminderFor(robot, reference)).not.toBe("");
     }
 
     // Ten reminders and the one Digest: the whole set the run would post.
@@ -1078,6 +1094,12 @@ describe("the daily run as a whole", () => {
     // its own: an untiebroken read hands back insert order, so the assertion has to want
     // something else or it cannot tell the two apart. Take the keys out of
     // `dueReminders` and this goes red (ADR-0016).
+    // One after another, deliberately, where the ten-Tender test above is concurrent:
+    // the timestamps below are set to *reverse* the insert order, and that guarantee is
+    // only available while the insert order is known. Built with `Promise.all` this
+    // would still pass, but it would have a one-in-six chance of agreeing with the heap
+    // by accident — a check weakened into the coin toss #104 was about. Three round
+    // trips is 733 ms, so there is no clock argument for changing it (#105).
     const tenders = [];
 
     for (let index = 0; index < 3; index += 1) {
