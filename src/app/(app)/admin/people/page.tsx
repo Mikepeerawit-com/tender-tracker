@@ -7,7 +7,7 @@ import { TestMentionButton } from "@/components/admin/test-mention-button";
 import { WecomUseridForm } from "@/components/admin/wecom-userid-form";
 import { Screen } from "@/components/screen";
 import { currentUser } from "@/lib/auth/session";
-import { createSessionClient } from "@/lib/supabase/session-client";
+import { listMemberships } from "@/lib/org/members";
 
 /**
  * The only administrative screen in v1: who is in the org, inviting someone new, and
@@ -25,14 +25,10 @@ export default async function PeoplePage() {
 
   const t = await getTranslations("people");
 
-  const { data: members } = await createSessionClient(store)
-    .from("users")
-    .select("id, name, email, wecom_userid, is_org_admin, disabled_at")
-    // Names are not unique, and this is the table an admin reads down looking for one
-    // person. `id` keeps two colleagues who share a name in the same two rows on every
-    // load rather than swapping places.
-    .order("name")
-    .order("id");
+  // Read through `listMemberships` rather than issued here: this page cannot be called by
+  // any test, so a query written in it — and the ordering rule it carries — is
+  // unreviewable (#119).
+  const members = await listMemberships(store);
 
   return (
     <Screen>
@@ -49,7 +45,7 @@ export default async function PeoplePage() {
       <section className="flex flex-col gap-4">
         <h2 className="text-sm font-medium">{t("members")}</h2>
         <ul className="flex flex-col gap-4">
-          {(members ?? []).map((member) => (
+          {members.map((member) => (
             <li
               key={member.id}
               className="border-border flex flex-col gap-3 rounded-lg border p-4"
@@ -57,22 +53,22 @@ export default async function PeoplePage() {
               <div className="flex flex-wrap items-baseline gap-2">
                 <span className="font-medium">{member.name}</span>
                 <span className="text-muted-foreground text-sm">{member.email}</span>
-                {member.is_org_admin ? (
+                {member.isOrgAdmin ? (
                   <span className="bg-muted rounded-md px-2 py-0.5 text-xs">
                     {t("orgAdmin")}
                   </span>
                 ) : null}
-                {member.disabled_at ? (
+                {member.disabledAt ? (
                   <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs">
                     {t("disabled")}
                   </span>
                 ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <WecomUseridForm userId={member.id} value={member.wecom_userid} />
+                <WecomUseridForm userId={member.id} value={member.wecomUserid} />
                 <TestMentionButton
                   userId={member.id}
-                  hasUserid={Boolean(member.wecom_userid)}
+                  hasUserid={Boolean(member.wecomUserid)}
                 />
               </div>
             </li>
