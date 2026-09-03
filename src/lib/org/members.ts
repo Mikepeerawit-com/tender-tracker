@@ -22,7 +22,11 @@ export async function listMembers(store: SessionCookieStore): Promise<Member[]> 
     .from("users")
     .select("id, name")
     .is("disabled_at", null)
+    // Two colleagues can share a name — this is a picker, and an option that moves
+    // between two openings of the same form is one a person clicks the wrong one of.
+    // `id` decides that rather than the heap.
     .order("name")
+    .order("id")
     .overrideTypes<Member[], { merge: false }>();
 
   return data ?? [];

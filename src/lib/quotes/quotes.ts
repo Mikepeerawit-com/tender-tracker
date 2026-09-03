@@ -560,7 +560,11 @@ export async function listItemSourcing(
     .from("no_supplier_found")
     .select("tender_item_id, user_id, note, created_at, user:users(name)")
     .in("tender_item_id", itemIds)
+    // Oldest first, so the refusals read in the order they were entered. `no_supplier_found`
+    // has no `id`; `user_id` is the other half of its key, and it is what settles two
+    // colleagues who answered inside the same clock tick.
     .order("created_at")
+    .order("user_id")
     .overrideTypes<NoSupplierFoundDbRow[], { merge: false }>();
 
   for (const refusal of refusals ?? []) {

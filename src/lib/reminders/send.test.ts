@@ -1068,6 +1068,58 @@ describe("the daily run as a whole", () => {
     expect(report.rates).toBeNull();
     expect(reminderFor(robot, await referenceOf(tender.id))).not.toBe("");
   });
+
+  it("posts a day's backlog in the order it accumulated, not the heap's", async () => {
+    // Three Tenders owed on the same day. `due_date` is equal across all of them, so the
+    // date cannot decide which message the group reads first and `created_at` has to.
+    //
+    // The rows' timestamps are then set *against* the order they were inserted in, which
+    // is the one lever there is for reproducing what a loaded or vacuumed heap does on
+    // its own: an untiebroken read hands back insert order, so the assertion has to want
+    // something else or it cannot tell the two apart. Take the keys out of
+    // `dueReminders` and this goes red (ADR-0016).
+    const tenders = [];
+
+    for (let index = 0; index < 3; index += 1) {
+      tenders.push(
+        await aTender({
+          internalQuoteDeadline: "2026-08-11",
+          clientSubmissionDeadline: "2026-08-13",
+        }),
+      );
+    }
+
+    const references = await Promise.all(
+      tenders.map((tender) => referenceOf(tender.id)),
+    );
+
+    // Reversed: the Tender made last is the one whose rows accumulated first.
+    for (const [index, tender] of tenders.entries()) {
+      const { error } = await service
+        .from("reminders")
+        .update({ created_at: `2026-08-0${3 - index}T00:00:00Z` })
+        .eq("tender_id", tender.id);
+
+      if (error) throw error;
+    }
+
+    const robot = recordingRobot();
+
+    await sendDailyPosts(runInstant, robot);
+
+    // Only these three, and only their relative order: the org has been collecting
+    // Tenders all suite and the run posts about those too.
+    const order = mine(robot)
+      .filter((message) => !isDigest(message.payload.text.content))
+      .map((message) =>
+        references.findIndex((reference) =>
+          message.payload.text.content.includes(reference),
+        ),
+      )
+      .filter((index) => index >= 0);
+
+    expect(order).toEqual([2, 1, 0]);
+  });
 });
 
 /**

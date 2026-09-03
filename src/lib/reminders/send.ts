@@ -317,8 +317,13 @@ async function dueReminders(orgId: string, today: string): Promise<ReminderRow[]
     .eq("sent", false)
     .lte("due_date", today)
     .in("milestone", [...reminderMilestones])
-    // Oldest first, so a backlog reads in the order it accumulated.
+    // Oldest first, so a backlog reads in the order it accumulated — and a whole day's
+    // worth shares one `due_date`, which is the order the group's messages are posted in.
+    // `created_at` is what "the order it accumulated" actually means once the day cannot
+    // decide it; `id` is the last resort behind that.
     .order("due_date")
+    .order("created_at")
+    .order("id")
     .overrideTypes<ReminderRow[], { merge: false }>();
 
   return data ?? [];
