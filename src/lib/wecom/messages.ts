@@ -32,6 +32,30 @@ import type { GroupMessage } from "./robot";
  * rules that actually bind. Until #59 the pointer pointed nowhere. See
  * `@/lib/app-links.ts` for what a link may carry and why a missing origin is quiet.
  *
+ * ## An instruction, not a report
+ *
+ * **Every message here says what the reader is being asked to do, and where.** This app
+ * ships no help page and no tour — `docs/simplification-scope.md` rejects both, a help
+ * page being the tax paid for an interface that did not get simple enough and a tour
+ * being dismissed once and never found again. What it ships instead is empty states and
+ * *these messages*, which are read in WeCom, where these people already are, and are the
+ * only surface guaranteed to be seen. So the teaching happens here, at the moment
+ * somebody needs it, and costs nothing to maintain (#99).
+ *
+ * Concretely: a line names the person by their role — 参与人 or 负责人 — says the verb,
+ * and names the screen or the control the verb happens on, in the sentence being read
+ * anyway. "内部报价截止:2026-08-25" told a reader a fact about a date and left them to
+ * work out that it was addressed to them and what it wanted; the line below tells them.
+ *
+ * This does **not** relax anything above it. The instruction is what to do in the app,
+ * never what the app would have shown — a message that needs a figure to be useful is
+ * the wrong message, not a reason to quote one (ADR-0012).
+ *
+ * The one message that does not carry a per-line instruction is the Digest, and that is
+ * deliberate: it lists every open Tender, and a line that told somebody what to do twelve
+ * times over is a Digest nobody reads to the bottom of. Its instruction sits once, in the
+ * footer. See {@link digestMessage}.
+ *
  * ## Convention
  *
  * **Every builder takes a single object argument and returns a {@link GroupMessage}.**
@@ -63,7 +87,7 @@ export function testMentionMessage({
   wecomUserid: string;
 }): GroupMessage {
   return {
-    content: "【招标跟踪】测试通知:如果这条消息 @ 到了你,请回复确认。",
+    content: "【招标跟踪】测试通知：如果这条消息 @ 到了你，请在本群回复一句话确认收到。",
     mentions: [wecomUserid],
   };
 }
@@ -75,22 +99,36 @@ export function testMentionMessage({
  * do not say the same kind of thing. Three count down to a date that has not arrived; the
  * fourth reports a date that went by with nothing sent, and **that one is the loudest
  * thing this app says** — it is the failure the whole product exists to prevent, and a
- * line that read "客户投标截止:2026-09-01(还剩 -1 天)" would bury it in the format of a
+ * line that read "客户投标截止：2026-09-01（还剩 -1 天）" would bury it in the format of a
  * routine nudge.
  *
  * `daysLeft` is therefore taken by the three that count down and ignored by the one that
  * does not, which is why it is an argument rather than something this record interpolates
  * for everybody.
+ *
+ * **Each line names its own audience and its own next action** (#99). Who a Milestone
+ * reaches is a property of the Milestone — `@/lib/reminders/send.ts` states it once, in
+ * `milestoneRules` — so the sentence can say it out loud: the internal quote deadline
+ * reaches 参与人 and asks for prices, and the other three reach the 负责人 and ask for
+ * something only the Owner can do. A reader who was @-ed and cannot tell which half of
+ * the message is theirs is a reader the reminder did not reach.
  */
 const milestoneLines: Record<
   ReminderMilestone,
   (date: string, daysLeft: number) => string
 > = {
-  internal_quote: (date, daysLeft) => `内部报价截止:${date}${remaining(daysLeft)}`,
-  client_submission: (date, daysLeft) => `客户投标截止:${date}${remaining(daysLeft)}`,
+  internal_quote: (date, daysLeft) =>
+    `内部报价截止：${date}${remaining(daysLeft)}。参与人请打开“我的工作”，为每个产品项` +
+    `录入报价，或说明找不到供应商。`,
+  client_submission: (date, daysLeft) =>
+    `客户投标截止：${date}${remaining(daysLeft)}。负责人请为每个产品项选定报价，把投标` +
+    `送到客户手上，再回来点“记录投标已送出”。`,
   submission_missed: (date) =>
-    `⚠️ 投标已错过!客户投标截止日期 ${date} 已过,我方仍未提交。`,
-  decision_chase: (date) => `跟进客户决标:预计决标日期 ${date}。请联系客户询问结果。`,
+    `⚠️ 投标已错过！客户投标截止日期 ${date} 已过，我方仍未提交。负责人请立即联系客户，` +
+    `问清楚还能不能补交，并把结果记进系统。`,
+  decision_chase: (date) =>
+    `跟进客户决标：预计决标日期 ${date}。负责人请联系客户询问结果，再逐个产品项把裁决` +
+    `记进系统。`,
 };
 
 /** One milestone this Tender is being nudged about, as the message needs it. */
@@ -157,7 +195,9 @@ export function reminderMessage({
       ...milestones.map(({ milestone, date, daysLeft }) =>
         milestoneLines[milestone](date, daysLeft),
       ),
-      "请进入系统跟进。",
+      // Every line above already says who is being asked and what for; this one says
+      // where, once, for however many of them the batch collapsed into this message.
+      "请进入系统完成以上操作。",
       ...linkLine(link),
     ].join("\n"),
     // The `@` is not written into the text — WeCom renders it from `mentioned_list`, and
@@ -167,7 +207,7 @@ export function reminderMessage({
 }
 
 function remaining(daysLeft: number): string {
-  return daysLeft === 0 ? "(就是今天)" : `(还剩 ${daysLeft} 天)`;
+  return daysLeft === 0 ? "（就是今天）" : `（还剩 ${daysLeft} 天）`;
 }
 
 /**
@@ -208,12 +248,12 @@ const digestSummaries: Record<
 > = {
   internal_quote: (date, daysLeft) => `内部报价截止 ${date}${remaining(daysLeft)}`,
   client_submission: (date, daysLeft) => `客户投标截止 ${date}${remaining(daysLeft)}`,
-  submission_missed: (date) => `⚠️ 已错过客户投标截止 ${date},仍未提交`,
-  decision_chase: (date) => `等待客户决标,预计 ${date}`,
+  submission_missed: (date) => `⚠️ 已错过客户投标截止 ${date}，仍未提交`,
+  decision_chase: (date) => `等待客户决标，预计 ${date}`,
 };
 
 /** A Tender whose Bid is out with no chase date set — open, and dated by nothing. */
-const undated = "已提交,等待客户决标(未设预计决标日期)";
+const undated = "已提交，等待客户决标（未设预计决标日期）";
 
 /** One open Tender in the Digest: which it is, and what it is heading for. */
 export type DigestLine = {
@@ -258,7 +298,15 @@ export function digestMessage({
   tenders: DigestLine[];
   link: string | null;
 }): GroupMessage {
-  const head = `【招标跟踪】今日概览:共 ${tenders.length} 个进行中的招标`;
+  const head = [
+    `【招标跟踪】每日摘要：共 ${tenders.length} 个进行中的招标`,
+    // **In the head, not the footer** (#99). Once, because a listing that told somebody
+    // what to do twelve times over is a Digest nobody reads to the bottom of — but at the
+    // top, because that is the line everybody reads and the one line the truncation below
+    // can never eat. A reader who stops after two Tenders has still been told what the
+    // list is for.
+    "请在下面找到与你有关的那几条，进入系统处理：参与人录入报价，负责人选定报价并提交投标。",
+  ].join("\n");
   // **One link, in the footer, and never one per line.** A Tender's line is roughly 60-90
   // bytes and a URL is another 60-70, so per-line links would very nearly halve how many
   // Tenders fit before the truncation below — the cost of making each line tappable would
@@ -266,14 +314,21 @@ export function digestMessage({
   // message whose whole job is the listing. It also needs no new arithmetic: the footer
   // is charged against the budget up front, before any line is added, so a longer one is
   // handled by the accounting that is already here.
-  const foot = ["详情请进入系统查看。", ...linkLine(link)].join("\n");
+  // The link and nothing else — the instruction moved to the head, and a sentence here
+  // repeating it would be the line the reader has already skipped. Kept as the array
+  // `linkLine` returns so that no link means no line at all, rather than an empty string
+  // that would join into a trailing newline.
+  const foot = linkLine(link);
+  // Says only what was dropped. The footer two lines below already sends the reader into
+  // the app, and saying it twice in three lines is how a footer stops being read.
   const omission = (count: number) => `其余 ${count} 个未列出。`;
 
   // Reserved up front at its longest, so the line that says what was dropped can never
   // itself be the line that does not fit.
   const reserved = utf8Bytes(`\n${omission(tenders.length)}`);
   const lines: string[] = [];
-  let used = utf8Bytes(head) + utf8Bytes(`\n${foot}`);
+  let used =
+    utf8Bytes(head) + foot.reduce((bytes, line) => bytes + utf8Bytes(`\n${line}`), 0);
 
   for (const [index, tender] of tenders.entries()) {
     const line = digestLine(tender);
@@ -294,7 +349,7 @@ export function digestMessage({
       head,
       ...lines,
       ...(omitted > 0 ? [omission(omitted)] : []),
-      foot,
+      ...foot,
     ].join("\n"),
   };
 }
@@ -303,7 +358,7 @@ function digestLine({ reference, client, title, next }: DigestLine): string {
   const summary =
     next === null ? undated : digestSummaries[next.milestone](next.date, next.daysLeft);
 
-  return `${reference} · ${client} · ${title}:${summary}`;
+  return `${reference} · ${client} · ${title}：${summary}`;
 }
 
 function utf8Bytes(value: string): number {
@@ -368,9 +423,9 @@ export function selectedQuoteOutcomeMessage({
     content: [
       outcomeHead({ reference, client, item }, outcome),
       outcome === "won"
-        ? "你的报价被选用,并且中标了。"
-        : "本次投标采用的是你的报价,客户最终选择了其他供应商。",
-      "详情请进入系统查看。",
+        ? "你的报价被选用，并且中标了。"
+        : "本次投标采用的是你的报价，客户最终选择了其他供应商。",
+      "请进入系统打开该产品项，查看这次采用的报价。",
       ...linkLine(link),
     ].join("\n"),
     mentions,
@@ -395,6 +450,15 @@ export function selectedQuoteOutcomeMessage({
  * `link` points at **the Tender Item**, for the same reason as above and rather more
  * pointedly: "your quote was not selected" is a sentence whose only useful answer is to
  * go and see what was.
+ *
+ * **The instruction stops at naming who we bid** (#99). "Go and ask them what the
+ * difference was" is the obvious next sentence and it is the one thing this message may
+ * not say: ADR-0020 takes the comparison off the Assignee's screen on purpose — *"a
+ * sourcing race where everyone watches everyone else's prices in real time is not the
+ * race this business is running"* — and an instruction to go and get it out of band
+ * would hand back through WeCom exactly what the screen withholds. The message names the
+ * colleague, which ADR-0012 permits and which is what makes it actionable at all, and
+ * then sends the reader to their **own** Quotes.
  */
 export function otherQuotesOutcomeMessage({
   reference,
@@ -417,9 +481,9 @@ export function otherQuotesOutcomeMessage({
     content: [
       outcomeHead({ reference, client, item }, outcome),
       selectedBy === null
-        ? "本次投标未记录选用的报价。"
-        : `本次投标采用的是 ${selectedBy} 的报价。`,
-      "你的报价未被选用。详情请进入系统查看。",
+        ? "你的报价未被选用，本次投标未记录选用的报价。"
+        : `你的报价未被选用，本次投标采用的是 ${selectedBy} 的报价。`,
+      "请进入系统打开该产品项，查看你自己的报价记录。",
       ...linkLine(link),
     ].join("\n"),
     mentions,

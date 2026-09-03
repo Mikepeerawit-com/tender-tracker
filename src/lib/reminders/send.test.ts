@@ -219,7 +219,7 @@ function mine(robot: RobotStub, whose: string = client) {
 }
 
 /** The Digest's own header. Every other message this org posts is about one Tender. */
-const digestHead = "今日概览";
+const digestHead = "每日摘要";
 
 function isDigest(content: string): boolean {
   return content.includes(digestHead);
@@ -830,7 +830,9 @@ describe("the missed submission", () => {
     const content = reminderFor(robot, await referenceOf(tender.id));
 
     expect(content).toContain("错过");
-    expect(content).not.toContain("客户投标截止:");
+    // The countdown line, which names the same deadline and would be the noise. Its
+    // colon is what tells it apart from the miss's own 客户投标截止日期 … 已过.
+    expect(content).not.toContain("客户投标截止：");
     expect(content).not.toContain("内部报价截止");
   });
 
@@ -1392,7 +1394,7 @@ describe("where a reminder and the Digest send people", () => {
 
     await sendDailyPosts(runInstant, robot);
 
-    expect(reminderFor(robot, reference)).toContain("请进入系统跟进。");
+    expect(reminderFor(robot, reference)).toContain("请进入系统完成以上操作。");
     expect(reminderFor(robot, reference)).not.toContain("http");
     expect(digestOf(robot)).not.toBe("");
     expect(digestOf(robot)).not.toContain("http");
