@@ -66,7 +66,12 @@ for someone who will not read:
 1. **Empty states** — already good, and they appear exactly where a person is stuck.
 2. **The Group Robot message itself** — it is read in WeCom, where these users already are,
    and it is the only surface guaranteed to be seen. Wording it as an instruction teaches
-   at the moment of need and costs nothing to maintain. This is the one currently unused.
+   at the moment of need and costs nothing to maintain. Shipped in
+   [#99](https://github.com/Mikepeerawit-com/tender-tracker/issues/99): every reminder
+   line now names the role it addresses — 参与人 or 负责人 — the verb, and the screen or
+   control the verb happens on, and the daily summary carries the same once in its footer.
+   `src/lib/wecom/messages.test.ts` holds it there with a rule that goes red on a message
+   asking the reader for nothing.
 3. **A 60-second screen recording pinned in the WeCom group**, in Chinese, when people are
    onboarded. Re-watchable, no code, no translation debt.
 4. **Five minutes of the Org Admin's time**, per person. For ten people this beats every

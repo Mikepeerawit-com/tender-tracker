@@ -506,6 +506,13 @@ function notificationsFor(
  * "which Milestone a Reminder is for decides who it @s" — and the same turns out to be
  * true of when it goes quiet, so both live here and a fifth milestone is a fifth entry
  * rather than three more branches spread across the file.
+ *
+ * **`audience` is said twice: here, and in the message.** Since #99 each milestone line in
+ * `@/lib/wecom/messages.ts` names the role it is addressed to — 参与人 for the internal
+ * quote deadline, 负责人 for the other three — so that somebody @-ed about a Tender owing
+ * two milestones can tell which half is theirs. **Changing an `audience` below means
+ * changing that sentence too**, or the message @s one person and instructs another.
+ * `messages.test.ts` pins the wording; nothing can pin the pair, which is why this says so.
  */
 const milestoneRules: Record<
   ReminderMilestone,

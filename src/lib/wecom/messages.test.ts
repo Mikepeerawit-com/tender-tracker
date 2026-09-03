@@ -119,6 +119,29 @@ const rules: Rule[] = [
       (message.mentions ?? []).filter((mention) => /^[+\d][\d\s-]{6,}$/.test(mention)),
   },
   {
+    name: "asks the reader for something, somewhere in it",
+    // #99: these messages are this app's manual. A help page is the tax paid for an
+    // interface that did not get simple enough and a tour is dismissed once and never
+    // found again, so `docs/simplification-scope.md` ships neither — the teaching happens
+    // here, in the sentence somebody is reading in WeCom anyway.
+    //
+    // **This is a floor and not the guard**, and the name says so. It goes red on a
+    // builder added later that asks the reader for nothing at all, which is the fault an
+    // introspecting rule can see; it cannot see a *line* going back to a bare report,
+    // because every message carries a 请 somewhere else. That regression is #99's actual
+    // one, and it is pinned per line in "the role each reminder line addresses" below.
+    offences: (message) => (message.content.includes("请") ? [] : [message.content]),
+  },
+  {
+    name: "says none of the retired words for a Tender or an Item",
+    // The settled vocabulary (#87, #88). These strings are hardcoded here rather than in
+    // `zh-Hans.json`, so the guard that retired 标书, 条目, 明细 and bare 产品 across the
+    // screens cannot see them — and this is the app's highest-volume Chinese. 标书 is the
+    // bid document *we send back*, and pointed at the opposite end of the exchange from
+    // the client's enquiry it was being used for.
+    offences: (message) => message.content.match(/标书|条目|明细|产品(?!项)/g) ?? [],
+  },
+  {
     name: "renders every field it reached for",
     // The fixture is passed to every builder by introspection, so a builder wanting a
     // field it does not carry would quietly interpolate `undefined` — and a message
@@ -179,6 +202,45 @@ describe("the rules themselves", () => {
     const rule = rules.find((candidate) => candidate.name === name);
 
     expect(rule?.offences(leaky).length).toBeGreaterThan(0);
+  });
+
+  /**
+   * The message #99 was filed about: every fact correct, nothing forbidden said, and no
+   * idea in it what the reader is supposed to do. It is what all four milestone lines
+   * looked like, and it satisfies every other rule in the list.
+   */
+  const reporting: GroupMessage = {
+    content: `【招标跟踪】${fixture.reference} · ${fixture.client}\n内部报价截止:2026-08-25`,
+  };
+
+  /**
+   * The same message in the vocabulary #87 and #88 retired — five words for two things,
+   * and not one of them wrong on its own line, which is why they survived on the screens
+   * for as long as they did. It asks the reader to do something, so it clears the rule
+   * above and is caught only by the one it is here for.
+   */
+  const stale: GroupMessage = {
+    content: "【招标跟踪】本标书的招标明细已有报价,请进入系统查看该条目下的产品。",
+  };
+
+  it("catches a message that only reports a condition", () => {
+    const rule = rules.find(
+      (candidate) => candidate.name === "asks the reader for something, somewhere in it",
+    );
+
+    expect(rule?.offences(reporting).length).toBeGreaterThan(0);
+    expect(rules.flatMap((other) => other.offences(reporting))).toEqual([
+      reporting.content,
+    ]);
+  });
+
+  it("catches a message written in the retired vocabulary", () => {
+    const rule = rules.find((candidate) =>
+      candidate.name.startsWith("says none of the retired words"),
+    );
+
+    // Every one of the four, named, so a failure says which word came back.
+    expect(rule?.offences(stale)).toEqual(["标书", "明细", "条目", "产品"]);
   });
 
   it("passes the message the app actually sends", () => {
@@ -374,6 +436,91 @@ describe("reminderMessage", () => {
   });
 });
 
+/**
+ * Who each milestone's line speaks to, in the line itself (#99).
+ *
+ * The audience is already a property of the Milestone — `@/lib/reminders/send.ts` states
+ * it once, in `milestoneRules`, and that is what decides who gets @-ed. What was missing
+ * is that the *sentence* never said it, so somebody @-ed about a Tender owing two
+ * milestones had to work out which half was theirs. These pin the two halves apart, in
+ * the words #87 settled: 负责人 is the Owner and nobody else, 参与人 is the Assignee.
+ */
+describe("the role each reminder line addresses", () => {
+  const lineFor = (milestone: builders.DueMilestone["milestone"]) =>
+    builders.reminderMessage({
+      reference: "T-1042",
+      client: "Bangkok General Hospital",
+      title: "Surgical consumables Q3",
+      milestones: [{ milestone, date: "2026-09-01", daysLeft: 2 }],
+      mentions: ["somchai"],
+      link: null,
+    }).content;
+
+  it("asks 参与人 for the prices, because that is who the internal deadline reaches", () => {
+    // `milestoneRules.internal_quote.audience` is the Assignees who still owe a Quote —
+    // the Owner is not @-ed by this one at all, so naming them here would address a
+    // person the message never reached.
+    const line = lineFor("internal_quote");
+
+    expect(line).toContain("参与人");
+    expect(line).not.toContain("负责人");
+  });
+
+  it.each(["client_submission", "submission_missed", "decision_chase"] as const)(
+    "asks 负责人 on %s, which is the only person it reaches",
+    (milestone) => {
+      const line = lineFor(milestone);
+
+      expect(line).toContain("负责人");
+      expect(line).not.toContain("参与人");
+    },
+  );
+
+  it.each([
+    "internal_quote",
+    "client_submission",
+    "submission_missed",
+    "decision_chase",
+  ] as const)("asks for something on %s, in the line itself", (milestone) => {
+    // The regression #99 is about, pinned where it can actually be seen. The whole-message
+    // rule cannot: `reminderMessage` always appends 请进入系统完成以上操作, so all four
+    // lines could go back to bare dates and it would stay green. This reads the milestone
+    // line alone — index 1, after the head and before the footer.
+    const line = lineFor(milestone).split("\n")[1];
+
+    expect(line).toContain("请");
+  });
+
+  it("names the screen or the control, not just the app", () => {
+    // "请进入系统跟进" is where this started: true, and no help to somebody who has the
+    // app open and does not know which of its screens wants them.
+    expect(lineFor("internal_quote")).toContain("我的工作");
+    expect(lineFor("client_submission")).toContain("记录投标已送出");
+  });
+
+  it("stays inside WeCom's cap with every milestone the Tender can owe at once", () => {
+    // The instruction wording roughly trebled a milestone line, and a Tender caught up
+    // after an outage carries all four in one message. A `text` message over 2048 bytes
+    // is refused whole, and this is the one reminder shape that could reach it — the
+    // Digest has a budget of its own; this one had never needed one.
+    const everything = builders.reminderMessage({
+      reference: "T-1042",
+      client: "Bangkok General Hospital and Medical Centre, Sukhumvit",
+      title: "Surgical consumables and ward furniture, Q3 restock",
+      milestones: [
+        { milestone: "internal_quote", date: "2026-08-25", daysLeft: 3 },
+        { milestone: "client_submission", date: "2026-09-01", daysLeft: 0 },
+        { milestone: "submission_missed", date: "2026-09-01", daysLeft: -1 },
+        { milestone: "decision_chase", date: "2026-09-20", daysLeft: 5 },
+      ],
+      mentions: ["somchai", "anong"],
+      link: "https://tenders.example.com/tenders/8f0e2d1c",
+    });
+
+    expect(new TextEncoder().encode(everything.content).length).toBeLessThanOrEqual(2048);
+  });
+});
+
 describe("the daily Digest", () => {
   const line = (reference: string, daysLeft: number) => ({
     reference,
@@ -472,6 +619,37 @@ describe("the daily Digest", () => {
     // reading.
     expect(digest.content).toContain("T-1000");
     expect(digest.content).not.toContain("T-1059");
+  });
+
+  it("tells the reader what to do with the list, once, at the top", () => {
+    // Once and not per line: the Digest is a listing of every open Tender, and a line
+    // that told somebody what to do twelve times over is a Digest nobody reads to the
+    // bottom of. Both roles are named because it @s nobody and is read by everybody.
+    const digest = builders.digestMessage({ tenders: [line("T-1042", 3)], link: null });
+
+    expect(digest.content).toContain("参与人");
+    expect(digest.content).toContain("负责人");
+    expect(digest.content.match(/参与人/g)).toHaveLength(1);
+  });
+
+  it("keeps that instruction when the list is too long to print", () => {
+    // In the head rather than the footer precisely so the truncation cannot reach it. A
+    // reader whose org has sixty open Tenders is the one most in need of being told what
+    // the list is for.
+    const many = Array.from({ length: 60 }, (_value, index) =>
+      line(`T-${1000 + index}`, index),
+    );
+    const digest = builders.digestMessage({ tenders: many, link: null });
+
+    expect(digest.content.split("\n")[1]).toContain("参与人");
+    expect(digest.content).toMatch(/其余 \d+ 个未列出/);
+  });
+
+  it("calls itself the daily summary, which is what CONTEXT.md says it is", () => {
+    // 每日摘要 — the settled label. 今日概览 was a sixth name for a thing with no screen.
+    expect(
+      builders.digestMessage({ tenders: [line("T-1042", 3)], link: null }).content,
+    ).toContain("每日摘要");
   });
 
   it("names no omission when everything fitted", () => {
@@ -638,11 +816,10 @@ describe("the link into the app", () => {
       const message = builders.digestMessage({ tenders: many, link });
       const lines = message.content.split("\n");
 
-      // The footer is two lines now — its sentence, then the bare URL — so the notice
-      // sits third from the end rather than second.
-      expect(lines.slice(-3)).toEqual([
+      // The footer is the bare URL and nothing else — the instruction sits in the head,
+      // where the truncation cannot reach it — so the notice is second from the end.
+      expect(lines.slice(-2)).toEqual([
         expect.stringMatching(/其余 \d+ 个未列出/),
-        "详情请进入系统查看。",
         link,
       ]);
     });

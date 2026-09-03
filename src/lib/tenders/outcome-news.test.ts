@@ -508,7 +508,7 @@ describe("where the outcome news sends people", () => {
 
     await decide(tender.itemId, "lost", robot);
 
-    expect(addressedTo(robot, nok)).toContain("详情请进入系统查看。");
+    expect(addressedTo(robot, nok)).toContain("请进入系统打开该产品项");
     expect(addressedTo(robot, nok)).not.toContain("http");
   });
 });
