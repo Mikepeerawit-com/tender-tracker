@@ -788,6 +788,44 @@ describe("No Supplier Found", () => {
     expect(sourcing?.noSupplierFound.map((row) => row.userId)).toEqual([assignee.id]);
   });
 
+  it("settles two Assignees who answered in the same tick by user id", async () => {
+    // `no_supplier_found` has no `id`; `user_id` is the other half of its key and the only
+    // tiebreak there is. Reaching it needs a real tie, which two statements cannot make —
+    // `now()` moves between them, so `created_at` would decide and the second key would
+    // never be asked. So the rows are written one after another in **descending `user_id`**
+    // and then given one identical `created_at` with the service client, the lever
+    // `send.test.ts` already uses for exactly this. The heap then holds the opposite of the
+    // answer, which is the condition #105 says a tiebreak check needs and mostly lacks.
+    //
+    // Verified as ADR-0016 requires: with `.order("user_id")` removed from
+    // `listItemSourcing`, this file run whole under the parallel suite went red **10 times
+    // in 10**. Never filtered to this test alone — with the table holding only these two
+    // rows the read is reliably insert order, which manufactures the red instead of
+    // finding it.
+    const stores = new Map([
+      [assignee.id, await signedInAs(assignee.email)],
+      [rival.id, await signedInAs(rival.email)],
+    ]);
+    const ascending = [assignee.id, rival.id].sort();
+
+    for (const userId of [...ascending].reverse()) {
+      await recordNoSupplierFound({ tenderItemId: itemId, note: null }, stores.get(userId)!);
+    }
+
+    const { error } = await service
+      .from("no_supplier_found")
+      .update({ created_at: "2026-08-18T09:00:00Z" })
+      .eq("tender_item_id", itemId);
+
+    if (error) throw error;
+
+    const sourcing = (
+      await listItemSourcing(tenderId, stores.get(ascending[0])!)
+    ).get(itemId);
+
+    expect(sourcing?.noSupplierFound.map((row) => row.userId)).toEqual(ascending);
+  });
+
   it("is cleared by the Assignee who left it", async () => {
     const store = await signedInAs(assignee.email);
 
