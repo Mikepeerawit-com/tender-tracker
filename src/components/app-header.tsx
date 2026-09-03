@@ -5,6 +5,7 @@ import { AppMenu } from "@/components/app-menu";
 import { TopNav } from "@/components/app-nav";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Button } from "@/components/ui/button";
+import type { ScreenWidth } from "@/components/ui/screen-body";
 
 /**
  * Where the reader is. One of two shapes, and never more than one row.
@@ -33,6 +34,25 @@ export type AppLocation =
  * button and the member's name — so a reader could not tell the Tender detail from the
  * list without reading the body. Now the list carries the wordmark, a Tender carries its
  * reference and client, and the sourcing screen carries those and the Item.
+ *
+ * **The bar is full width and its contents are not.** The ink, the border and the fill
+ * span the viewport, because a bar that stopped short of the edge would be a strip rather
+ * than a bar; what sits on it is held in the same column as the body beneath, at the same
+ * {@link ScreenWidth} and the same `px-6`. Until #97 there was no inner container at all,
+ * and above ~1300px that was visible: the body centred itself at 1280 while the wordmark
+ * stayed pinned to the window, so the page had two different answers to *where is my left
+ * edge*. On a phone the column is the whole width and this changes nothing but the
+ * padding, which now matches the body's.
+ *
+ * **What is aligned is the column, not the ink**, and the difference is the controls' own
+ * insets: the wordmark link's `px-2`, the icon buttons' 44px square around a glyph half
+ * that size. Pulling each end group back by its own inset was written and taken out again.
+ * It lines the ink up and it does so by letting a child overhang its parent, which is
+ * precisely what `overflowing` in `@/test/layout` is watching for — the overhang is
+ * harmless here, since it lands inside the `px-6`, but the only way to keep it was to
+ * teach that guard an exception, and a guard with an exception for the case in front of
+ * you is the shape ADR-0016 refuses. Eight pixels of ghost-button padding is a smaller
+ * price than a hole in the check that catches rows pushing the page sideways.
  *
  * **It also carries the two destinations, above `md` and only there.** Below `md` they
  * are a bottom bar instead, reachable with a thumb inside the WeCom webview; above it a
@@ -67,71 +87,85 @@ export type AppLocation =
 export function AppHeader({
   isOrgAdmin,
   location = { kind: "app" },
+  width = "max-w-3xl",
 }: {
   isOrgAdmin: boolean;
   location?: AppLocation;
+  /**
+   * The column the bar's contents are aligned to — the same value the page hands
+   * `ScreenBody`, and handed to both by `Screen` so that one number reaches them.
+   * The default is the default there: the two screens that stand in for a page,
+   * `(app)/loading.tsx` and `(app)/error.tsx`, draw this bar over a body they compose at
+   * that width, and a fallback whose bar disagreed with its own skeleton would be the
+   * fault this prop exists to fix, drawn on the way in.
+   */
+  width?: ScreenWidth;
 }) {
   const t = useTranslations("nav");
   const app = useTranslations("app");
 
   return (
-    <header className="border-hairline bg-card flex min-w-0 items-center justify-between gap-2 border-b px-2 py-1.5">
-      <div className="flex min-w-0 flex-1 items-center gap-1">
-        {location.kind === "app" ? (
-          // This link is on every screen in the app, so its prefetch fires most often and
-          // is discarded most often — see the note in `tender-row.tsx`.
-          <Link
-            href="/tenders"
-            prefetch={false}
-            className="hover:bg-muted flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-2 transition-colors"
-          >
-            <Wordmark />
-            <span className="min-w-0 truncate text-sm font-semibold">{app("name")}</span>
-          </Link>
-        ) : (
-          <>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-11"
-              aria-label={t("back")}
-              nativeButton={false}
-              render={<Link href={location.backHref} prefetch={false} />}
+    <header className="border-hairline bg-card border-b px-6">
+      <div
+        className={`mx-auto flex w-full min-w-0 items-center justify-between gap-2 py-1.5 ${width}`}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-1">
+          {location.kind === "app" ? (
+            // This link is on every screen in the app, so its prefetch fires most often
+            // and is discarded most often — see the note in `tender-row.tsx`.
+            <Link
+              href="/tenders"
+              prefetch={false}
+              className="hover:bg-muted flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-2 transition-colors"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M15 5l-7 7 7 7"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </Button>
-            {/* Both halves may be shortened, and both have to be able to: a reference
-                is whatever the client issued and need not contain a space, so one held at
-                `shrink-0` pushed the whole bar off a 390px phone. The reference is capped
-                at a share of the row rather than given a free hand, so that a long one
-                cannot squeeze the client name out of existence — a clipped name is still
-                recognisable, and two clipped halves still say which record this is. */}
-            <span className="flex min-w-0 items-baseline gap-2">
-              <span className="text-ink-faint max-w-[45%] min-w-0 truncate font-mono text-[11.5px] font-medium tracking-wide">
-                {location.reference}
+              <Wordmark />
+              <span className="min-w-0 truncate text-sm font-semibold">{app("name")}</span>
+            </Link>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-11"
+                aria-label={t("back")}
+                nativeButton={false}
+                render={<Link href={location.backHref} prefetch={false} />}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M15 5l-7 7 7 7"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </Button>
+              {/* Both halves may be shortened, and both have to be able to: a reference
+                  is whatever the client issued and need not contain a space, so one held at
+                  `shrink-0` pushed the whole bar off a 390px phone. The reference is capped
+                  at a share of the row rather than given a free hand, so that a long one
+                  cannot squeeze the client name out of existence — a clipped name is still
+                  recognisable, and two clipped halves still say which record this is. */}
+              <span className="flex min-w-0 items-baseline gap-2">
+                <span className="text-ink-faint max-w-[45%] min-w-0 truncate font-mono text-[11.5px] font-medium tracking-wide">
+                  {location.reference}
+                </span>
+                <span className="min-w-0 truncate text-[13px] font-semibold">
+                  {location.detail}
+                </span>
               </span>
-              <span className="min-w-0 truncate text-[13px] font-semibold">
-                {location.detail}
-              </span>
-            </span>
-          </>
-        )}
-      </div>
+            </>
+          )}
+        </div>
 
-      <div className="flex shrink-0 items-center gap-1">
-        {/* Above `md` only. Below it the same two destinations are a bottom bar, drawn by
-            `(app)/layout.tsx` where a thumb reaches them (ADR-0021). */}
-        <TopNav />
-        <LocaleSwitcher compact />
-        <AppMenu isOrgAdmin={isOrgAdmin} />
+        <div className="flex shrink-0 items-center gap-1">
+          {/* Above `md` only. Below it the same two destinations are a bottom bar, drawn
+              by `(app)/layout.tsx` where a thumb reaches them (ADR-0021). */}
+          <TopNav />
+          <LocaleSwitcher compact />
+          <AppMenu isOrgAdmin={isOrgAdmin} />
+        </div>
       </div>
     </header>
   );

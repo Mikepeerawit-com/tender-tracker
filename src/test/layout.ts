@@ -3,13 +3,30 @@ import { expect } from "vitest";
 export { phone } from "./phone.mjs";
 
 /**
- * The shared half of the `layout` project: one viewport and one measurement.
+ * The shared half of the `layout` project: the viewports, and the measurements every
+ * suite in it makes.
  *
  * `overflowing` began at the bottom of `working-sheet.layout.test.tsx`, where it guarded
  * the only screen anybody measured. #56 was the bill for that — the tender list, the
  * Tender detail and the app shell had never been measured at all — so it lives here now,
  * to be pointed at anything drawn.
  */
+
+/**
+ * The viewport the Owner's two screens are judged at (ADR-0021, #97).
+ *
+ * ADR-0021 composes the tender list and the Tender detail **at 1280px**, and this is
+ * deliberately wider than that. At exactly 1280 a column capped at 1280 and a column that
+ * simply took whatever the window gave it measure the same number, so a suite standing
+ * there could not tell a committed width from no cap at all — and the fault it is guarding
+ * against is the one #97 was raised for, a screen that never says how wide it means to be.
+ * The 160px of daylight is what lets the assertion fail (ADR-0016).
+ *
+ * 1440×900 rather than a round number, because it is the default logical resolution of the
+ * laptop an Owner in this org actually has open.
+ */
+export const desk = { width: 1440, height: 900 };
+
 
 /**
  * ADR-0009's bar, as every layout suite states it: nothing on the page scrolls sideways.
