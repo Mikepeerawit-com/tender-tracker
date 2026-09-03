@@ -8,7 +8,7 @@ import "@/app/globals.css";
 import en from "@/messages/en.json";
 import zhHans from "@/messages/zh-Hans.json";
 
-import { desk, expectNoSidewaysScroll, phone } from "@/test/layout";
+import { column, desk, expectNoSidewaysScroll, phone } from "@/test/layout";
 
 import { AuthScreen } from "./auth-screen";
 import { LoginForm } from "./login-form";
@@ -67,9 +67,9 @@ describe("a signed-out screen", () => {
       await page.viewport(desk.width, desk.height);
       renderLogin(locale, m);
 
-      const column = document.querySelector("main")!.getBoundingClientRect();
+      const columnRect = column().getBoundingClientRect();
 
-      expect(column.width).toBe(narrowColumn);
+      expect(columnRect.width).toBe(narrowColumn);
       // Centred, not merely narrow: a column pinned to the left of a 1440px window is the
       // other way to fail this and measures the same width.
       //
@@ -79,7 +79,7 @@ describe("a signed-out screen", () => {
       // column would then fail an assertion that has nothing to do with centring.
       const laidOutIn = document.documentElement.clientWidth;
 
-      expect(Math.round(column.left)).toBe(Math.round(laidOutIn - column.right));
+      expect(Math.round(columnRect.left)).toBe(Math.round(laidOutIn - columnRect.right));
     },
   );
 
@@ -92,9 +92,7 @@ describe("a signed-out screen", () => {
       // The same cap, below it: 390px less the wrapper's `p-6` either side. This is the
       // half that says the column is a cap rather than a fixed width — a `w-sm` would
       // measure 384 here and push the page sideways.
-      expect(document.querySelector("main")!.getBoundingClientRect().width).toBe(
-        phone.width - 48,
-      );
+      expect(column().getBoundingClientRect().width).toBe(phone.width - 48);
       expectNoSidewaysScroll();
     },
   );
