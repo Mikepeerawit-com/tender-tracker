@@ -216,7 +216,7 @@ describe("listWorklist", () => {
     // Overdue on sourcing, but that is a fact about the *row* now. It groups by Progress
     // like everything else, and its Progress is `new`.
     const overdue = await aTender({ internalQuoteDeadline: "2026-08-05" });
-    const quiet = await aTender();
+    const quiet = await aTender({ clientSubmissionDeadline: "2026-09-05" });
     const alsoQuiet = await aTender({ clientSubmissionDeadline: "2026-08-30" });
 
     const priced = await aTender({ items: [anItem(), anItem("Surgical masks")] });
@@ -235,12 +235,68 @@ describe("listWorklist", () => {
     expect(sections.map((section) => section.tenders.map((row) => row.id))).toEqual([
       [missed.id],
       // Soonest client submission deadline first, within a group as across the list. The
-      // order is inherited from `listTenders`, never decided here.
+      // order is inherited from `listTenders`, never decided here. Three different client
+      // deadlines on purpose: what a tie does is the next test's question, and this one
+      // would answer it by luck.
       [alsoQuiet.id, overdue.id, quiet.id],
       [priced.id],
       [],
       [sent.id],
     ]);
+  });
+
+  it("breaks a tie on the client's deadline with the internal one", async () => {
+    // Two Tenders due to the client on the same day, which the date the list sorts on
+    // cannot order. Created in the *opposite* order to the one asserted, so that insert
+    // order — what an untiebroken read of a fresh heap hands back — is the wrong answer
+    // rather than accidentally the right one. Take the tiebreaker back out of
+    // `listTenders` and this was watched go red, every run — which is the point of
+    // asserting a tie rather than inheriting one (ADR-0016). The `id` key behind this
+    // one is the next test's question.
+    const later = await aTender({
+      internalQuoteDeadline: "2026-08-26",
+      clientSubmissionDeadline: "2026-09-10",
+    });
+    const sooner = await aTender({
+      internalQuoteDeadline: "2026-08-20",
+      clientSubmissionDeadline: "2026-09-10",
+    });
+
+    const grouped = (await worklist()).filter((section) => section.tenders.length > 0);
+
+    // Both are `new`, so they share a group and what is read below is the order *within*
+    // a list — not the order of the groups around it, which would answer by accident.
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0].tenders.map((row) => row.id)).toEqual([sooner.id, later.id]);
+  });
+
+  it("falls back to `id` when both deadlines match, so a list of twins holds still", async () => {
+    // Five Tenders alike in both dates, where neither key can say anything and `id` is
+    // all that is left. Five rather than two because a uuid is random: with two, insert
+    // order agrees with `id` order half the time and pulling the key out would be a coin
+    // toss rather than a red — the very fault this issue is about, rebuilt inside its own
+    // check. With five the heap has one arrangement in 120 that would let it pass, and
+    // pulling the key out was watched go red (ADR-0016).
+    const twins = [];
+
+    for (let index = 0; index < 5; index += 1) {
+      twins.push(
+        await aTender({
+          internalQuoteDeadline: "2026-08-22",
+          clientSubmissionDeadline: "2026-09-12",
+        }),
+      );
+    }
+
+    const grouped = (await worklist()).filter((section) => section.tenders.length > 0);
+
+    expect(grouped).toHaveLength(1);
+    // Postgres orders `uuid` bytewise, which for the lowercase hex it hands back is the
+    // same order a plain string sort gives — so this is the spec's ascending `id`, not a
+    // second copy of the query's reasoning.
+    expect(grouped[0].tenders.map((row) => row.id)).toEqual(
+      twins.map((twin) => twin.id).sort(),
+    );
   });
 
   it("labels every row with whichever deadlines are inside the rolling window", async () => {

@@ -41,6 +41,11 @@ const service = createServiceClient();
 const owner = { id: "", email: `owner-${run}@example.test` };
 const mate = { id: "", email: `mate-${run}@example.test` };
 const outsider = { id: "", email: `outsider-${run}@example.test` };
+/** Two colleagues who really do share a name, which is the only thing they are for. */
+const twins = [
+  { id: "", email: `twin-a-${run}@example.test` },
+  { id: "", email: `twin-b-${run}@example.test` },
+];
 
 let orgId = "";
 let otherOrgId = "";
@@ -84,7 +89,11 @@ async function createOrg(name: string): Promise<string> {
   return data.id;
 }
 
-async function createMember(org: string, who: { id: string; email: string }) {
+async function createMember(
+  org: string,
+  who: { id: string; email: string },
+  name = who.email,
+) {
   const { data, error } = await service.auth.admin.createUser({
     email: who.email,
     password,
@@ -97,7 +106,7 @@ async function createMember(org: string, who: { id: string; email: string }) {
 
   const { error: profileError } = await service
     .from("users")
-    .insert({ id: who.id, org_id: org, name: who.email, email: who.email });
+    .insert({ id: who.id, org_id: org, name, email: who.email });
 
   if (profileError) throw profileError;
 }
@@ -120,6 +129,8 @@ beforeAll(async () => {
   await createMember(orgId, owner);
   await createMember(orgId, mate);
   await createMember(otherOrgId, outsider);
+
+  for (const twin of twins) await createMember(orgId, twin, "Somchai Wong");
 });
 
 afterEach(async () => {
@@ -130,7 +141,9 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  const ids = [owner.id, mate.id, outsider.id].filter(Boolean);
+  const ids = [owner.id, mate.id, outsider.id, ...twins.map((t) => t.id)].filter(
+    Boolean,
+  );
 
   await service.from("users").delete().in("id", ids);
 
@@ -576,6 +589,25 @@ describe("Assignees", () => {
       ok: true,
     });
     expect((await getTender(tenderId, store))?.assignees).toEqual([]);
+  });
+
+  it("keeps two Assignees who share a name in the same order on every read", async () => {
+    // `localeCompare` calls these two equal, so the name cannot order them and `id` has
+    // to. Enrolled in the *opposite* order to the one asserted — which is knowable here
+    // because the ids already exist — so that the order the embed hands back untouched
+    // is the wrong answer. Drop the `id` key from `getTender` and this goes red every
+    // run rather than half of them (ADR-0016).
+    const [first, second] = [...twins].sort((a, b) => a.id.localeCompare(b.id));
+    const tenderId = await aTender();
+    const store = await signedInAs(owner.email);
+
+    expect(await addAssignee({ tenderId, userId: second.id }, store)).toEqual({ ok: true });
+    expect(await addAssignee({ tenderId, userId: first.id }, store)).toEqual({ ok: true });
+
+    expect((await getTender(tenderId, store))?.assignees).toEqual([
+      { id: first.id, name: "Somchai Wong" },
+      { id: second.id, name: "Somchai Wong" },
+    ]);
   });
 
   it("lets anyone add themselves without waiting to be asked", async () => {

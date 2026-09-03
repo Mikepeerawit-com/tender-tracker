@@ -565,7 +565,8 @@ export async function removeAssignee(
 }
 
 /**
- * Every Tender the caller's org has, soonest Client Submission Deadline first.
+ * Every Tender the caller's org has, soonest Client Submission Deadline first, and
+ * ties on that date broken rather than left to the heap.
  *
  * A plain list, and deliberately so: the worklist blocks that decide what a Tender is
  * *doing* need the Quotes and the No Supplier Found records they are derived from, which
@@ -578,7 +579,14 @@ export async function listTenders(store: SessionCookieStore): Promise<TenderList
       `${tenderColumns}, owner:users!tenders_owner_user_id_fkey(name), ` +
         `items:tender_items(id, outcome)`,
     )
+    // The reader's screen states two dates on every row, and the client's is only the
+    // first of them: two Tenders due to the client on the same day are told apart by
+    // which one the office has to finish pricing first. `id` is not a fact about any
+    // screen — it is the last resort that keeps a list whose every date matches from
+    // reordering itself between two reads.
     .order("client_submission_deadline")
+    .order("internal_quote_deadline")
+    .order("id")
     .overrideTypes<TenderListDbRow[], { merge: false }>();
 
   return (data ?? []).map((row) => ({ ...tenderSummary(row), items: row.items }));
@@ -618,10 +626,14 @@ export async function getTender(
       outcome: item.outcome,
       outcomeAt: item.outcome_at,
     })),
+    // The embed comes back in no order at all, so this sort is the whole of the list's
+    // order. Two colleagues can share a name and `localeCompare` calls them equal, which
+    // a stable sort settles by handing back the heap — the same fault `listTenders` has
+    // on its dates. `id` is the last resort behind the name, as it is for the Items above.
     assignees: data.assignees
       .map((row) => row.user)
       .filter((user) => user !== null)
-      .sort((a, b) => a.name.localeCompare(b.name)),
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)),
   };
 }
 

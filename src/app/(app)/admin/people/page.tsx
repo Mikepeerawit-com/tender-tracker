@@ -28,7 +28,11 @@ export default async function PeoplePage() {
   const { data: members } = await createSessionClient(store)
     .from("users")
     .select("id, name, email, wecom_userid, is_org_admin, disabled_at")
-    .order("name");
+    // Names are not unique, and this is the table an admin reads down looking for one
+    // person. `id` keeps two colleagues who share a name in the same two rows on every
+    // load rather than swapping places.
+    .order("name")
+    .order("id");
 
   return (
     <Screen>
