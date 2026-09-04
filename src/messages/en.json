@@ -16,6 +16,13 @@
     "zh-Hans": "简体中文",
     "switching": "Switching language…"
   },
+  "themeSwitcher": {
+    "label": "Appearance",
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark",
+    "switching": "Changing appearance…"
+  },
   "login": {
     "title": "Sign in",
     "description": "Tender Tracker is invitation-only. If you do not have an account yet, ask your Administrator to invite you.",

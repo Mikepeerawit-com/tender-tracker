@@ -330,6 +330,45 @@ describe("membership is not business data", () => {
     expect(data?.locale).not.toBe("zh-Hans");
   });
 
+  it("still lets a member repaint their own app", async () => {
+    // The column grant is what this asks about: `theme` joins `name` and `locale` on the
+    // list of columns a member may write, or the switcher is a control that silently does
+    // nothing (#133).
+    const client = await signedInAs(members.a.email);
+
+    const { error } = await client
+      .from("users")
+      .update({ theme: "dark" })
+      .eq("id", members.a.id);
+
+    expect(error).toBeNull();
+  });
+
+  it("refuses to let a member repaint a colleague's app", async () => {
+    // The other half, and the reason the two are asserted separately: a column added to
+    // the grant and *not* covered by the own-row policy would pass the test above and hand
+    // every signed-in browser one PostgREST call that turns a colleague's phone dark in
+    // the middle of a meeting. The policy names no column, so this passes by inheritance —
+    // which is exactly the claim worth pinning, since the new migration does not restate it.
+    const client = await signedInAs(members.a.email);
+
+    const { error } = await client
+      .from("users")
+      .update({ theme: "dark" })
+      .eq("id", members.mate.id);
+
+    // A write matching no updatable row is a success over zero rows, as above.
+    expect(error).toBeNull();
+
+    const { data } = await service
+      .from("users")
+      .select("theme")
+      .eq("id", members.mate.id)
+      .single();
+
+    expect(data?.theme).toBe("system");
+  });
+
   it("refuses to let a member rewrite the org's settings", async () => {
     // `fx_buffer_pct` now has a screen (#123), and this is what that screen is gated
     // *against*: the write goes through a server action that checks `is_org_admin` and

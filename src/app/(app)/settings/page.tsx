@@ -1,8 +1,10 @@
 import { getTranslations } from "next-intl/server";
 
 import { LocaleSwitcher } from "@/components/locale-switcher";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Measure } from "@/components/ui/screen-body";
 import { ScreenHeader } from "@/components/ui/screen-header";
+import { getThemeChoice } from "@/lib/theme/cookie";
 
 /**
  * **Preferences** — what this app is set up as for one member, and for nobody else.
@@ -20,12 +22,23 @@ import { ScreenHeader } from "@/components/ui/screen-header";
  * before — but behind the login a member has already chosen a locale on first start-up, so
  * it does not carry here, and the bar is one control lighter in both scripts (#56).
  *
+ * **The theme sits beside it** (#133), which is the second thing on the screen and the
+ * reason Preferences is a stack of cards rather than one. Both are the same kind of fact —
+ * what this app is set up as for one member, remembered on their own row and seen by
+ * nobody else — and neither belongs anywhere near the Organisation group, where a change
+ * lands on colleagues' screens.
+ *
  * There is no gate on this screen and there should not be: everything on it is the
  * reader's own.
  */
 export default async function PreferencesPage() {
   const t = await getTranslations("preferences");
   const language = await getTranslations("localeSwitcher");
+  const appearance = await getTranslations("themeSwitcher");
+
+  // What the page is *painted* in, which is the cookie the root layout resolved this
+  // request from rather than the row behind it. See the note on `ThemeSwitcher`.
+  const theme = await getThemeChoice();
 
   return (
     <>
@@ -37,6 +50,11 @@ export default async function PreferencesPage() {
         <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
           <h2 className="text-sm font-medium">{language("label")}</h2>
           <LocaleSwitcher />
+        </section>
+
+        <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
+          <h2 className="text-sm font-medium">{appearance("label")}</h2>
+          <ThemeSwitcher current={theme} />
         </section>
       </Measure>
     </>

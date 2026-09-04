@@ -319,9 +319,10 @@ _Avoid_: pipeline, total quoted value, open value
 The one place a member changes what is theirs and an Org Admin changes what is the
 organisation's. It has two groups, and which group a thing is in is the whole of what the
 grouping says: **Preferences** is what affects the reader alone — the language they read in
-— and every member has one. **Organisation** is what affects everybody, and only an **Org
-Admin** has one: People, the Group Robot and Converting foreign prices, which had been
-three loose rows in a menu with no collective name until this term existed.
+and the **Theme** they read it in — and every member has one. **Organisation** is what
+affects everybody, and only an **Org Admin** has one: People, the Group Robot and
+Converting foreign prices, which had been three loose rows in a menu with no collective
+name until this term existed.
 
 The two are named apart so that an Org Admin can tell at a glance which of their changes
 land on their colleagues' screens. Where the groups sit and what is drawn for whom is
@@ -330,6 +331,19 @@ entry's.
 _Label_: en "Settings" · zh 设置 · the groups: en "Preferences" / "Organisation" · zh
 偏好设置 / 组织.
 _Avoid_: admin, admin area, console, configuration, options
+
+**Theme**:
+Whether a member's app is painted light, dark, or whatever their device is currently asking
+for. Three answers — System, light and dark — with System the default, so nobody is blinded
+at night without having asked for anything and nobody is asked a question that has a good
+answer already. It is the reader's own and is remembered on their user record rather than
+on the handset, so it follows them to the next device
+([ADR-0024](docs/adr/0024-the-theme-is-the-readers-not-the-devices.md)) — the same posture
+the language has, and the opposite of an organisation-level setting, which changes what a
+colleague sees.
+_Label_: en "Appearance" · zh 外观 · the answers: en "System" / "Light" / "Dark" · zh
+跟随系统 / 浅色 / 深色.
+_Avoid_: dark mode, night mode, colour scheme, skin
 
 **Org Admin**:
 A user who may invite others into one organisation. A capability, not a rank — an Org

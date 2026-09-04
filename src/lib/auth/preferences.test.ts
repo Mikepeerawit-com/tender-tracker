@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createServiceClient } from "@/lib/supabase/service-client";
 import { memoryCookieStore } from "@/lib/supabase/session-client";
 
-import { chooseLocale } from "./preferences";
+import { chooseLocale, chooseTheme } from "./preferences";
 import { currentUser, signIn } from "./session";
 
 /**
@@ -120,6 +120,58 @@ describe("chooseLocale", () => {
     // The signed-out login screen has a switcher too, and there is no row to write yet.
     // The cookie carries that choice alone until the sign-in turns them into somebody.
     await expect(chooseLocale("zh-Hans", memoryCookieStore())).resolves.toEqual({
+      ok: false,
+    });
+  });
+});
+
+describe("chooseTheme", () => {
+  it("follows the device for a member who has never been asked", async () => {
+    const store = await signedIn();
+
+    // The one place theme parts company with locale: there is no `/choose-theme` and
+    // there should not be, so the answer that needs no question is already on the row.
+    await expect(currentUser(store)).resolves.toMatchObject({ theme: "system" });
+  });
+
+  it("remembers a pinned theme on the user's own row", async () => {
+    const store = await signedIn();
+
+    await expect(chooseTheme("dark", store)).resolves.toEqual({ ok: true });
+
+    // Read back through the session client, the way a page renders it — the service key
+    // would pass even if `theme` had never joined the column grant.
+    await expect(currentUser(store)).resolves.toMatchObject({ theme: "dark" });
+  });
+
+  it("survives a new session with an empty cookie jar", async () => {
+    await chooseTheme("dark", await signedIn());
+
+    // The phone the choice was made on, and the office desktop it was not. A theme that
+    // reverted on the second device would be worse than one nobody was offered, which is
+    // the whole of why it is a column rather than a cookie (ADR-0024).
+    const later = await signedIn();
+
+    await expect(currentUser(later)).resolves.toMatchObject({ theme: "dark" });
+  });
+
+  it("lets a member come back to following their device", async () => {
+    const store = await signedIn();
+
+    await chooseTheme("dark", store);
+    await expect(chooseTheme("system", store)).resolves.toEqual({ ok: true });
+
+    // `system` is a stored answer rather than the absence of one, which is what makes
+    // coming back to it something a member can do at all.
+    await expect(currentUser(store)).resolves.toMatchObject({ theme: "system" });
+  });
+
+  it("records nothing for a caller with no session", async () => {
+    // No screen reaches this today — the control is behind the login, unlike the language
+    // switcher, which the sign-in screen carries. It is asserted anyway because the write
+    // aims at `auth.uid()`: a version of this that fell back to updating *by something
+    // else* would be a write with no owner, and the refusal is what says it cannot be.
+    await expect(chooseTheme("dark", memoryCookieStore())).resolves.toEqual({
       ok: false,
     });
   });

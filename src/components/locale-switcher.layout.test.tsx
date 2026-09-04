@@ -74,6 +74,7 @@ vi.mock("@/app/actions/quote-photos", () => ({
   signQuotePhotoUploadsAction: async () => ({}),
 }));
 vi.mock("@/app/actions/locale", () => ({ switchLocale: () => new Promise(() => {}) }));
+vi.mock("@/app/actions/theme", () => ({ switchTheme: async () => ({}) }));
 
 describe(`switching language at ${phone.width}×${phone.height}`, () => {
   it.each(locales)("does not push Preferences sideways, in %s", async (locale, messages) => {

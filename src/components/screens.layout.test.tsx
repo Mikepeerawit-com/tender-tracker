@@ -50,6 +50,7 @@ vi.mock("@/app/actions/admin", () => ({
   setFxBufferAction: async () => ({}),
 }));
 vi.mock("@/app/actions/locale", () => ({ switchLocale: async () => ({}) }));
+vi.mock("@/app/actions/theme", () => ({ switchTheme: async () => ({}) }));
 vi.mock("@/app/actions/tenders", () => ({
   addAssigneeAction: async () => ({}),
   removeAssigneeAction: async () => ({}),

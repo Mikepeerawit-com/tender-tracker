@@ -467,6 +467,29 @@ describe("users", () => {
 
     expect(data?.locale).toBeNull();
   });
+
+  it("accepts only the three themes there is a control for", async () => {
+    const { error } = await service
+      .from("users")
+      .update({ theme: "sepia" })
+      .eq("id", fixture.userId);
+
+    expect(error).not.toBeNull();
+  });
+
+  it("follows the device until somebody says otherwise", async () => {
+    // The one place `theme` parts company with `locale`, which is null until first
+    // start-up asks. Nothing asks about a theme, so a row nobody has touched has to
+    // already hold the answer that needs no question — otherwise every member arrives on
+    // a screen with no palette decided for it.
+    const { data } = await service
+      .from("users")
+      .select("theme")
+      .eq("id", fixture.userId)
+      .single();
+
+    expect(data?.theme).toBe("system");
+  });
 });
 
 describe("reminders", () => {

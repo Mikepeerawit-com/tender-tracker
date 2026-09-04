@@ -15,6 +15,7 @@ import { ItemBrief } from "@/components/quotes/item-brief";
 import { NoSupplierFoundForm } from "@/components/quotes/no-supplier-found-form";
 import { QuoteList } from "@/components/quotes/quote-list";
 import { SettingsFrame } from "@/components/settings/settings-nav";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { MyWorkList } from "@/components/tenders/my-work-list";
 import { OutstandingBand } from "@/components/tenders/outstanding-band";
@@ -649,6 +650,15 @@ function preferences(m: Messages) {
         <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
           <h2 className="text-sm font-medium">{m.localeSwitcher.label}</h2>
           <LocaleSwitcher />
+        </section>
+
+        {/* `system` because it is what a member who has never opened this screen holds,
+            and because it is the widest of the three in both scripts — 跟随系统 is four Han
+            glyphs against two. A fixture pinned to a shorter answer would measure the easy
+            case of a row that has to fit three thumb-sized targets at 390px. */}
+        <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
+          <h2 className="text-sm font-medium">{m.themeSwitcher.label}</h2>
+          <ThemeSwitcher current="system" />
         </section>
       </Measure>
     </>

@@ -3,6 +3,9 @@ import { Fira_Code, Fira_Sans } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 
+import { getThemeChoice } from "@/lib/theme/cookie";
+import { themeClassName } from "@/lib/theme/config";
+
 import "./globals.css";
 
 /**
@@ -54,13 +57,30 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+/**
+ * **The theme is on the document before anything else is** (#133).
+ *
+ * A pinned light or dark is the server's answer and arrives in the first byte of the
+ * markup: there is no moment at which the page is painted in the other one, which is what
+ * an Assignee tapping a Group Robot reminder at night is owed — that link lands in the
+ * WeCom in-app webview over a phone network, the slowest path in the product and the one
+ * where a flash lasts longest.
+ *
+ * **System is the class `theme-system` and nothing else**, because the operating system's
+ * setting is the one thing a server cannot see. `globals.css` answers it with a
+ * `prefers-color-scheme` media query rather than with a script, so it too is settled
+ * before the first paint rather than corrected after it (ADR-0024).
+ */
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const locale = await getLocale();
+  const theme = themeClassName(await getThemeChoice());
 
   return (
     <html
       lang={locale}
-      className={`${firaSans.variable} ${firaCode.variable} h-full antialiased`}
+      // Light is the absence of a class — `:root` already *is* the light palette — so the
+      // trim is what keeps that case from leaving a stray space in the markup.
+      className={`${theme} ${firaSans.variable} ${firaCode.variable} h-full antialiased`.trim()}
     >
       <body className="min-h-full flex flex-col">
         <NextIntlClientProvider>{children}</NextIntlClientProvider>
