@@ -7,6 +7,7 @@ import { ItemPricing } from "@/components/comparison/item-pricing";
 import { SelectQuoteButton } from "@/components/comparison/select-quote-button";
 import { ImageCountBadge } from "@/components/images/image-count-badge";
 import { Button } from "@/components/ui/button";
+import { ChangeFigure } from "@/components/ui/change-figure";
 import { InitialsAvatar } from "@/components/ui/initials-avatar";
 import { calendarDate, calendarDateFormat } from "@/lib/calendar-date";
 import { sheetTotals } from "@/lib/comparison/pricing";
@@ -165,45 +166,47 @@ function TotalsBar({ items }: { items: SheetItem[] }) {
       </span>
 
       <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-        <Total label={t("bidTotal")} value={thb(totals.bidTotal)} />
-        <Total label={t("landedCost")} value={thb(totals.landedCostTotal)} />
-        <Total
-          label={t("margin")}
-          value={
+        {/* Absolute prices, and so uncoloured. Neither is a movement of money — a Bid
+            total is what we are asking and the landed cost is what it costs us — and
+            colour on a figure here means direction or it means nothing (ADR-0023). */}
+        <Total label={t("bidTotal")}>
+          <span className="money text-base font-medium">{thb(totals.bidTotal)}</span>
+        </Total>
+        <Total label={t("landedCost")}>
+          <span className="money text-base font-medium">
+            {thb(totals.landedCostTotal)}
+          </span>
+        </Total>
+
+        <Total label={t("margin")}>
+          {totals.marginProvisional ? (
             // One understated cost understates the whole bar. The total is no more final
-            // than the least final figure in it.
-            totals.marginProvisional ? tc("provisional") : thb(totals.marginTotal)
-          }
-          muted={totals.marginProvisional}
-        />
+            // than the least final figure in it — and a bar that put a direction on it
+            // would be claiming a direction for a figure that is not yet a figure.
+            <span className="text-flag-ink text-xs font-medium">{tc("provisional")}</span>
+          ) : (
+            // The one figure on the bar that is a difference rather than an amount, so
+            // the one that carries a glyph, a sign and a hue.
+            <ChangeFigure amount={totals.marginTotal} maximumFractionDigits={0} />
+          )}
+        </Total>
       </dl>
     </div>
   );
 }
 
-function Total({
-  label,
-  value,
-  muted = false,
-}: {
-  label: string;
-  value: string;
-  muted?: boolean;
-}) {
+/**
+ * One figure on the bar, under the name it is read by.
+ *
+ * The `<dd>` carries no styling of its own: what a figure *is* — an absolute price, a
+ * directed change, a figure held back as provisional — decides how it is drawn, and each
+ * caller says so where it knows the answer.
+ */
+function Total({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-baseline gap-2">
       <dt className="field-label">{label}</dt>
-      {/* Never toned by sign. A negative total is negative because it has a minus in
-          front of it, which is a copy of the meaning no colour convention can invert. */}
-      <dd
-        className={
-          muted
-            ? "text-flag-ink text-xs font-medium"
-            : "money text-base font-medium"
-        }
-      >
-        {value}
-      </dd>
+      <dd>{children}</dd>
     </div>
   );
 }

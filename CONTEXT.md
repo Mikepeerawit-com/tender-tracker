@@ -291,7 +291,14 @@ _Avoid_: unedited, draft, estimated, incomplete, unconfirmed *as a label*
 **Margin**:
 Selling price minus Landed Cost, on a Tender Item. Always computed, never entered.
 Internal-only — and internal now means the Owner, not the org (ADR-0020).
+The one figure on the sheet that is a *change* rather than an amount, so the one that
+says which way it went: a triangle, an explicit sign, and a hue decided by the language
+the screen is rendered in — red for a gain in `zh-Hans`, green for a gain in `en`
+(ADR-0023). A Margin that is **Provisional**, or that cannot be computed at all, carries
+none of the three: there is no direction to claim until the figure is a figure.
 _Label_: en "Profit" · zh 毛利.
+_Direction_: en "Gain" / "Loss" / "Break-even" · zh 盈利 / 亏损 / 持平 — the words a
+screen reader hears in place of the triangle.
 
 **Coverage**:
 How many Tender Items carry a selling price, out of all of them. Sits at the head of the

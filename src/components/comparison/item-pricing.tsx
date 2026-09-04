@@ -1,19 +1,17 @@
 "use client";
 
 import { useActionState, useRef, useState, type ReactNode } from "react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 
 import {
   setLandedCostAction,
   setSellingPriceAction,
   type PricingState,
 } from "@/app/actions/comparison";
+import { ChangeFigure } from "@/components/ui/change-figure";
 import { Input } from "@/components/ui/input";
 import { marginOf } from "@/lib/comparison/pricing";
 import type { SheetItem } from "@/lib/comparison/sheet";
-// From the currency list rather than from `@/lib/quotes/quotes`, which re-exports it: this
-// runs in the browser, and that module is `server-only`.
-import { reportingCurrency } from "@/lib/fx/currencies";
 
 /**
  * Pricing, inline in the Item's row: landed cost, selling price, and the Margin between
@@ -287,10 +285,14 @@ function MarginFigure({
  * pre-filled value, with nothing added for shipping, duty or handling — is understated in
  * cost and overstated in profit, so it renders as provisional rather than as a number.
  * Nothing is blocked and nobody is nagged; the figure simply stops pretending to be final.
+ *
+ * **Provisional outranks direction, and that ordering is the point.** A Margin nobody has
+ * vouched for is overstated in profit, so a green (or, in `zh-Hans`, red) triangle on it
+ * would dress up a figure that is not yet a figure — the one dishonest thing this screen
+ * could do while somebody works out what to bid.
  */
 function Margin({ value, provisional }: { value: number | null; provisional: boolean }) {
   const t = useTranslations("comparison");
-  const format = useFormatter();
 
   if (value === null) return <span className="text-muted-foreground">{emDash}</span>;
 
@@ -300,18 +302,11 @@ function Margin({ value, provisional }: { value: number | null; provisional: boo
     return <span className="text-flag-ink text-xs font-medium">{t("provisional")}</span>;
   }
 
-  // **A negative Margin is never rendered in red**, nor in any alarm-toned treatment.
-  // In Chinese financial convention red is up and green is down — the inverse of the
-  // Western reading — so a red negative Margin is read as a *gain* by half the people
-  // using this daily. Keeping alarm to deadlines sidesteps the inversion rather than
-  // picking a side of it, which is the only move available in an app that ships `en` and
-  // `zh-Hans` from one component tree (ADR-0019). The minus sign the formatter puts in
-  // front of the figure is the copy of the meaning, and it inverts for nobody.
-  return (
-    <span className="money text-base font-medium">
-      {format.number(value, { style: "currency", currency: reportingCurrency })}
-    </span>
-  );
+  // A Margin is a *change* figure — selling price less what it cost us — so it says which
+  // way it went, in the convention of the language the screen is being rendered in
+  // (ADR-0023). The hue inverts between `en` and `zh-Hans`; the triangle and the sign do
+  // not, and they are what a reader in greyscale or in sunlight is left with.
+  return <ChangeFigure amount={value} />;
 }
 
 const initialState: PricingState = {};

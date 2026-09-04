@@ -470,6 +470,13 @@
       "failed": "选定失败，请重试。"
     }
   },
+  "money": {
+    "direction": {
+      "gain": "盈利",
+      "loss": "亏损",
+      "flat": "持平"
+    }
+  },
   "people": {
     "title": "成员",
     "description": "组织内的全部成员。账号仅可通过邀请创建，没有自助注册页面。",
