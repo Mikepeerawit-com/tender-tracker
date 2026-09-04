@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { defaultLocale, locales } from "@/i18n/config";
+import { themeChoices } from "@/lib/theme/config";
 import { loginErrors } from "@/lib/auth/session";
 import { setPasswordErrors } from "@/lib/auth/password";
 import { setupErrors } from "@/lib/auth/setup";
@@ -363,6 +364,15 @@ describe.each(locales)("%s wording", (locale) => {
         (key) => !flat.has(key),
       ),
     );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("names every theme a member can be painted in", () => {
+    // The switcher renders `t(choice)` over the list rather than three literal keys, so
+    // the source scan below cannot see these: a fourth theme added to `themeChoices` would
+    // draw a raw key at somebody and nothing else here would notice.
+    const missing = themeChoices.filter((choice) => !flat.has(`themeSwitcher.${choice}`));
 
     expect(missing).toEqual([]);
   });

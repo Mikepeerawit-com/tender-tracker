@@ -2,7 +2,46 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/**
+ * **Dark, reached two ways** (#133).
+ *
+ * A reader who pinned it — `.dark` on the document, written by the server from its first
+ * byte — or a reader who left the choice to their device, which is `.theme-system` plus
+ * whatever the operating system says at the moment of first style resolution.
+ *
+ * **The media query is the answer to "System", and it is deliberately not a script.** The
+ * server cannot see an operating system's setting, and the alternatives to a media query
+ * all paint something first and correct it afterwards: an inline script in `<head>` is a
+ * flash on a slow parse, and anything after hydration is a flash of the wrong theme on
+ * the slowest path in the product — a Group Robot link opened at night, inside the WeCom
+ * webview, over a phone network (ADR-0024).
+ *
+ * **What happens on an engine too old to know the query** is the reason it is this
+ * mechanism and not `light-dark()`, which would state each token's two values in one place
+ * and need no media query at all. WeCom's Android webview is a Tencent build of an
+ * unstated Chromium version (research 17 §2, inferred rather than measured), so neither
+ * feature can be assumed. The two fail differently: an engine that does not know this
+ * query ignores it and paints `theme-system` light — which is what every reader got before
+ * #133, with a pinned theme still working, since that is a plain class — while an engine
+ * that does not know `light-dark()` finds every token invalid at computed-value time and
+ * renders an app nobody can read. One degrades to the status quo; the other degrades to
+ * unusable.
+ *
+ * The element itself is in the selector as well as its descendants, because the palette
+ * below is declared *on* whichever element carries the class — the real `<html>`, and the
+ * ground `@/test/screens` draws round a screen under test.
+ */
+@custom-variant dark {
+  &:is(.dark, .dark *) {
+    @slot;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    &:is(.theme-system, .theme-system *) {
+      @slot;
+    }
+  }
+}
 
 /**
  * The visual system ADR-0019 records.
@@ -237,76 +276,97 @@
 }
 
 /*
- * Nothing in this app turns dark mode on yet — there is no toggle and no `.dark` is ever
- * applied. It is kept defined rather than deleted so that the hues resolve to something
- * deliberate if it ever is, instead of to nothing at all.
+ * The theme a reader chose, and the one the token file has answered since #130 without
+ * anything ever turning it on. #133 is the switch: Preferences offers System, light or
+ * dark, the choice is remembered on `users.theme`, and the server writes the class below
+ * onto `<html>` from its first byte (ADR-0024).
  *
- * Which is why it was repainted in the same pass as the light block rather than left
- * behind: a theme nothing switches on is exactly the one that goes stale, and the
- * contrast guard walks every screen through it so that the answer here is a measured one
- * rather than a hopeful one.
+ * **Stated once, reached by both readings of "dark".** `@variant dark` expands this block
+ * through the custom variant at the head of the file, so the pinned class and the
+ * device's own setting get the same declarations rather than a copy each — and a repaint
+ * moves one list of values. The two selectors on the rule are the elements that may carry
+ * a palette: the document when a reader pinned dark, and the ground under a screen when
+ * the device is what decided.
+ *
+ * `color-scheme` is the half of this that is not tokens, and it is not decoration: it is
+ * what makes the canvas the browser paints *before this stylesheet arrives* the right
+ * ground, and what keeps a scrollbar, a native select and a form control from being the
+ * one light thing on a dark screen. `light dark` on the system class is the pair in
+ * preference order — the device picks; `dark` on the pinned class overrules it, which is
+ * the whole of what pinning means.
  */
+.theme-system {
+  color-scheme: light dark;
+}
+
 .dark {
-  --background: oklch(0.185 0.015 265);
-  --foreground: oklch(0.945 0.006 90);
-  --ink-faint: oklch(0.665 0.018 265);
-  --hairline-soft: oklch(0.285 0.014 265);
+  color-scheme: dark;
+}
 
-  --signal: oklch(0.7 0.14 259);
-  --signal-ink: oklch(0.8 0.09 259);
-  --signal-wash: oklch(0.7 0.14 259 / 0.16);
-  --signal-edge: oklch(0.7 0.14 259 / 0.4);
-  --alarm: oklch(0.685 0.17 27);
-  --alarm-ink: oklch(0.81 0.1 27);
-  --alarm-wash: oklch(0.685 0.17 27 / 0.16);
-  --alarm-edge: oklch(0.685 0.17 27 / 0.4);
-  --flag: oklch(0.78 0.13 72);
-  --flag-ink: oklch(0.86 0.1 78);
-  --flag-wash: oklch(0.78 0.13 72 / 0.18);
-  --flag-edge: oklch(0.78 0.13 72 / 0.4);
+.dark,
+.theme-system {
+  @variant dark {
+    --background: oklch(0.185 0.015 265);
+    --foreground: oklch(0.945 0.006 90);
+    --ink-faint: oklch(0.665 0.018 265);
+    --hairline-soft: oklch(0.285 0.014 265);
 
-  /* The same pair, lifted off a dark ground — and still well clear of alarm's ink. */
-  --money-red: oklch(0.72 0.165 12);
-  --money-green: oklch(0.775 0.12 155);
+    --signal: oklch(0.7 0.14 259);
+    --signal-ink: oklch(0.8 0.09 259);
+    --signal-wash: oklch(0.7 0.14 259 / 0.16);
+    --signal-edge: oklch(0.7 0.14 259 / 0.4);
+    --alarm: oklch(0.685 0.17 27);
+    --alarm-ink: oklch(0.81 0.1 27);
+    --alarm-wash: oklch(0.685 0.17 27 / 0.16);
+    --alarm-edge: oklch(0.685 0.17 27 / 0.4);
+    --flag: oklch(0.78 0.13 72);
+    --flag-ink: oklch(0.86 0.1 78);
+    --flag-wash: oklch(0.78 0.13 72 / 0.18);
+    --flag-edge: oklch(0.78 0.13 72 / 0.4);
 
-  --card: oklch(0.225 0.016 265);
-  --card-foreground: var(--foreground);
-  --popover: oklch(0.225 0.016 265);
-  --popover-foreground: var(--foreground);
-  --primary: var(--signal);
-  --primary-foreground: oklch(0.19 0.05 259);
-  --secondary: oklch(0.275 0.016 265);
-  --secondary-foreground: var(--foreground);
-  --muted: oklch(0.275 0.016 265);
-  --muted-foreground: oklch(0.745 0.016 265);
-  --accent: oklch(0.275 0.016 265);
-  --accent-foreground: var(--foreground);
-  /*
-   * Its own value here too, for the reason the light block gives. It was `var(--alarm)`
-   * in this block alone, which left the token file stating a rule and breaking it four
-   * lines later depending on which theme you read.
-   */
-  --destructive: oklch(0.685 0.17 27);
-  /*
-   * A stated hairline rather than white at 12%, so that the two themes are answered the
-   * same way and a rule does not change weight with the surface it happens to cross.
-   */
-  --border: oklch(0.345 0.014 265);
-  --input: oklch(0.545 0.016 265);
-  --ring: var(--signal);
-  --chart-1: var(--signal);
-  --chart-2: var(--flag);
-  --chart-3: oklch(0.745 0.016 265);
-  --chart-4: oklch(0.665 0.018 265);
-  --chart-5: oklch(0.945 0.006 90);
-  --sidebar: oklch(0.225 0.016 265);
-  --sidebar-foreground: var(--foreground);
-  --sidebar-primary: var(--signal);
-  --sidebar-primary-foreground: oklch(0.19 0.05 259);
-  --sidebar-accent: oklch(0.275 0.016 265);
-  --sidebar-accent-foreground: var(--foreground);
-  --sidebar-border: oklch(0.345 0.014 265);
-  --sidebar-ring: var(--signal);
+    /* The same pair, lifted off a dark ground — and still well clear of alarm's ink. */
+    --money-red: oklch(0.72 0.165 12);
+    --money-green: oklch(0.775 0.12 155);
+
+    --card: oklch(0.225 0.016 265);
+    --card-foreground: var(--foreground);
+    --popover: oklch(0.225 0.016 265);
+    --popover-foreground: var(--foreground);
+    --primary: var(--signal);
+    --primary-foreground: oklch(0.19 0.05 259);
+    --secondary: oklch(0.275 0.016 265);
+    --secondary-foreground: var(--foreground);
+    --muted: oklch(0.275 0.016 265);
+    --muted-foreground: oklch(0.745 0.016 265);
+    --accent: oklch(0.275 0.016 265);
+    --accent-foreground: var(--foreground);
+    /*
+     * Its own value here too, for the reason the light block gives. It was `var(--alarm)`
+     * in this block alone, which left the token file stating a rule and breaking it four
+     * lines later depending on which theme you read.
+     */
+    --destructive: oklch(0.685 0.17 27);
+    /*
+     * A stated hairline rather than white at 12%, so that the two themes are answered the
+     * same way and a rule does not change weight with the surface it happens to cross.
+     */
+    --border: oklch(0.345 0.014 265);
+    --input: oklch(0.545 0.016 265);
+    --ring: var(--signal);
+    --chart-1: var(--signal);
+    --chart-2: var(--flag);
+    --chart-3: oklch(0.745 0.016 265);
+    --chart-4: oklch(0.665 0.018 265);
+    --chart-5: oklch(0.945 0.006 90);
+    --sidebar: oklch(0.225 0.016 265);
+    --sidebar-foreground: var(--foreground);
+    --sidebar-primary: var(--signal);
+    --sidebar-primary-foreground: oklch(0.19 0.05 259);
+    --sidebar-accent: oklch(0.275 0.016 265);
+    --sidebar-accent-foreground: var(--foreground);
+    --sidebar-border: oklch(0.345 0.014 265);
+    --sidebar-ring: var(--signal);
+  }
 }
 
 @layer base {

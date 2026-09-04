@@ -3,6 +3,11 @@ import "server-only";
 import { cache } from "react";
 
 import { isLocale, type Locale } from "@/i18n/config";
+import {
+  defaultThemeChoice,
+  isThemeChoice,
+  type ThemeChoice,
+} from "@/lib/theme/config";
 import { createServiceClient } from "@/lib/supabase/service-client";
 import {
   createSessionClient,
@@ -15,6 +20,7 @@ export type SessionUser = {
   name: string;
   email: string;
   locale: Locale | null;
+  theme: ThemeChoice;
   isOrgAdmin: boolean;
 };
 
@@ -45,7 +51,7 @@ export const loginErrors = [...signInRefusals, "incomplete", "link"] as const;
 
 export type LoginError = (typeof loginErrors)[number];
 
-const profileColumns = "id, org_id, name, email, locale, is_org_admin";
+const profileColumns = "id, org_id, name, email, locale, theme, is_org_admin";
 
 export async function signIn(
   credentials: { email: string; password: string },
@@ -130,6 +136,10 @@ export const currentUser = cache(async function currentUser(
     name: profile.name,
     email: profile.email,
     locale: isLocale(profile.locale) ? profile.locale : null,
+    // Unlike `locale` there is no null to carry: the column is `not null default
+    // 'system'`, and a value this app does not ship could only come from a database
+    // ahead of this build — where following the device is the safe reading.
+    theme: isThemeChoice(profile.theme) ? profile.theme : defaultThemeChoice,
     isOrgAdmin: profile.is_org_admin,
   };
 });

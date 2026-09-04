@@ -8,6 +8,7 @@ import { setLocale } from "@/i18n/locale";
 import { setPassword, type SetPasswordError } from "@/lib/auth/password";
 import { currentUser, signIn, signOut, type LoginError } from "@/lib/auth/session";
 import { chooseLocale } from "@/lib/auth/preferences";
+import { setThemeChoice } from "@/lib/theme/cookie";
 
 /**
  * The request boundary. `cookies()` is resolved here and handed down, so everything
@@ -46,11 +47,14 @@ export async function signInAction(
     return { error: result.reason, email: typed };
   }
 
-  // Carry the stored choice into the cookie the renderer reads, so the very next page
-  // is already in the right language rather than one navigation behind.
+  // Carry the stored choices into the cookies the renderer reads, so the very next page is
+  // already in the right language and the right theme rather than one navigation behind.
+  // This is what "on any device they sign in on" means in practice: the row is the memory,
+  // and signing in is when it reaches a browser that has never seen this member.
   const user = await currentUser(store);
 
   if (user?.locale) await setLocale(user.locale);
+  if (user) await setThemeChoice(user.theme);
 
   redirect(user?.locale ? "/" : "/choose-language");
 }
