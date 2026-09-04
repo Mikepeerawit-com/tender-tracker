@@ -43,38 +43,7 @@ import { expectNoSidewaysScroll, phone } from "@/test/layout";
  * honest model of what a phone on mobile data sits in for the length of the round trip.
  */
 
-// Hoisted per file and therefore not shareable, the way every other renderer of
-// `@/test/screens` declares its own. See the note in that file.
-vi.mock("@/app/actions/auth", () => ({
-  signOutAction: async () => ({}),
-  signInAction: async () => ({}),
-}));
-vi.mock("@/app/actions/admin", () => ({
-  inviteAction: async () => ({}),
-  setWecomUseridAction: async () => ({}),
-  sendTestMentionAction: async () => ({}),
-  setMembershipDisabledAction: async () => ({}),
-  setGroupRobotAction: async () => ({}),
-  setFxBufferAction: async () => ({}),
-}));
-vi.mock("@/app/actions/tenders", () => ({
-  addAssigneeAction: async () => ({}),
-  removeAssigneeAction: async () => ({}),
-}));
-vi.mock("@/app/actions/quotes", () => ({
-  createQuoteAction: async () => ({}),
-  updateQuoteAction: async () => ({}),
-  deleteQuoteAction: async () => ({}),
-  recordNoSupplierFoundAction: async () => ({}),
-  clearNoSupplierFoundAction: async () => ({}),
-}));
-vi.mock("@/app/actions/quote-photos", () => ({
-  recordQuotePhotosAction: async () => ({}),
-  removeQuotePhotoAction: async () => ({}),
-  signQuotePhotoUploadsAction: async () => ({}),
-}));
 vi.mock("@/app/actions/locale", () => ({ switchLocale: () => new Promise(() => {}) }));
-vi.mock("@/app/actions/theme", () => ({ switchTheme: async () => ({}) }));
 
 describe(`switching language at ${phone.width}×${phone.height}`, () => {
   it.each(locales)("does not push Preferences sideways, in %s", async (locale, messages) => {

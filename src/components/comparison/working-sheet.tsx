@@ -231,9 +231,24 @@ function ItemSummary({ tenderId, item }: { tenderId: string; item: SheetItem }) 
 
   return (
     <>
-      <div className="flex min-w-0 flex-[2_1_16rem] flex-col items-start gap-1.5">
-        <span className="text-foreground font-medium">{item.productName}</span>
-        <span className="text-muted-foreground text-xs">
+      {/* `break-words` for the reason `Cell` carries it, and it was missing here until
+          #135: an Item's product name and its Selected Quote's supplier name are two
+          strings nobody here chose the length of, and a client who names a line
+          `NitrileExaminationGlovesPowderFreeSizeMediumNonSterile` pushed this row — and
+          therefore the page — past a 390px phone. `min-w-0` alone does not help: a flex
+          item still refuses to shrink below its longest unbroken word unless the word is
+          allowed to break. It went unseen because the sheet's own suite composes product
+          names with spaces in them; the shared record's are the runs a client really
+          sends. */}
+      <div className="flex min-w-0 flex-[2_1_16rem] flex-col items-start gap-1.5 break-words">
+        {/* `max-w-full` is the other half of the hold, and the half `min-w-0` cannot do.
+            `items-start` is what keeps the chips and the button shrink-to-fit rather than
+            stretched across the column, and it sizes *every* child to its own content —
+            so a span holding an unbroken word is laid out at that word's width and takes
+            the page with it, however narrow the column around it was allowed to become.
+            The chips below already carry this pair; the two lines of text did not. */}
+        <span className="text-foreground max-w-full font-medium">{item.productName}</span>
+        <span className="text-muted-foreground max-w-full text-xs">
           {t("item.quantified", {
             quantity: item.quantity,
             unit: item.unit,
@@ -261,7 +276,7 @@ function ItemSummary({ tenderId, item }: { tenderId: string; item: SheetItem }) 
         </Button>
       </div>
 
-      <div className="flex min-w-0 flex-[1_1_11rem] flex-col gap-0.5">
+      <div className="flex min-w-0 flex-[1_1_11rem] flex-col gap-0.5 break-words">
         <span className="field-label">{t("label.selectedQuote")}</span>
 
         {selected ? (
@@ -736,7 +751,23 @@ function Notice({
   };
 
   return (
-    <p role="note" className={`rounded-lg border px-3 py-2 text-sm ${tones[tone]}`}>
+    <p
+      // `break-words` for the reason `Cell` carries it, and it is the same fault caught a
+      // second time in #135: three of the four banners name a supplier, and a supplier name
+      // is a string nobody here chose the length of —
+      // `GuangzhouImproveMedicalInstrumentsCoLtd` arrives with nowhere to break, in a box
+      // 390px wide less two paddings.
+      //
+      // **It fitted on the machine that wrote this and did not fit in CI**, which is the
+      // half worth writing down. Under ADR-0019 no Latin webfont is fetched and none
+      // resolves in this harness, so the Latin text here is drawn by whatever face the
+      // machine has — PingFang on a developer's macOS, something wider on a Linux runner.
+      // Judging a width by arithmetic on one machine's metrics is what the ADR says not to
+      // do; holding it structurally is what survives the difference. The corollary is that
+      // a *green* run of this suite locally is not evidence about the runner either.
+      role="note"
+      className={`rounded-lg border px-3 py-2 text-sm break-words ${tones[tone]}`}
+    >
       <span className="font-semibold">{title}</span> <span>{children}</span>
     </p>
   );

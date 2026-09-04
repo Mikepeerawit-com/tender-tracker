@@ -1,13 +1,25 @@
 import { render } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
-import { NextIntlClientProvider } from "next-intl";
 
-import { desk, phone } from "@/test/layout";
-import { Ground, locales, Screen, screens, type Theme, themes } from "@/test/screens";
-
-import { AuthScreen } from "@/components/auth/auth-screen";
-import { LoginForm } from "@/components/auth/login-form";
+import {
+  alphaOf,
+  backgrounds,
+  contrast,
+  flatten,
+  groundUnder,
+  luminance,
+} from "@/test/colour";
+import { describeElement, desk, phone } from "@/test/layout";
+import {
+  locales,
+  Screen,
+  screens,
+  signedOutScreens,
+  SignedOut,
+  type Theme,
+  themes,
+} from "@/test/screens";
 
 /**
  * **Every word on every screen, over the ground it is really drawn on, in both themes.**
@@ -33,39 +45,6 @@ import { LoginForm } from "@/components/auth/login-form";
  * — and would be how the desk's app bar and the dense working sheet went unchecked
  * forever if this stood only at 390px.
  */
-
-// Hoisted per file and therefore not shareable, the way every other renderer of
-// `@/test/screens` declares its own. See the note in that file.
-vi.mock("@/app/actions/auth", () => ({
-  signOutAction: async () => ({}),
-  signInAction: async () => ({}),
-}));
-vi.mock("@/app/actions/admin", () => ({
-  inviteAction: async () => ({}),
-  setWecomUseridAction: async () => ({}),
-  sendTestMentionAction: async () => ({}),
-  setMembershipDisabledAction: async () => ({}),
-  setGroupRobotAction: async () => ({}),
-  setFxBufferAction: async () => ({}),
-}));
-vi.mock("@/app/actions/locale", () => ({ switchLocale: async () => ({}) }));
-vi.mock("@/app/actions/theme", () => ({ switchTheme: async () => ({}) }));
-vi.mock("@/app/actions/tenders", () => ({
-  addAssigneeAction: async () => ({}),
-  removeAssigneeAction: async () => ({}),
-}));
-vi.mock("@/app/actions/quotes", () => ({
-  createQuoteAction: async () => ({}),
-  updateQuoteAction: async () => ({}),
-  deleteQuoteAction: async () => ({}),
-  recordNoSupplierFoundAction: async () => ({}),
-  clearNoSupplierFoundAction: async () => ({}),
-}));
-vi.mock("@/app/actions/quote-photos", () => ({
-  recordQuotePhotosAction: async () => ({}),
-  removeQuotePhotoAction: async () => ({}),
-  signQuotePhotoUploadsAction: async () => ({}),
-}));
 
 /**
  * WCAG 2.2's minimums, which are the floor this app is held to rather than a target.
@@ -112,28 +91,27 @@ describe.each(themes)("the %s theme", (theme) => {
 
   /**
    * The screens reached *before* signing in, which the record above does not hold: they
-   * have no `(app)` shell, so they compose `AuthScreen` directly rather than `Screen`.
+   * have no `(app)` shell, so they are composed through `SignedOut` rather than `Screen`.
    * They are repainted by the same tokens as everything else and were the half of #130's
    * *"and the signed-out ones"* that nothing would otherwise have measured.
    *
-   * `LoginForm` inside it for the reason its own suite gives: it is the busiest of the
-   * three forms, and a column measured around nothing measures nothing.
+   * All four of them since #135, from the record beside the other one, rather than the
+   * sign-in screen composed by hand here.
    */
-  it.each(locales)("is legible on the sign-in screen, in %s", async (locale, messages) => {
+  it.each(
+    locales.flatMap(([locale, messages]) =>
+      Object.entries(signedOutScreens(messages)).map(
+        ([name, entry]) => [`${name}, in ${locale}`, locale, messages, entry.body] as const,
+      ),
+    ),
+  )("is legible on %s", async (name, locale, messages, body) => {
     const { container } = render(
-      <NextIntlClientProvider locale={locale} messages={messages} timeZone="Asia/Bangkok">
-        <Ground theme={theme}>
-          <AuthScreen
-            title={messages.login.title}
-            description={messages.login.description}
-          >
-            <LoginForm />
-          </AuthScreen>
-        </Ground>
-      </NextIntlClientProvider>,
+      <SignedOut theme={theme} locale={locale} messages={messages}>
+        {body}
+      </SignedOut>,
     );
 
-    await expectLegible(container, theme, `the sign-in screen, in ${locale}`);
+    await expectLegible(container, theme, name);
   });
 });
 
@@ -177,7 +155,7 @@ async function expectLegible(
  * whole of the claim, and it names no value.
  */
 function expectGroundIs(theme: Theme, container: HTMLElement, name: string): void {
-  const ground = luminance(flatten(backgrounds(container.firstElementChild as HTMLElement)));
+  const ground = luminance(groundUnder(container.firstElementChild as HTMLElement));
 
   if (theme === "dark") expect(ground, `${name} is not dark`).toBeLessThan(0.2);
   else expect(ground, `${name} is not light`).toBeGreaterThan(0.5);
@@ -186,8 +164,8 @@ function expectGroundIs(theme: Theme, container: HTMLElement, name: string): voi
 /** Why this element's words are unreadable where they are drawn, or `null` if they are not. */
 function readableFault(element: HTMLElement): string | null {
   const style = getComputedStyle(element);
-  const ground = flatten(backgrounds(element));
-  const ratio = contrast(flatten([...backgrounds(element), style.color]), ground);
+  const ground = groundUnder(element);
+  const ratio = contrast(inkOver(element, style.color), ground);
   const floor = isLarge(style) ? largeText : bodyText;
 
   if (ratio >= floor) return null;
@@ -205,8 +183,8 @@ function boundaryFault(control: HTMLElement): string | null {
   // there.
   if (width === 0 || alphaOf(style.borderTopColor) === 0) return null;
 
-  const behind = flatten(backgrounds(control.parentElement!));
-  const ratio = contrast(flatten([...backgrounds(control.parentElement!), style.borderTopColor]), behind);
+  const behind = groundUnder(control.parentElement);
+  const ratio = contrast(inkOver(control.parentElement, style.borderTopColor), behind);
 
   if (ratio >= controlBoundary) return null;
 
@@ -241,92 +219,12 @@ function isLarge(style: CSSStyleDeclaration): boolean {
 }
 
 /**
- * The layers between this element and the nearest opaque surface, bottom-first.
+ * A possibly-translucent ink as the colour it comes out, over what is behind it.
  *
- * The walk stops at the first background that is fully opaque, because nothing below it
- * reaches the eye. If it reaches the top without finding one — which no screen in this app
- * does, since the ground carries one — {@link flatten} paints on white, the last resort a
- * browser itself would use.
+ * The colour on an element is not the colour a reader sees: `text-destructive/70` over a
+ * wash is three layers deep, and comparing the declared value against the ground would
+ * report a ratio nothing on the screen has.
  */
-function backgrounds(element: HTMLElement): string[] {
-  const layers: string[] = [];
-
-  for (let node: HTMLElement | null = element; node !== null; node = node.parentElement) {
-    const colour = getComputedStyle(node).backgroundColor;
-    const alpha = alphaOf(colour);
-
-    if (alpha === 0) continue;
-
-    layers.unshift(colour);
-
-    if (alpha === 1) break;
-  }
-
-  return layers;
-}
-
-const paint = document.createElement("canvas").getContext("2d", {
-  willReadFrequently: true,
-})!;
-
-/**
- * A stack of possibly-translucent colours as the one colour a reader sees.
- *
- * Composited by the canvas rather than in arithmetic here, so that every colour syntax the
- * stylesheet may use — `oklch()` today, whatever it moves to tomorrow — is resolved by the
- * same engine that paints the page. A colour the canvas cannot parse would silently keep
- * the previous fill, so each layer is checked to have actually taken.
- */
-function flatten(layers: string[]): [number, number, number] {
-  paint.clearRect(0, 0, 1, 1);
-  paint.fillStyle = "#ffffff";
-  paint.fillRect(0, 0, 1, 1);
-
-  for (const layer of layers) {
-    paint.fillStyle = "#ff00ff";
-    paint.fillStyle = layer;
-
-    expect(paint.fillStyle, `the canvas could not parse ${layer}`).not.toBe("#ff00ff");
-
-    paint.fillRect(0, 0, 1, 1);
-  }
-
-  const [red, green, blue] = paint.getImageData(0, 0, 1, 1).data;
-
-  return [red, green, blue];
-}
-
-function alphaOf(colour: string): number {
-  paint.clearRect(0, 0, 1, 1);
-  paint.fillStyle = colour;
-  paint.fillRect(0, 0, 1, 1);
-
-  return paint.getImageData(0, 0, 1, 1).data[3] / 255;
-}
-
-/** WCAG 2.2's contrast ratio, on two colours already flattened to plain sRGB. */
-function contrast(a: [number, number, number], b: [number, number, number]): number {
-  const [lighter, darker] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-function luminance([red, green, blue]: [number, number, number]): number {
-  const [r, g, b] = [red, green, blue].map((channel) => {
-    const value = channel / 255;
-
-    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  });
-
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-/** Enough of the offending element to find it: what it is, and the words it drew. */
-function describeElement(element: HTMLElement): string {
-  const words = [...element.childNodes]
-    .filter((node) => node.nodeType === Node.TEXT_NODE)
-    .map((node) => node.textContent?.trim())
-    .join(" ");
-
-  return `<${element.localName}> ${words.slice(0, 60)}`.trim();
+function inkOver(element: HTMLElement | null, ink: string): [number, number, number] {
+  return flatten([...backgrounds(element), ink]);
 }

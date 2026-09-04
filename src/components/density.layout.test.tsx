@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { column, controlRows, phone } from "@/test/layout";
 import { locales, type Locale, Screen, screens } from "@/test/screens";
@@ -67,36 +67,6 @@ import { locales, type Locale, Screen, screens } from "@/test/screens";
  * type error at this call site rather than a budget left quietly measuring a column with
  * nothing in it.
  */
-
-// Hoisted per file and therefore not shareable, the way `screens.layout.test.tsx` and the
-// contact sheet each declare their own. See the note in `@/test/screens`.
-vi.mock("@/app/actions/auth", () => ({ signOutAction: async () => ({}) }));
-vi.mock("@/app/actions/admin", () => ({
-  inviteAction: async () => ({}),
-  setWecomUseridAction: async () => ({}),
-  sendTestMentionAction: async () => ({}),
-  setMembershipDisabledAction: async () => ({}),
-  setGroupRobotAction: async () => ({}),
-  setFxBufferAction: async () => ({}),
-}));
-vi.mock("@/app/actions/locale", () => ({ switchLocale: async () => ({}) }));
-vi.mock("@/app/actions/theme", () => ({ switchTheme: async () => ({}) }));
-vi.mock("@/app/actions/tenders", () => ({
-  addAssigneeAction: async () => ({}),
-  removeAssigneeAction: async () => ({}),
-}));
-vi.mock("@/app/actions/quotes", () => ({
-  createQuoteAction: async () => ({}),
-  updateQuoteAction: async () => ({}),
-  deleteQuoteAction: async () => ({}),
-  recordNoSupplierFoundAction: async () => ({}),
-  clearNoSupplierFoundAction: async () => ({}),
-}));
-vi.mock("@/app/actions/quote-photos", () => ({
-  recordQuotePhotosAction: async () => ({}),
-  removeQuotePhotoAction: async () => ({}),
-  signQuotePhotoUploadsAction: async () => ({}),
-}));
 
 /**
  * The budgets, per locale.

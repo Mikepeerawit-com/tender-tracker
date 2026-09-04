@@ -1,14 +1,22 @@
 import { render } from "@testing-library/react";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { commands, page, server } from "vitest/browser";
 
-import { locales, Screen, screens } from "@/test/screens";
+import {
+  locales,
+  Screen,
+  screens,
+  signedOutScreens,
+  SignedOut,
+  type Theme,
+  themes,
+} from "@/test/screens";
 import { phone } from "@/test/layout";
 import { captureWindow } from "@/test/phone.mjs";
 
 /**
- * **The contact sheet** — every screen, both locales, photographed for somebody to look
- * at (#78).
+ * **The contact sheet** — every screen, both locales and both themes, photographed for
+ * somebody to look at (#78, #135).
  *
  * This is deliberately **not a check**. It asserts nothing about how anything looks, it
  * has no baseline to diff against, and it never runs in CI. ADR-0016 refuses checks that
@@ -28,39 +36,16 @@ import { captureWindow } from "@/test/phone.mjs";
  *
  * The sheet says which faces really resolved, because that is the one fact that makes an
  * image from one machine safe to read on another.
+ *
+ * **Both themes since #135**, and the pair is laid out side by side rather than on two
+ * pages. `contrast.layout.test.tsx` can say that every word on the dark ground clears its
+ * floor and cannot say whether the screen is any *good* — whether the washes still read as
+ * surfaces, whether a chip still reads as a chip. And it is the only place #129's first
+ * open risk can be judged at all: in `zh-Hans` a gain and a passed deadline are both red,
+ * a few centimetres apart on the Tender detail, and whether the tabular figure with a
+ * triangle reads differently enough from the sentence beside a lamp is a question for eyes
+ * rather than for a ratio.
  */
-
-// Hoisted per file and therefore not shareable with the layout suite, which declares the
-// same block for the same components. See the note in `@/test/screens`.
-vi.mock("@/app/actions/auth", () => ({ signOutAction: async () => ({}) }));
-vi.mock("@/app/actions/admin", () => ({
-  inviteAction: async () => ({}),
-  setWecomUseridAction: async () => ({}),
-  sendTestMentionAction: async () => ({}),
-  setMembershipDisabledAction: async () => ({}),
-  setGroupRobotAction: async () => ({}),
-  setFxBufferAction: async () => ({}),
-}));
-vi.mock("@/app/actions/locale", () => ({ switchLocale: async () => ({}) }));
-vi.mock("@/app/actions/theme", () => ({ switchTheme: async () => ({}) }));
-vi.mock("@/app/actions/tenders", () => ({
-  addAssigneeAction: async () => ({}),
-  removeAssigneeAction: async () => ({}),
-}));
-vi.mock("@/app/actions/quotes", () => ({
-  createQuoteAction: async () => ({}),
-  updateQuoteAction: async () => ({}),
-  deleteQuoteAction: async () => ({}),
-  // The reduced sourcing screen draws `NoSupplierFoundForm`, which reaches for both of
-  // these through `useActionState` — an undefined action there throws on render.
-  recordNoSupplierFoundAction: async () => ({}),
-  clearNoSupplierFoundAction: async () => ({}),
-}));
-vi.mock("@/app/actions/quote-photos", () => ({
-  recordQuotePhotosAction: async () => ({}),
-  removeQuotePhotoAction: async () => ({}),
-  signQuotePhotoUploadsAction: async () => ({}),
-}));
 
 /**
  * The capture instant, resolved once by the `contact-sheet` script and handed in.
@@ -89,7 +74,7 @@ const CAPTURED_AT = import.meta.env.VITE_CONTACT_SHEET_AT ?? "an unrecorded time
 const OUT_FROM_HERE = "../../.contact-sheet";
 const OUT_FROM_ROOT = ".contact-sheet";
 
-type Shot = { screen: string; locale: string; file: string };
+type Shot = { screen: string; locale: string; theme: Theme; file: string };
 
 const shots: Shot[] = [];
 
@@ -99,47 +84,48 @@ let faces: ResolvedFace[] = [];
 describe("the contact sheet", () => {
   it.each(
     locales.flatMap(([locale, messages]) =>
-      Object.entries(screens(messages)).map(
-        ([name, entry]) =>
-          [`${name}, in ${locale}`, name, locale, messages, entry.body] as const,
+      themes.flatMap((theme) =>
+        Object.entries(screens(messages)).map(
+          ([name, entry]) =>
+            [`${name}, in ${locale}, ${theme}`, name, locale, theme, messages, entry.body] as const,
+        ),
       ),
     ),
-  )("captures %s", async (_case, name, locale, messages, body) => {
+  )("captures %s", async (_case, name, locale, theme, messages, body) => {
     render(
-      <Screen locale={locale} messages={messages}>
+      <Screen theme={theme} locale={locale} messages={messages}>
         {body}
       </Screen>,
     );
 
     if (faces.length === 0) faces = resolveDeclaredStack();
 
-    const file = `${slug(name)}.${locale}.png`;
+    await photograph(name, locale, theme);
+  });
 
-    // Lay the screen out at phone size first — the previous capture left the iframe as
-    // tall as its own screen, and a page laid out in that taller box measures wrong here.
-    await page.viewport(phone.width, phone.height);
-
-    // Then grow the viewport to the screen's full height before photographing it. Both
-    // halves are needed and neither implies the other: screenshotting `document.body`
-    // alone returns a box the right size with everything below the fold unpainted, and
-    // growing the viewport alone still needs an element to bound the capture.
-    const height = fullHeight();
-
-    // Taller than the window and vitest would quietly scale the iframe to fit, producing
-    // a sheet that looks fine and is the wrong size. Fail instead: this asserts the tool
-    // worked, never that the screen looks right.
-    expect(height, `${name} is taller than the capture window`).toBeLessThanOrEqual(
-      captureWindow.height,
+  /**
+   * And the four reached before signing in. They are photographed here rather than left
+   * out because the sheet's claim is *every screen*, and the first screen anybody in this
+   * org will ever see is one of these — on a phone, at night, in the theme this ticket is
+   * about.
+   */
+  it.each(
+    locales.flatMap(([locale, messages]) =>
+      themes.flatMap((theme) =>
+        Object.entries(signedOutScreens(messages)).map(
+          ([name, entry]) =>
+            [`${name}, in ${locale}, ${theme}`, name, locale, theme, messages, entry.body] as const,
+        ),
+      ),
+    ),
+  )("captures %s", async (_case, name, locale, theme, messages, body) => {
+    render(
+      <SignedOut theme={theme} locale={locale} messages={messages}>
+        {body}
+      </SignedOut>,
     );
 
-    await page.viewport(phone.width, height);
-
-    await page.screenshot({
-      element: document.body,
-      path: `${OUT_FROM_HERE}/${file}`,
-    });
-
-    shots.push({ screen: name, locale, file });
+    await photograph(name, locale, theme);
   });
 
   afterAll(async () => {
@@ -149,6 +135,40 @@ describe("the contact sheet", () => {
     await commands.writeFile(`${OUT_FROM_ROOT}/index.html`, indexPage(shots, faces));
   });
 });
+
+/**
+ * Take the picture of whatever was just rendered, and record it in the sheet.
+ *
+ * Both `it.each` blocks above do this and only this once their screen is on the page, and
+ * the difference between them is which wrapper composed it — so the composing is theirs
+ * and everything after it is here.
+ */
+async function photograph(name: string, locale: string, theme: Theme): Promise<void> {
+  const file = `${slug(name)}.${locale}.${theme}.png`;
+
+  // Lay the screen out at phone size first — the previous capture left the iframe as tall
+  // as its own screen, and a page laid out in that taller box measures wrong here.
+  await page.viewport(phone.width, phone.height);
+
+  // Then grow the viewport to the screen's full height before photographing it. Both
+  // halves are needed and neither implies the other: screenshotting `document.body` alone
+  // returns a box the right size with everything below the fold unpainted, and growing
+  // the viewport alone still needs an element to bound the capture.
+  const height = fullHeight();
+
+  // Taller than the window and vitest would quietly scale the iframe to fit, producing a
+  // sheet that looks fine and is the wrong size. Fail instead: this asserts the tool
+  // worked, never that the screen looks right.
+  expect(height, `${name} is taller than the capture window`).toBeLessThanOrEqual(
+    captureWindow.height,
+  );
+
+  await page.viewport(phone.width, height);
+
+  await page.screenshot({ element: document.body, path: `${OUT_FROM_HERE}/${file}` });
+
+  shots.push({ screen: name, locale, theme, file });
+}
 
 /**
  * Which of the families the app *declares* actually got used.
@@ -247,26 +267,37 @@ function slug(name: string): string {
 }
 
 /**
- * One page, each screen a row with the two locales side by side.
+ * One page, each screen a row of four: both locales, and inside each the two themes.
  *
- * `zh-Hans` is drawn first in each row for the reason #68 gives: judge the working
- * language first, because the type scale was set for PingFang and checked against the
- * Latin face rather than the other way round.
+ * `zh-Hans` is drawn first for the reason #68 gives — judge the working language first,
+ * because the type scale was set for PingFang and checked against the Latin face rather
+ * than the other way round — and the themes sit **adjacent within a locale** rather than
+ * on two pages, because what somebody is looking for here is the difference between them
+ * on one screen. A dark palette reviewed on its own reads as fine; reviewed beside the
+ * light one, the wash that went flat and the chip that stopped being a chip are obvious.
  */
+const cells = locales.flatMap(([locale]) =>
+  themes.map((theme) => ({ locale, theme })),
+);
+
 function indexPage(taken: Shot[], resolved: ResolvedFace[]): string {
   const order = [...new Set(taken.map((shot) => shot.screen))];
 
   const rows = order
     .map((name) => {
-      const cells = ["zh-Hans", "en"]
-        .map((locale) => {
-          const shot = taken.find((s) => s.screen === name && s.locale === locale);
+      const row = cells
+        .map(({ locale, theme }) => {
+          const shot = taken.find(
+            (s) => s.screen === name && s.locale === locale && s.theme === theme,
+          );
 
-          if (shot === undefined) return `<figure><figcaption>${locale} — not captured</figcaption></figure>`;
+          if (shot === undefined) {
+            return `<figure><figcaption>${locale} · ${theme} — not captured</figcaption></figure>`;
+          }
 
           return `<figure>
-        <figcaption>${locale}</figcaption>
-        <a href="${shot.file}"><img src="${shot.file}" alt="${name}, ${locale}"></a>
+        <figcaption>${locale} · ${theme}</figcaption>
+        <a href="${shot.file}"><img src="${shot.file}" alt="${name}, ${locale}, ${theme}"></a>
       </figure>`;
         })
         .join("\n      ");
@@ -274,7 +305,7 @@ function indexPage(taken: Shot[], resolved: ResolvedFace[]): string {
       return `  <section>
     <h2>${name}</h2>
     <div class="pair">
-      ${cells}
+      ${row}
     </div>
   </section>`;
     })
@@ -292,7 +323,7 @@ function indexPage(taken: Shot[], resolved: ResolvedFace[]): string {
 <title>Contact sheet — tender-tracker</title>
 <style>
   :root { color-scheme: light dark; }
-  body { font: 15px/1.5 system-ui, sans-serif; margin: 0; padding: 2rem; max-width: 1100px; }
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 0; padding: 2rem; max-width: 1500px; }
   h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
   .note { color: #666; max-width: 62ch; }
   .facts { background: #f4f4f5; border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0 2.5rem; }
@@ -302,7 +333,7 @@ function indexPage(taken: Shot[], resolved: ResolvedFace[]): string {
   .no { opacity: .6; }
   section { margin-bottom: 3rem; }
   h2 { font-size: 1rem; margin: 0 0 .75rem; }
-  .pair { display: flex; gap: 1.5rem; align-items: flex-start; }
+  .pair { display: flex; gap: 1.25rem; align-items: flex-start; }
   figure { margin: 0; flex: 1; min-width: 0; }
   figcaption { font-size: .8rem; color: #666; margin-bottom: .4rem; }
   img { width: 100%; height: auto; border: 1px solid #d4d4d8; border-radius: 6px; display: block; }
@@ -310,8 +341,9 @@ function indexPage(taken: Shot[], resolved: ResolvedFace[]): string {
 
 <h1>Contact sheet</h1>
 <p class="note">
-  Every screen, both locales, as this machine drew them. This is something to look at, not
-  a check — there is no baseline, nothing is committed, and nothing here can fail. The
+  Every screen, both locales and both themes, as this machine drew them. This is something
+  to look at, not a check — there is no baseline, nothing is committed, and nothing here
+  can fail. The
   phone in your hand is still the only honest renderer; see
   <code>scripts/prelaunch-phone-checks.sh</code>.
 </p>

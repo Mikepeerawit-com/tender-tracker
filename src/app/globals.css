@@ -180,9 +180,16 @@
    * The faintest tier of ink, and the darkest it has ever been: at its old value it drew
    * 10.5px field labels and reference codes at 3.1:1, which is under the floor for text
    * that size and was the worst legibility fault in the old palette. It is now the
-   * lightest ink that clears 4.5:1 on both the paper and a sheet.
+   * lightest ink that clears 4.5:1 on **every** surface it is drawn on.
+   *
+   * There are three, and the third is why this moved again in #135. The paper and a
+   * sheet were the two anybody had counted; the working sheet's header and its totals bar
+   * are drawn on a `muted/40` wash, which is darker than either, and the field labels on
+   * that bar measured 4.48:1 — under the floor, on the one screen no shared guard could
+   * see. The sheet is in `@/test/screens` now, so the surface is measured rather than
+   * remembered.
    */
-  --ink-faint: oklch(0.545 0.018 265);
+  --ink-faint: oklch(0.535 0.018 265);
   --hairline-soft: oklch(0.935 0.008 90);
 
   /*
@@ -371,13 +378,35 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
   }
   html {
     @apply font-sans;
+  }
+
+  /**
+   * **The focus ring for everything that does not draw its own** (#135).
+   *
+   * The fields and the buttons carry a ring of their own and turn this off with
+   * `outline-none`; a link does not, and until #135 a link's ring was whatever the browser
+   * drew, tinted by an `outline-ring/50` on `*` and never asked whether a reader could see
+   * it. It could not: at half strength the ring measured 2.3:1 on the dark ground and
+   * 2.6:1 on the light one, against the 3:1 that SC 1.4.11 asks of anything carrying
+   * information. It was under the floor in *both* themes, which is why this is stated here
+   * rather than adjusted in the dark block.
+   *
+   * **Solid, not a wash.** Half of signal over a card is a ring you can see if you already
+   * know where it is. Signal is the hue that means *something is expected of you*
+   * (ADR-0019), and a control holding the caret is the clearest case of that in the app —
+   * so it is drawn at the strength that says so, and the offset is what keeps it off the
+   * control's own edge rather than merged into it.
+   */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 }
 
@@ -420,5 +449,37 @@
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.02em;
+  }
+}
+
+/**
+ * **A reader who asked for nothing to move gets nothing that moves** (#135).
+ *
+ * `prefers-reduced-motion` is not a preference about taste. It is set by people for whom
+ * movement on a screen causes nausea, migraine or vertigo — so this is stated once, over
+ * everything, rather than left to each component to remember. `ScreenSkeleton` was the one
+ * that did remember, with a `motion-reduce:animate-none` on its pulse; every other
+ * `transition-colors` in the app ran against the preference, and the pending spinners in
+ * both switchers turned regardless.
+ *
+ * **Unlayered and `!important`, which is the only place this reliably wins.** Every
+ * declaration it is overruling is a Tailwind utility in `@layer utilities`, and a rule in
+ * an earlier layer loses to a later one however specific it is — `*` against
+ * `.transition-colors` would lose twice over. An unlayered `!important` sits above every
+ * layered normal declaration, and this file has no layered `!important` for it to sit
+ * under.
+ *
+ * **Off, not merely shortened.** The usual form of this leaves `0.01ms` on the clock so
+ * that anything waiting for `transitionend` or `animationend` still hears one. Nothing in
+ * this app waits for either, so the honest value is zero — and it lets
+ * `motion.layout.test.tsx` assert that nothing moves rather than that nothing moves much.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
   }
 }

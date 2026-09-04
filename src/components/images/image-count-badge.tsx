@@ -39,7 +39,7 @@ export function ImageCountBadge({
       <button
         type="button"
         aria-label={openLabel}
-        className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 border-border inline-flex h-11 w-fit items-center gap-1.5 rounded-lg border px-2.5 text-sm focus-visible:ring-3 focus-visible:outline-none"
+        className="text-muted-foreground hover:text-foreground focus-visible:ring-ring border-border inline-flex h-11 w-fit items-center gap-1.5 rounded-lg border px-2.5 text-sm focus-visible:ring-3 focus-visible:outline-none"
         onClick={() => setOpenAt(0)}
       >
         <ImageIcon className="size-4" aria-hidden />
