@@ -751,7 +751,23 @@ function Notice({
   };
 
   return (
-    <p role="note" className={`rounded-lg border px-3 py-2 text-sm ${tones[tone]}`}>
+    <p
+      // `break-words` for the reason `Cell` carries it, and it is the same fault caught a
+      // second time in #135: three of the four banners name a supplier, and a supplier name
+      // is a string nobody here chose the length of —
+      // `GuangzhouImproveMedicalInstrumentsCoLtd` arrives with nowhere to break, in a box
+      // 390px wide less two paddings.
+      //
+      // **It fitted on the machine that wrote this and did not fit in CI**, which is the
+      // half worth writing down. Under ADR-0019 no Latin webfont is fetched and none
+      // resolves in this harness, so the Latin text here is drawn by whatever face the
+      // machine has — PingFang on a developer's macOS, something wider on a Linux runner.
+      // Judging a width by arithmetic on one machine's metrics is what the ADR says not to
+      // do; holding it structurally is what survives the difference. The corollary is that
+      // a *green* run of this suite locally is not evidence about the runner either.
+      role="note"
+      className={`rounded-lg border px-3 py-2 text-sm break-words ${tones[tone]}`}
+    >
       <span className="font-semibold">{title}</span> <span>{children}</span>
     </p>
   );
