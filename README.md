@@ -82,7 +82,7 @@ machine that took it: a Linux runner resolves at best Noto Sans SC and may carry
 face at all, which would render `zh-Hans` — the locale to judge first — as a wall of
 tofu. macOS resolves PingFang SC, what an iPhone reader actually sees. The index page
 names which faces really resolved, so a sheet from one machine can be read safely on
-another. Note that `next/font` supplies IBM Plex Sans in the real app and not in this
+another. Note that `next/font` supplies Fira Sans in the real app and not in this
 harness, so unless you have it installed the Latin text is drawn by the CJK face behind
 it.
 

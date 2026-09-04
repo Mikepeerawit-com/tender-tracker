@@ -148,10 +148,10 @@ describe("the contact sheet", () => {
  * installed falls through to the same last-resort face as a deliberately bogus name, so
  * an identical advance width means it did not resolve.
  *
- * The Latin face matters most here. `--font-ibm-plex-sans` is set by `next/font` on the
- * real `<html>` and is absent in this harness, so unless IBM Plex Sans is installed
- * locally the Latin text in these images is being drawn by the CJK face behind it. That
- * is a real difference from production and the reader has to be told, not spared.
+ * The Latin face matters most here. `--font-fira-sans` is set by `next/font` on the real
+ * `<html>` and is absent in this harness, so unless Fira Sans is installed locally the
+ * Latin text in these images is being drawn by the CJK face behind it. That is a real
+ * difference from production and the reader has to be told, not spared.
  */
 type FaceRole = "drew this sheet" | "never reached" | "not installed";
 type ResolvedFace = { family: string; role: FaceRole };
@@ -240,8 +240,8 @@ function slug(name: string): string {
  * One page, each screen a row with the two locales side by side.
  *
  * `zh-Hans` is drawn first in each row for the reason #68 gives: judge the working
- * language first, because the type scale was set for PingFang and checked against Plex
- * rather than the other way round.
+ * language first, because the type scale was set for PingFang and checked against the
+ * Latin face rather than the other way round.
  */
 function indexPage(taken: Shot[], resolved: ResolvedFace[]): string {
   const order = [...new Set(taken.map((shot) => shot.screen))];
@@ -314,7 +314,7 @@ function indexPage(taken: Shot[], resolved: ResolvedFace[]): string {
   </ul>
   <p class="note" style="margin-bottom:0">
     Only the first family that resolves draws anything; the rest are declared and never
-    consulted. <code>next/font</code> supplies <code>IBM Plex Sans</code> in the real app
+    consulted. <code>next/font</code> supplies <code>Fira Sans</code> in the real app
     and not in this harness, so unless it is installed here the Latin text below is being
     drawn by the CJK face behind it — a real difference from what ships.
   </p>

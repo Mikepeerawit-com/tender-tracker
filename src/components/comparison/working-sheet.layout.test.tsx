@@ -10,7 +10,7 @@ import type { QuotePhoto } from "@/lib/images/quote-photos";
 import type { ReferenceImage } from "@/lib/images/reference-images";
 import type { Quote } from "@/lib/quotes/quotes";
 import messages from "@/messages/en.json";
-import { expectNoSidewaysScroll, phone } from "@/test/layout";
+import { desk, expectNoSidewaysScroll, fontStack, phone } from "@/test/layout";
 
 import { WorkingSheet } from "./working-sheet";
 
@@ -96,6 +96,57 @@ describe(`the working sheet at ${phone.width}×${phone.height}`, () => {
       expectNoSidewaysScroll();
     } finally {
       // Put the phone back, so a width set here is not what the next test measures.
+      await page.viewport(phone.width, phone.height);
+    }
+  });
+});
+
+/**
+ * **Eight competing offers read down the page as a column of numbers** — the one thing
+ * the numeral face is chosen for (ADR-0019).
+ *
+ * A figure is only comparable to the one above it if the digits are the same width: with
+ * proportional figures a `1` is narrower than a `0`, every row is a different length, and
+ * the eye has to read each number instead of scanning the column. That is what `.money`
+ * and the mono half of the type stack are for, and it is invisible in a screenshot of any
+ * single row — so the repaint that moved the face is the change that had to state it.
+ *
+ * **Every figure the sheet drew is asked, and it is asked what it reached for rather than
+ * how wide the digits came out.** Measuring the digits was the first shape of this and it
+ * measures the wrong machine: no Latin face in either stack — not Fira Code, not SF Mono,
+ * not `ui-monospace` — resolves in this headless browser, so a width taken here is a fact
+ * about the substitute Chromium picked, and it would be a different fact on the CI runner
+ * and a third on a phone. What travels is which stack the figure is pointed at and that it
+ * asked for tabular figures; the face itself is judged where ADR-0019 says it is judged,
+ * on a device, through the contact sheet.
+ */
+describe("the figures on the working sheet", () => {
+  it("sets every figure in the numeral stack, with tabular digits", async () => {
+    await page.viewport(desk.width, desk.height);
+
+    try {
+      const { container } = renderSheet();
+      const figures = [...container.querySelectorAll<HTMLElement>(".money")];
+
+      // A sheet that drew no money at all would otherwise pass this in silence.
+      expect(figures.length).toBeGreaterThan(0);
+
+      const numerals = fontStack("--font-mono");
+      const words = fontStack("--font-sans");
+
+      // The two stacks really are different families, so a `.money` that quietly
+      // inherited the body face could not pass the walk below by coincidence.
+      expect(numerals).not.toBe(words);
+
+      for (const figure of figures) {
+        const style = getComputedStyle(figure);
+
+        expect(style.fontFamily, figure.textContent ?? "").toBe(numerals);
+        expect(style.fontVariantNumeric, figure.textContent ?? "").toContain(
+          "tabular-nums",
+        );
+      }
+    } finally {
       await page.viewport(phone.width, phone.height);
     }
   });
