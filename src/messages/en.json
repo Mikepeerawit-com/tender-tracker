@@ -89,7 +89,8 @@
     "destinations": "Main navigation",
     "menu": "Menu",
     "back": "Back",
-    "itemLocation": "{client} · {item}"
+    "itemLocation": "{client} · {item}",
+    "currencyConversion": "Foreign prices"
   },
   "images": {
     "viewing": "{position} of {total}",
@@ -543,5 +544,24 @@
       "not_a_wecom_webhook": "That is not a WeCom group webhook. It should start https://qyapi.weixin.qq.com/ and carry a key.",
       "save_failed": "That could not be saved. The webhook is unchanged — try again."
     }
+  },
+  "currencyConversion": {
+    "title": "Converting foreign prices",
+    "description": "A supplier quoting in yuan or dollars is converted to Baht at the market rate plus a little, because a bank charges more than the market rate. This sets how much is added.",
+    "current": "Foreign prices are being converted at the market rate plus {percent}%.",
+    "label": "Added to the market rate (%)",
+    "help": "Higher makes foreign prices look slightly dearer than the market says, which is the safe direction to be wrong in. Lower makes every bid look cheaper than it will really be.",
+    "affects": "Only quotes recorded from now on. A quote already recorded keeps the rate it was entered at — the one exception is somebody correcting the day a quote says the price was given, which works that day out afresh.",
+    "save": "Save",
+    "saving": "Saving…",
+    "status": {
+      "saved": "Saved. Quotes recorded from now on use the new figure.",
+      "not_admin": "Only an Administrator can change this.",
+      "not_a_percentage": "That is not a number. Enter a percentage, such as 2 or 2.5.",
+      "out_of_range": "Enter a percentage between 0 and 10. A 2 typed as 200 would treble every foreign price.",
+      "too_precise": "Two decimal places at most — 2.25, not 2.255.",
+      "save_failed": "That could not be saved. The figure is unchanged — try again."
+    },
+    "percentSign": "%"
   }
 }

@@ -19,9 +19,10 @@ import { controlRows, expectNoSidewaysScroll, phone } from "@/test/layout";
  * #48 reported the tender list, a Tender **and** the comparison sheet all wider than the
  * phone — one symptom on three screens is one cause on the thing all three share.
  *
- * The admin case is the one that matters. An org admin's bar carries six buttons —
- * Tenders, People, Group Robot, the two locales and Sign out — and `Button` is
- * `shrink-0 whitespace-nowrap`, so none of them gives up a pixel.
+ * The admin case is the one that matters. An org admin's bar carries the widest set of
+ * controls there is — Tenders, the two locales, and a menu holding People, Group Robot,
+ * Converting foreign prices and Sign out — and `Button` is `shrink-0 whitespace-nowrap`,
+ * so none of them gives up a pixel.
  *
  * Since #73 the bar also states **where the reader is**, which gives it two shapes and a
  * new way to overflow: the `record` shape carries a back control plus a reference and a

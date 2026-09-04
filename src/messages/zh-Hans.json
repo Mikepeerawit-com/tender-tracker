@@ -89,7 +89,8 @@
     "destinations": "主导航",
     "menu": "菜单",
     "back": "返回",
-    "itemLocation": "{client}·{item}"
+    "itemLocation": "{client}·{item}",
+    "currencyConversion": "外币换算"
   },
   "images": {
     "viewing": "第 {position} 张，共 {total} 张",
@@ -543,5 +544,24 @@
       "not_a_wecom_webhook": "这不是企业微信群机器人的 webhook 地址。它应以 https://qyapi.weixin.qq.com/ 开头,并带有 key 参数。",
       "save_failed": "保存失败。地址未被修改,请重试。"
     }
+  },
+  "currencyConversion": {
+    "title": "外币报价换算",
+    "description": "供应商用人民币或美元报价时，换算成泰铢用的是市场汇率再往上加一点，因为银行给的汇率比市场差。这里设置的就是加多少。",
+    "current": "目前外币报价按市场汇率上浮 {percent}% 换算。",
+    "label": "在市场汇率之上加价（%）",
+    "help": "调高会让外币报价显示得比市场价略贵，宁可错在这个方向；调低则会让每一次投标看起来比实际便宜。",
+    "affects": "只影响从现在起录入的报价。已经录入的报价仍按当时的汇率计算，唯一的例外是有人更正某条报价的报价日期——那会按新日期重新计算。",
+    "save": "保存",
+    "saving": "保存中…",
+    "status": {
+      "saved": "已保存。从现在起录入的报价按新数值换算。",
+      "not_admin": "只有组织管理员可以修改。",
+      "not_a_percentage": "这不是一个数字。请填写百分比，例如 2 或 2.5。",
+      "out_of_range": "请填写 0 到 10 之间的百分比。把 2 写成 200 会让所有外币报价变成三倍。",
+      "too_precise": "最多两位小数——填 2.25，而不是 2.255。",
+      "save_failed": "保存失败。数值未被修改，请重试。"
+    },
+    "percentSign": "%"
   }
 }

@@ -228,6 +228,25 @@ in. Quotes are always stored in the currency the supplier quoted; conversion is 
 display only and is always shown as derived.
 _Avoid_: base currency, home currency, display currency
 
+**FX Buffer**:
+How much is added to the ECB mid-market rate before a foreign price is converted, held on
+the organisation as a percentage rather than in code — the real spread Taihue's bank
+charges on THB↔CNY and THB↔USD was outstanding when the spec was written, so it is a
+setting an Org Admin changes rather than a deploy (buildspec_2 A3). It errs toward
+*overstating* cost on purpose: mid-market is not what a bank charges, and a Bid built on
+an understated cost is one that wins and loses money. **Changing it changes what the next
+Quote freezes** — nothing walks existing Quotes to re-price them, and a change that did
+would be a bug rather than a feature. The one already-frozen pair that moves moves for a
+different reason: correcting the day a Quote *claims* re-runs the freeze against that
+date, at the buffer as it then stands, because the re-frozen row has to be one the create
+path could produce (ADR-0018).
+_Label_: en "Converting foreign prices" · zh 外币报价换算 — the screen is named for what it
+does to a price, because "buffer" is a word only we would have used for it. The menu row
+shortens to en "Foreign prices" · zh 外币换算, the way `localeSwitcher.short` does: a
+destination in a list of destinations is read at a glance, and the screen it opens is
+where the full name earns its length.
+_Avoid_: spread, markup, fx margin, safety factor
+
 **Frozen Rate**:
 The pair of exchange rates a Quote stores at the moment it is entered — ECB mid-market
 and the buffered rate actually applied — together with the day ECB published them. Never
