@@ -407,8 +407,8 @@ export function Body({
   return (
     <>
       {/* An org admin, always: it is the widest the bar ever is — the menu behind it
-          carries People and Group Robot as well as Sign out — and the bar's own suite is
-          where the ordinary member's is measured. */}
+          carries People, Group Robot and Converting foreign prices as well as Sign out —
+          and the bar's own suite is where the ordinary member's is measured. */}
       <AppHeader isOrgAdmin location={location} width={width} />
       <ScreenBody width={width}>{children}</ScreenBody>
     </>

@@ -9,6 +9,7 @@ import { setPasswordErrors } from "@/lib/auth/password";
 import { setupErrors } from "@/lib/auth/setup";
 import { inviteStatuses, wecomUserIdStatuses } from "@/lib/auth/invite";
 import { pricingProblems, selectionProblems } from "@/lib/comparison/sheet";
+import { fxBufferStatuses } from "@/lib/org/fx-buffer";
 import { membershipDisableStatuses } from "@/lib/org/members";
 import { imageProblems } from "@/lib/images/images";
 import { matchTypes, quoteProblems } from "@/lib/quotes/quotes";
@@ -116,6 +117,12 @@ describe.each(others)("%s", (locale) => {
         // A converted amount behind the mathematical sign for it. There is no word in
         // either language to translate.
         "quotes.approx",
+        // The per-cent sign beside the box it belongs to, for the same reason: it is a
+        // sign rather than a word, and it is the same sign in both languages. It is in
+        // the catalogue at all so that the screen holds no string the catalogue does not
+        // — a locale that wanted percent written differently would have somewhere to say
+        // so, which a glyph hardcoded in the markup would not.
+        "currencyConversion.percentSign",
       ].sort(),
     );
   });
@@ -296,6 +303,19 @@ describe.each(locales)("%s wording", (locale) => {
   it("reports how every group robot save ended", () => {
     const missing = groupRobotStatuses.filter(
       (status) => !flat.has(`groupRobot.status.${status}`),
+    );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("reports how every change to the FX Buffer ended", () => {
+    // Four of the six are refusals of a number somebody typed, and the screen has no
+    // other way to say what was wrong with it — a raw key there is a Save button that
+    // silently leaves the old buffer in place while re-pricing nothing. `saved` matters
+    // for the opposite reason: it is where the admin is told the change reaches the next
+    // Quote and no Quote already frozen.
+    const missing = fxBufferStatuses.filter(
+      (status) => !flat.has(`currencyConversion.status.${status}`),
     );
 
     expect(missing).toEqual([]);

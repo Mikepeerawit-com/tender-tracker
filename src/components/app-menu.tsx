@@ -59,6 +59,9 @@ export function AppMenu({ isOrgAdmin }: { isOrgAdmin: boolean }) {
                   <Menu.LinkItem href="/admin/group-robot" className={item}>
                     {t("groupRobot")}
                   </Menu.LinkItem>
+                  <Menu.LinkItem href="/admin/currency-conversion" className={item}>
+                    {t("currencyConversion")}
+                  </Menu.LinkItem>
                   <div role="separator" className="bg-border my-1 h-px" />
                 </>
               ) : null}

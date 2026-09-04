@@ -9,6 +9,7 @@ import {
   type InviteStatus,
   type WecomUserIdStatus,
 } from "@/lib/auth/invite";
+import { setFxBuffer, type FxBufferStatus } from "@/lib/org/fx-buffer";
 import {
   setMembershipDisabled,
   type MembershipDisableStatus,
@@ -147,4 +148,36 @@ export async function setGroupRobotAction(
   revalidatePath("/admin/group-robot");
 
   return { status: clearing ? "cleared" : "saved" };
+}
+
+export type FxBufferState = {
+  status?: FxBufferStatus;
+};
+
+/**
+ * Set how much is added to the market exchange rate when a foreign price is converted.
+ *
+ * The percentage arrives as the string the box held rather than as a number: reading it
+ * is the whole risk here — a 2 meant as 2% and stored as 2 triples every foreign price
+ * entered afterwards — so it is done in one place, `parseBufferPercent`, which a test can
+ * stand at. `Number()` here would put the conversion somewhere nothing can check.
+ *
+ * Nothing is passed for the old value and nothing needs to be: the setting is one column
+ * with one writer, and a change reaches the next Quote rather than any that already
+ * froze a rate.
+ */
+export async function setFxBufferAction(
+  _previous: FxBufferState,
+  formData: FormData,
+): Promise<FxBufferState> {
+  const result = await setFxBuffer(
+    { entered: String(formData.get("percent") ?? "") },
+    await cookies(),
+  );
+
+  if (!result.ok) return { status: result.reason };
+
+  revalidatePath("/admin/currency-conversion");
+
+  return { status: "saved" };
 }

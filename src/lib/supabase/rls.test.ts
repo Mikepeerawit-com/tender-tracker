@@ -331,8 +331,11 @@ describe("membership is not business data", () => {
   });
 
   it("refuses to let a member rewrite the org's settings", async () => {
-    // No v1 screen edits these, and fx_buffer_pct silently re-prices every future
-    // Quote.
+    // `fx_buffer_pct` now has a screen (#123), and this is what that screen is gated
+    // *against*: the write goes through a server action that checks `is_org_admin` and
+    // then uses the service role. The browser's own key must still be refused, because a
+    // column one PostgREST call from any signed-in member is one that silently re-prices
+    // every future Quote in the org.
     const client = await signedInAs(members.a.email);
 
     const { error } = await client
