@@ -52,7 +52,7 @@ describe(`a tender row at ${phone.width}×${phone.height}`, () => {
         {/* The page's own wrapper, so the row is measured inside the padding it really
             has rather than edge to edge. */}
         <div className="flex flex-1 flex-col gap-8 p-6">
-          <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+          <main className="mx-auto flex w-full max-w-7xl flex-col gap-8">
             {/* The bordered container the group draws its rows inside. */}
             <div className="border-hairline bg-card overflow-hidden rounded-lg border">
               <ul className="flex flex-col">

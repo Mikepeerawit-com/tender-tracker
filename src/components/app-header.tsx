@@ -5,7 +5,6 @@ import { AppMenu } from "@/components/app-menu";
 import { TopNav } from "@/components/app-nav";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Button } from "@/components/ui/button";
-import type { ScreenWidth } from "@/components/ui/screen-body";
 
 /**
  * Where the reader is. One of two shapes, and never more than one row.
@@ -37,12 +36,19 @@ export type AppLocation =
  *
  * **The bar is full width and its contents are not.** The ink, the border and the fill
  * span the viewport, because a bar that stopped short of the edge would be a strip rather
- * than a bar; what sits on it is held in the same column as the body beneath, at the same
- * {@link ScreenWidth} and the same `px-6`. Until #97 there was no inner container at all,
- * and above ~1300px that was visible: the body centred itself at 1280 while the wordmark
- * stayed pinned to the window, so the page had two different answers to *where is my left
- * edge*. On a phone the column is the whole width and this changes nothing but the
+ * than a bar; what sits on it is held in the same column as the body beneath — the region,
+ * at the same `max-w-7xl` and the same `px-6`. Until #97 there was no inner container at
+ * all, and above ~1300px that was visible: the body centred itself at 1280 while the
+ * wordmark stayed pinned to the window, so the page had two different answers to *where is
+ * my left edge*. On a phone the column is the whole width and this changes nothing but the
  * padding, which now matches the body's.
+ *
+ * **The region is written here rather than handed in** (ADR-0022, #131). It was a prop
+ * until this ticket, because each screen committed to its own width and the bar had to be
+ * told which — which meant a page could hand the two halves different numbers, and the
+ * suite had to measure them against each other to catch it. There is one region now, so
+ * there is nothing left to pass and nothing left to get wrong; the measurement is kept
+ * anyway, because it is what would notice this file and `ScreenBody` drifting apart.
  *
  * **What is aligned is the column, not the ink**, and the difference is the controls' own
  * insets: the wordmark link's `px-2`, the icon buttons' 44px square around a glyph half
@@ -87,28 +93,16 @@ export type AppLocation =
 export function AppHeader({
   isOrgAdmin,
   location = { kind: "app" },
-  width = "max-w-3xl",
 }: {
   isOrgAdmin: boolean;
   location?: AppLocation;
-  /**
-   * The column the bar's contents are aligned to — the same value the page hands
-   * `ScreenBody`, and handed to both by `Screen` so that one number reaches them.
-   * The default is the default there: the two screens that stand in for a page,
-   * `(app)/loading.tsx` and `(app)/error.tsx`, draw this bar over a body they compose at
-   * that width, and a fallback whose bar disagreed with its own skeleton would be the
-   * fault this prop exists to fix, drawn on the way in.
-   */
-  width?: ScreenWidth;
 }) {
   const t = useTranslations("nav");
   const app = useTranslations("app");
 
   return (
     <header className="border-hairline bg-card border-b px-6">
-      <div
-        className={`mx-auto flex w-full min-w-0 items-center justify-between gap-2 py-1.5 ${width}`}
-      >
+      <div className="mx-auto flex w-full max-w-7xl min-w-0 items-center justify-between gap-2 py-1.5">
         <div className="flex min-w-0 flex-1 items-center gap-1">
           {location.kind === "app" ? (
             // This link is on every screen in the app, so its prefetch fires most often

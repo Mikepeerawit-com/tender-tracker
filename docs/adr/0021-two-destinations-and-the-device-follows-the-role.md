@@ -2,6 +2,8 @@
 
 **Status:** accepted. Extends [ADR-0007](0007-dashboard-is-an-action-board.md) with a second list; qualifies [ADR-0009](0009-comparison-sheet-reflows-at-768px.md)'s claim that reflow removes the need for a separate design.
 
+> **Partly superseded by [ADR-0022](0022-one-region-one-left-edge.md), 4 September 2026.** The per-screen committed widths settled by the amendment at the foot of this file are gone: every screen behind the login now draws in one region at 1280px, and what varies per screen is the measure inside it. Everything else here stands — two destinations, the bottom bar below `md`, and the device following the role. ADR-0022 records why per-screen widths were the right answer in #97 and the wrong one now.
+
 The app has had no navigation at all: one app bar, and a hamburger holding a single item for a non-admin (Sign out). Everything is reached by drilling from `/tenders`. That is a defensible shape for one list, and it produced one bad outcome — **an Assignee's actual job is buried three levels down**. To enter a price they open the worklist, pick a Tender, find their Item among the others, and open it. The reminder that summoned them names an Item; the app makes them navigate a Tender.
 
 ## The decision
@@ -46,4 +48,6 @@ The decision above holds unchanged. The tender list joined the Tender detail at 
 
 **The bar's column is aligned; its ink is not, and that is deliberate.** A ghost control carries its own inset — the wordmark's `px-2`, an icon button's 44px square around a smaller glyph — so a control whose box starts at the column edge draws its mark a padding's width inside it. Pulling each end group back by that inset was written, looked right, and was removed: it works by letting a child overhang its parent, which is what `overflowing` in `@/test/layout` exists to catch, and keeping it meant teaching that guard an exception for the case in front of us. Eight pixels of button padding is cheaper than a hole in the check that catches a row pushing the page sideways.
 
-**What the width does *not* buy.** Nothing about the two Owner screens was redesigned to fill 1280 — the working sheet was already composed for it, and the worklist's rows simply stop wrapping their reference onto a second line. A row rearranged for the desk is a second design of the thing ADR-0009 says should be one, and is a decision for its own ticket if a reader ever asks for it.
+**What the width does *not* buy.** *(The committed widths this paragraph describes were replaced by ADR-0022's single region; the claim below about what a width does not buy is unchanged and still holds.)*
+
+Nothing about the two Owner screens was redesigned to fill 1280 — the working sheet was already composed for it, and the worklist's rows simply stop wrapping their reference onto a second line. A row rearranged for the desk is a second design of the thing ADR-0009 says should be one, and is a decision for its own ticket if a reader ever asks for it.

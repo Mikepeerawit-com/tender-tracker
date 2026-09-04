@@ -35,18 +35,18 @@ import { ScreenHeader } from "@/components/ui/screen-header";
  *
  * That is also why this composes {@link ScreenBody} rather than `Screen`: `Screen` draws
  * the bar, and a fallback that used it would put a second one under `loading.tsx`'s. The
- * wrapper below it is the same wrapper every page gets, at its default width — which is
- * what keeps this and the bar above it agreeing about where the page starts.
+ * wrapper below it is the same wrapper every page gets — and since ADR-0022 that is the
+ * same *region* every page gets, so the skeleton no longer widens into the page it stood
+ * in for. Until #131 it did: the tender list and the Tender detail were composed at 1280
+ * while this stayed at 768, and a monitor watched the column jump when the fetch landed.
  *
- * **On the Owner's two screens it is narrower than what replaces it**, and that is the
- * accepted cost of one fallback for eight screens. Since #97 the tender list and the
- * Tender detail are composed at the desk's 1280 while this stays at the phone's 768, so a
- * monitor sees a narrow skeleton widen when the page lands. It cannot be fixed here:
- * `loading.tsx` is one file above every route under `(app)` and cannot see which page is
- * coming — the same fact that makes it draw the wordmark rather than a record — and a
- * per-route fallback is four files to hold in step for a few hundred milliseconds of grey
- * boxes. Widening *this* instead would put the jump on the six screens that are narrow,
- * which is the same fault more often.
+ * **What is left of that is the measure**, and it is a much smaller version of the same
+ * trade. This draws at the app's default, and the three Org Admin screens are tighter — so
+ * on those three the header's grey lines are a little wider than the words that replace
+ * them. It cannot be fixed here: `loading.tsx` is one file above every route under `(app)`
+ * and cannot see which page is coming, which is the same fact that makes it draw the
+ * wordmark rather than a record. A per-route fallback is four files to hold in step for a
+ * few hundred milliseconds of grey boxes.
  */
 export function ScreenSkeleton() {
   const t = useTranslations("app");

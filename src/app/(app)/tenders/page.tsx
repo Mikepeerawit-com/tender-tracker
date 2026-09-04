@@ -6,6 +6,7 @@ import { getTranslations } from "next-intl/server";
 import { Screen } from "@/components/screen";
 import { TenderGroup } from "@/components/tenders/tender-group";
 import { Button } from "@/components/ui/button";
+import { Measure } from "@/components/ui/screen-body";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { todayIn } from "@/lib/calendar-date";
 import { currentUser } from "@/lib/auth/session";
@@ -50,7 +51,7 @@ export default async function TendersPage() {
   const filled = sections.filter((section) => section.tenders.length > 0);
 
   return (
-    <Screen width="max-w-7xl">
+    <Screen>
       <ScreenHeader
         heading={t("title")}
         actions={
@@ -70,9 +71,11 @@ export default async function TendersPage() {
         // Two different emptinesses, and they must not read as the same sentence: a
         // team who has recorded nothing yet needs the way in, and a team who has
         // finished everything needs telling that they have.
-        <p className="text-muted-foreground text-sm">
-          {total === 0 ? t("empty") : t("allClear")}
-        </p>
+        <Measure>
+          <p className="text-muted-foreground text-sm">
+            {total === 0 ? t("empty") : t("allClear")}
+          </p>
+        </Measure>
       ) : (
         // In the order `listWorklist` returns them, which is the order the groups are
         // read in. Empty ones are dropped here rather than there: the ordering is the

@@ -4,6 +4,8 @@ import { getTranslations } from "next-intl/server";
 
 import { GroupRobotForm } from "@/components/admin/group-robot-form";
 import { Screen } from "@/components/screen";
+import { Measure } from "@/components/ui/screen-body";
+import { ScreenHeader } from "@/components/ui/screen-header";
 import { currentUser } from "@/lib/auth/session";
 import { groupRobotStatus } from "@/lib/wecom/group-robot";
 
@@ -33,18 +35,16 @@ export default async function GroupRobotPage() {
   if (status === null) notFound();
 
   return (
-    <Screen width="max-w-2xl">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
+    <Screen measure="42rem">
+      <ScreenHeader heading={t("title")}>
         <p className="text-muted-foreground text-sm">{t("description")}</p>
-      </header>
+      </ScreenHeader>
 
-      <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
-        <GroupRobotForm
-          configured={status.configured}
-          updatedAt={status.updatedAt}
-        />
-      </section>
+      <Measure>
+        <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
+          <GroupRobotForm configured={status.configured} updatedAt={status.updatedAt} />
+        </section>
+      </Measure>
     </Screen>
   );
 }

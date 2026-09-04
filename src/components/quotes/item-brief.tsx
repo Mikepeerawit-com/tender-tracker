@@ -1,6 +1,7 @@
 import { useFormatter, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
+import { Measure } from "@/components/ui/screen-body";
 import { calendarDate, calendarDateFormat } from "@/lib/calendar-date";
 
 /**
@@ -49,37 +50,45 @@ export function ItemBrief({
   const tenders = useTranslations("tenders");
   const format = useFormatter();
 
+  // The brief is what an Assignee reads before typing a number — a product name, a
+  // quantity and the client's own sentence about it — so it is prose and sits at the
+  // screen's measure rather than spanning the region (ADR-0022). It carries its own,
+  // rather than being wrapped at each of the two places it is drawn, because there is no
+  // composition in which a brief a metre wide is the one somebody wanted.
+  //
   // Stretched, not `items-start`. A column that aligns its children to the start gives
   // each one `fit-content`, and a product name with no space in it measures at its
   // max-content width — so `break-words` never gets a constrained line box to break in,
   // and the block holds itself wider than the phone. The one child that must not stretch
   // is the image badge, which is `w-fit` in its own right.
   return (
-    <section className="border-hairline bg-card flex min-w-0 flex-col gap-2 rounded-lg border p-4">
-      <span className="field-label">{t("asked")}</span>
+    <Measure>
+      <section className="border-hairline bg-card flex min-w-0 flex-col gap-2 rounded-lg border p-4">
+        <span className="field-label">{t("asked")}</span>
 
-      <h1 className="min-w-0 text-xl leading-tight font-semibold tracking-tight break-words">
-        {productName}
-      </h1>
+        <h1 className="min-w-0 text-xl leading-tight font-semibold tracking-tight break-words">
+          {productName}
+        </h1>
 
-      <p className="min-w-0 font-mono text-[13px] font-medium tabular-nums break-words">
-        {tenders("item.quantified", { quantity, unit })}
-      </p>
+        <p className="min-w-0 font-mono text-[13px] font-medium tabular-nums break-words">
+          {tenders("item.quantified", { quantity, unit })}
+        </p>
 
-      {description ? (
-        <p className="text-muted-foreground min-w-0 text-sm break-words">{description}</p>
-      ) : null}
+        {description ? (
+          <p className="text-muted-foreground min-w-0 text-sm break-words">{description}</p>
+        ) : null}
 
-      {images}
+        {images}
 
-      <p className="text-ink-faint min-w-0 text-xs break-words">
-        {tenders("internalQuoteDue", {
-          date: format.dateTime(
-            calendarDate(internalQuoteDeadline),
-            calendarDateFormat,
-          ),
-        })}
-      </p>
-    </section>
+        <p className="text-ink-faint min-w-0 text-xs break-words">
+          {tenders("internalQuoteDue", {
+            date: format.dateTime(
+              calendarDate(internalQuoteDeadline),
+              calendarDateFormat,
+            ),
+          })}
+        </p>
+      </section>
+    </Measure>
   );
 }

@@ -13,14 +13,15 @@ export { phone } from "./phone.mjs";
  */
 
 /**
- * The viewport the Owner's two screens are judged at (ADR-0021, #97).
+ * The wide viewport every screen is judged at (ADR-0022, #97). It was the Owner's two
+ * alone until #131, when they stopped being the only screens with a width to commit to.
  *
- * ADR-0021 composes the tender list and the Tender detail **at 1280px**, and this is
- * deliberately wider than that. At exactly 1280 a column capped at 1280 and a column that
- * simply took whatever the window gave it measure the same number, so a suite standing
- * there could not tell a committed width from no cap at all — and the fault it is guarding
- * against is the one #97 was raised for, a screen that never says how wide it means to be.
- * The 160px of daylight is what lets the assertion fail (ADR-0016).
+ * ADR-0022 caps the region **at 1280px**, and this is deliberately wider than that. At
+ * exactly 1280 a column capped at 1280 and a column that simply took whatever the window
+ * gave it measure the same number, so a suite standing there could not tell a committed
+ * width from no cap at all — and the fault it is guarding against is the one #97 was raised
+ * for, a screen that never says how wide it means to be. The 160px of daylight is what
+ * lets the assertion fail (ADR-0016).
  *
  * 1440×900 rather than a round number, because it is the default logical resolution of the
  * laptop an Owner in this org actually has open.
@@ -30,11 +31,12 @@ export const desk = { width: 1440, height: 900 };
 /**
  * The `main` a screen's body is drawn inside, without the bars the shell draws around it.
  *
- * The column each screen commits to a width for: `max-w-7xl` at the Owner's desk and
- * `max-w-3xl` on a phone, the `ScreenWidth` that `ScreenBody` caps it at. The signed-out
- * screens are the exception worth naming — `AuthScreen` draws its own `main` at
- * `max-w-sm`, with no shell around it at all — and they are measured through this too,
- * because it is the same element the suites want either way.
+ * **The region**, since ADR-0022: one column at `max-w-7xl`, the same on every screen
+ * behind the login, which is what `ScreenBody` caps it at. It was a per-screen number
+ * until #131 and this is where that was measured. The signed-out screens are the exception
+ * worth naming — `AuthScreen` draws its own `main` at `max-w-sm`, with no shell around it
+ * at all — and they are measured through this too, because it is the same element the
+ * suites want either way. What varies inside the region is {@link measures}.
  *
  * Not `body`, which is taken twice over — `document.body` is what
  * {@link expectNoSidewaysScroll} measures, and `Body` is the page wrapper
@@ -53,6 +55,27 @@ export const desk = { width: 1440, height: 900 };
  */
 export function column(): HTMLElement {
   return document.querySelector("main")!;
+}
+
+/**
+ * The distinct widths of the **measure** columns a screen drew, inside {@link column}.
+ *
+ * The narrower column ADR-0022 puts a screen's prose and its form fields in. `Measure` in
+ * `screen-body.tsx` marks each one and takes its cap from a custom property the screen
+ * sets once, so a screen that has more than one of them still has one width — and this
+ * returns a set rather than a list so that saying so costs a caller nothing.
+ *
+ * **Distinct widths, not a count.** How many blocks of prose a screen happens to draw is
+ * composition and moves whenever the screen does; what ADR-0022 commits to is the number
+ * they are all drawn at. A screen that drew none at all answers `[]`, which is a real
+ * answer and a failing one wherever a measure was declared.
+ */
+export function measures(): number[] {
+  const widths = [...column().querySelectorAll<HTMLElement>("[data-measure]")].map(
+    (element) => element.getBoundingClientRect().width,
+  );
+
+  return [...new Set(widths)].sort((a, b) => a - b);
 }
 
 /**

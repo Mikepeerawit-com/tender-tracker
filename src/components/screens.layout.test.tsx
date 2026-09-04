@@ -6,7 +6,14 @@ import { page } from "vitest/browser";
 import { QuoteForm } from "@/components/quotes/quote-form";
 import { blankQuote } from "@/lib/quotes/quote-form";
 import { Body, itemBar, locales, Screen, screens, tender } from "@/test/screens";
-import { column, controlRows, desk, expectNoSidewaysScroll, phone } from "@/test/layout";
+import {
+  column,
+  controlRows,
+  desk,
+  expectNoSidewaysScroll,
+  measures,
+  phone,
+} from "@/test/layout";
 
 /**
  * **Whole screens, header and body together** — the shape hand-check 1 of #48 actually
@@ -23,7 +30,8 @@ import { column, controlRows, desk, expectNoSidewaysScroll, phone } from "@/test
  * **And at two widths, since #97.** ADR-0021 designs each destination for the device its
  * role uses, so a suite that only ever stood at 390px could report green on an app with no
  * desktop design at all — which is exactly what it did. The second `describe` below stands
- * at a desk and asserts the width each screen commits to.
+ * at a desk, where ADR-0022's region and the measure inside it are the only things there
+ * are to see: below the cap both are simply the window.
  *
  * Both locales, for the reason #56 gives — *"the labels are translated, so English is not
  * the worst case"*. A Han glyph is about twice the width of a Latin letter, so a shorter
@@ -33,6 +41,14 @@ import { column, controlRows, desk, expectNoSidewaysScroll, phone } from "@/test
 // Hoisted per file and therefore not shareable: the contact sheet declares its own copy
 // of this block for the same components. See the note in `@/test/screens`.
 vi.mock("@/app/actions/auth", () => ({ signOutAction: async () => ({}) }));
+vi.mock("@/app/actions/admin", () => ({
+  inviteAction: async () => ({}),
+  setWecomUseridAction: async () => ({}),
+  sendTestMentionAction: async () => ({}),
+  setMembershipDisabledAction: async () => ({}),
+  setGroupRobotAction: async () => ({}),
+  setFxBufferAction: async () => ({}),
+}));
 vi.mock("@/app/actions/locale", () => ({ switchLocale: async () => ({}) }));
 vi.mock("@/app/actions/tenders", () => ({
   addAssigneeAction: async () => ({}),
@@ -58,10 +74,10 @@ describe(`a whole screen at ${phone.width}×${phone.height}`, () => {
   it.each(
     locales.flatMap(([locale, messages]) =>
       Object.entries(screens(messages)).map(
-        ([name, body]) => [`${name}, in ${locale}`, locale, messages, body] as const,
+        ([name, entry]) => [`${name}, in ${locale}`, locale, messages, entry] as const,
       ),
     ),
-  )("does not scroll sideways: %s", (_case, locale, messages, body) => {
+  )("does not scroll sideways: %s", (_case, locale, messages, { body }) => {
     render(
       <Screen locale={locale} messages={messages}>
         {body}
@@ -90,36 +106,31 @@ describe(`a whole screen at ${phone.width}×${phone.height}`, () => {
 });
 
 /**
- * **The Owner's two screens, at the monitor they are actually read on** (ADR-0021, #97).
+ * **One region, at the monitor a screen is widest on** (ADR-0022, #131).
  *
  * The suite above is the phone's, and until #97 it was the only one there was: six of the
  * eight screens rendered as a 768px column at every viewport, and nothing could see it,
  * because the one wider test in the repo asserted only that nothing overflowed — which a
  * centred phone column on a 1440px monitor passes perfectly. ADR-0016 calls that a check
- * that cannot fail, and this is the replacement.
+ * that cannot fail, and the width assertion below is what replaced it.
  *
- * **What it pins is a committed width, screen by screen.** Not a floor, not "wide enough":
- * the table below is the composition ADR-0021 decided, so widening My work or narrowing
- * the tender list fails here rather than being noticed later by somebody with a monitor.
+ * **What it pins is now one number rather than a table of them.** #97 committed each
+ * screen to its own width, and the guard was a hand-maintained row per screen kept honest
+ * by a reconciliation test. ADR-0022 replaced the per-screen widths with a single region,
+ * so a table under that rule would say the same number on every row — repetition a
+ * renamed screen could quietly drop out of, and nothing anybody would notice. The number the
+ * change actually introduces is stated once, here, and walked over every screen.
+ *
+ * **What is still per screen is the measure**, because that is what genuinely varies:
+ * how wide a line of a screen's prose and its form fields are allowed to be, inside the
+ * region they share. It is declared beside the screen in `@/test/screens` rather than in a
+ * table here, and that is the half of this ticket the next ones are built on — a screen
+ * added to that record inherits every guard in this file with nothing to remember, so the
+ * next screen cannot be the one nobody measured. The reconciliation test that used to keep
+ * a separate table naming every screen went with the table: a check that the record agrees
+ * with itself is a check that cannot fail (ADR-0016).
  */
-const columnAtADesk: Record<string, 768 | 1280> = {
-  // The Assignee's two, composed at 390px and allowed to grow no further than the phone's
-  // column. A five-field form and a finishable list are not improved by a monitor.
-  "my work": 768,
-  "my work, finished": 768,
-  "sourcing an item": 768,
-  "sourcing an item on a tender somebody else owns": 768,
-  "correcting a quote": 768,
-  // The Owner's, at a desk: comparing Quotes and typing prices.
-  "the tender list": 1280,
-  "a tender": 1280,
-  "a tender somebody else owns": 1280,
-  // The two that stand in for a page. They are drawn before anybody knows which screen is
-  // coming, so they get the default — and what matters about them here is that their bar
-  // and their skeleton agree with *each other*, which `expectOneColumn` checks.
-  "the loading fallback": 768,
-  "a screen that threw": 768,
-};
+const region = 1280;
 
 describe(`a whole screen at ${desk.width}×${desk.height}`, () => {
   // The layout project's viewport is the phone and every other suite in it depends on
@@ -128,40 +139,40 @@ describe(`a whole screen at ${desk.width}×${desk.height}`, () => {
     await page.viewport(phone.width, phone.height);
   });
 
-  it("states a column for every screen and for no screen that has gone", () => {
-    // A table of expectations that has quietly stopped naming the app is the check that
-    // cannot fail (ADR-0016): a renamed screen would drop out of the walk below and take
-    // its assertion with it, silently.
-    expect(Object.keys(columnAtADesk).sort()).toEqual(
-      Object.keys(screens(locales[0][1])).sort(),
-    );
-  });
-
   it.each(
     locales.flatMap(([locale, messages]) =>
       Object.entries(screens(messages)).map(
-        ([name, body]) => [`${name}, in ${locale}`, name, locale, messages, body] as const,
+        ([name, entry]) => [`${name}, in ${locale}`, locale, messages, entry] as const,
       ),
     ),
-  )("is composed at the width it commits to: %s", async (_case, name, locale, messages, body) => {
-    await page.viewport(desk.width, desk.height);
+  )(
+    "draws its content in the one region: %s",
+    async (_case, locale, messages, { body, measure }) => {
+      await page.viewport(desk.width, desk.height);
 
-    render(
-      <Screen locale={locale} messages={messages}>
-        {body}
-      </Screen>,
-    );
+      render(
+        <Screen locale={locale} messages={messages}>
+          {body}
+        </Screen>,
+      );
 
-    expect(column().getBoundingClientRect().width).toBe(columnAtADesk[name]);
+      expect(column().getBoundingClientRect().width).toBe(region);
 
-    // The header stops disagreeing with the page about where its left edge is, which is
-    // the other half of #97 and the half only a wide viewport can see: below the cap the
-    // two columns are both simply the window.
-    expectOneColumn();
+      // And its prose and its fields inside that region, at the one measure it commits
+      // to. `toEqual` on the set rather than a ceiling on each: a screen that quietly
+      // stopped drawing a measure column, or drew a second one at another width, is the
+      // fault this is here for and a ceiling passes both.
+      expect(measures()).toEqual([measure]);
 
-    expectNoSidewaysScroll();
-    expect(controlRows(appBar())).toBe(1);
-  });
+      // The header stops disagreeing with the page about where its left edge is, which is
+      // the other half of #97 and the half only a wide viewport can see: below the cap the
+      // two columns are both simply the window.
+      expectOneColumn();
+
+      expectNoSidewaysScroll();
+      expect(controlRows(appBar())).toBe(1);
+    },
+  );
 });
 
 /**
@@ -213,7 +224,7 @@ describe(`the create-a-Quote form with photos held, at ${phone.width}×${phone.h
 
     render(
       <Screen locale={locale} messages={m}>
-        <Body width="max-w-3xl" location={itemBar}>
+        <Body location={itemBar}>
           <QuoteForm
             tenderId={tender.id}
             tenderItemId="item-gloves"

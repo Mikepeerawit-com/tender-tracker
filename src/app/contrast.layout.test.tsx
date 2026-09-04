@@ -40,6 +40,14 @@ vi.mock("@/app/actions/auth", () => ({
   signOutAction: async () => ({}),
   signInAction: async () => ({}),
 }));
+vi.mock("@/app/actions/admin", () => ({
+  inviteAction: async () => ({}),
+  setWecomUseridAction: async () => ({}),
+  sendTestMentionAction: async () => ({}),
+  setMembershipDisabledAction: async () => ({}),
+  setGroupRobotAction: async () => ({}),
+  setFxBufferAction: async () => ({}),
+}));
 vi.mock("@/app/actions/locale", () => ({ switchLocale: async () => ({}) }));
 vi.mock("@/app/actions/tenders", () => ({
   addAssigneeAction: async () => ({}),
@@ -87,7 +95,8 @@ describe.each(themes)("the %s theme", (theme) => {
   it.each(
     locales.flatMap(([locale, messages]) =>
       Object.entries(screens(messages)).map(
-        ([name, body]) => [`${name}, in ${locale}`, locale, messages, body] as const,
+        ([name, entry]) =>
+          [`${name}, in ${locale}`, locale, messages, entry.body] as const,
       ),
     ),
   )("is legible on %s", async (name, locale, messages, body) => {

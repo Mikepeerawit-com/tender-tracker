@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { Screen } from "@/components/screen";
+import { Measure } from "@/components/ui/screen-body";
+import { ScreenHeader } from "@/components/ui/screen-header";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { EditTenderForm } from "@/components/tenders/edit-tender-form";
 import { ReferenceImageGallery } from "@/components/tenders/reference-image-gallery";
@@ -50,44 +52,44 @@ export default async function EditTenderPage({
         detail: tender.clientName,
       }}
     >
-      <header className="flex flex-col gap-2">
-        <span className="text-muted-foreground font-mono text-xs">
-          {tender.reference}
-        </span>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("edit")}</h1>
+      <ScreenHeader eyebrow={tender.reference} heading={t("edit")}>
         <p className="text-muted-foreground text-sm">{t("editDescription")}</p>
-      </header>
+      </ScreenHeader>
 
       {/* The Owner this Tender already has, even if they have since been disabled and
           so are not in `members`: a picker that cannot show them reassigns them. */}
-      <EditTenderForm
-        tenderId={tender.id}
-        members={ownerOptions(members, {
-          id: tender.ownerUserId,
-          name: tender.ownerName,
-        })}
-        defaults={tender}
-      />
+      <Measure>
+        <EditTenderForm
+          tenderId={tender.id}
+          members={ownerOptions(members, {
+            id: tender.ownerUserId,
+            name: tender.ownerName,
+          })}
+          defaults={tender}
+        />
+      </Measure>
 
-      <section className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-sm font-medium">{t("item.plural")}</h2>
-          <p className="text-muted-foreground text-xs">{t("item.hint")}</p>
-        </div>
+      <Measure>
+        <section className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-sm font-medium">{t("item.plural")}</h2>
+            <p className="text-muted-foreground text-xs">{t("item.hint")}</p>
+          </div>
 
-        {tender.items.map((item) => (
-          <EditTenderItemForm
-            key={item.id}
-            tenderId={tender.id}
-            item={item}
-            // The last Item cannot go: a Tender that asks for nothing is a Tender
-            // nobody can Bid on, and the server refuses it either way.
-            removable={tender.items.length > 1}
-          />
-        ))}
+          {tender.items.map((item) => (
+            <EditTenderItemForm
+              key={item.id}
+              tenderId={tender.id}
+              item={item}
+              // The last Item cannot go: a Tender that asks for nothing is a Tender
+              // nobody can Bid on, and the server refuses it either way.
+              removable={tender.items.length > 1}
+            />
+          ))}
 
-        <AddTenderItemForm tenderId={tender.id} />
-      </section>
+          <AddTenderItemForm tenderId={tender.id} />
+        </section>
+      </Measure>
 
       {/* Buildspec screen 3 puts Reference Images on this screen, and they upload
           per-Tender: five pictures arrive in one email with nothing saying which Item

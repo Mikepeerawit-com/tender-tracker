@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 import { AppHeader, type AppLocation } from "@/components/app-header";
 import {
   ScreenBody,
+  type MeasureWidth,
   type ScreenGap,
-  type ScreenWidth,
 } from "@/components/ui/screen-body";
 import { currentUser } from "@/lib/auth/session";
 
@@ -28,9 +28,11 @@ import { currentUser } from "@/lib/auth/session";
  * type being satisfied rather than a case that arises: nothing renders a `Screen` without
  * having passed that gate, and the admin menu is all it would decide.
  *
- * **`width` reaches the bar as well as the body**, and that is the whole of what a
- * content-aligned app bar needs from this file (#97). One number, stated once by the page,
- * so the two halves of a screen cannot disagree about where its left edge is.
+ * **Nothing about the width reaches the bar any more, because there is nothing to say**
+ * (ADR-0022, #131). Every screen behind the login draws in one region, so `AppHeader` and
+ * `ScreenBody` both write it themselves and a page has no way to hand them different
+ * answers. What a page may still vary is `measure` — how wide a line of its prose and its
+ * fields are — and that is the body's alone: the bar carries no prose and no fields.
  *
  * The two screens that stand in for a page — `(app)/loading.tsx` and `(app)/error.tsx` —
  * do not use this. They draw their own `AppHeader` in the wordmark shape, because at that
@@ -39,13 +41,14 @@ import { currentUser } from "@/lib/auth/session";
  */
 export async function Screen({
   location,
-  width,
+  measure,
   gap,
   children,
 }: {
   /** The shape the bar draws. Omitted on the screens that are not about one record. */
   location?: AppLocation;
-  width?: ScreenWidth;
+  /** How wide this screen's prose and fields are allowed to be. Its default is the app's. */
+  measure?: MeasureWidth;
   gap?: ScreenGap;
   children: ReactNode;
 }) {
@@ -53,12 +56,8 @@ export async function Screen({
 
   return (
     <>
-      <AppHeader
-        isOrgAdmin={user?.isOrgAdmin ?? false}
-        location={location}
-        width={width}
-      />
-      <ScreenBody width={width} gap={gap}>
+      <AppHeader isOrgAdmin={user?.isOrgAdmin ?? false} location={location} />
+      <ScreenBody measure={measure} gap={gap}>
         {children}
       </ScreenBody>
     </>

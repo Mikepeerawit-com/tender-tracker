@@ -62,7 +62,6 @@ export default async function TenderPage({ params }: PageProps<"/tenders/[id]">)
         reference: tender.reference,
         detail: tender.clientName,
       }}
-      width="max-w-7xl"
     >
       {/* No reference in the eyebrow and no way back in the actions: the app bar
           carries both on every screen about one record (#73), and drawing the same

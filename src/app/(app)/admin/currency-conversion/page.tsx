@@ -4,6 +4,8 @@ import { getTranslations } from "next-intl/server";
 
 import { CurrencyConversionForm } from "@/components/admin/currency-conversion-form";
 import { Screen } from "@/components/screen";
+import { Measure } from "@/components/ui/screen-body";
+import { ScreenHeader } from "@/components/ui/screen-header";
 import { currentUser } from "@/lib/auth/session";
 import { asPercent } from "@/lib/org/fx-buffer";
 import { getOrgSettings } from "@/lib/org/org";
@@ -31,21 +33,24 @@ export default async function CurrencyConversionPage() {
   const { fxBufferPct } = await getOrgSettings(store);
 
   return (
-    <Screen width="max-w-2xl">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
+    <Screen measure="42rem">
+      <ScreenHeader heading={t("title")}>
         <p className="text-muted-foreground text-sm">{t("description")}</p>
-      </header>
+      </ScreenHeader>
 
-      <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
-        <CurrencyConversionForm percent={asPercent(fxBufferPct)} />
-      </section>
+      <Measure>
+        <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
+          <CurrencyConversionForm percent={asPercent(fxBufferPct)} />
+        </section>
+      </Measure>
 
       {/* The promise the setting makes to history, said out loud on the screen that can
           break it — including the one exception, because an Org Admin who met it as a
           surprise would have been told something false here. ADR-0018: correcting the day
           a Quote claims re-freezes that Quote against the new date. */}
-      <p className="text-muted-foreground text-sm">{t("affects")}</p>
+      <Measure>
+        <p className="text-muted-foreground text-sm">{t("affects")}</p>
+      </Measure>
     </Screen>
   );
 }
