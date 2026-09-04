@@ -1,4 +1,5 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { describeElement, drawn, phone } from "@/test/layout";
@@ -69,6 +70,19 @@ import {
  * no record this walks. `QuoteForm`'s held-photo Remove is the live one — it is the same
  * `size="sm"` as the four this caught, and it is fixed alongside them on the strength of
  * being the same control rather than on the strength of being measured here.
+ *
+ * **`NewTenderForm`'s per-row Remove was the second of that kind, and is not any more**
+ * (#143). The record screen opens on one Item row and draws no Remove beside it; the
+ * control appears only once somebody presses *Add an item*. It was `size="sm"` with no
+ * `h-11`, exactly like the four above, and the walk over screens at rest cannot see it.
+ *
+ * So it is measured by pressing the button — the last `describe` in this file. That is
+ * `screens.layout.test.tsx`'s own shape, where *the create-a-Quote form with photos held*
+ * uploads two files and then measures: a screen a reader reaches in one press is a screen,
+ * and the record it is not in is a record of screens **at rest** rather than a list of
+ * everything worth measuring. What stays out of reach is what no single press composes —
+ * the lightbox, and the held-photo Remove that needs files a fixture cannot hand a file
+ * input on every screen it appears on.
  *
  * **And spacing is not a substitute measured here.** WCAG 2.2's own target rule (SC 2.5.8)
  * lets an undersized target pass if nothing else comes within 24px of it. This app's floor
@@ -178,4 +192,46 @@ describe.each(locales)("read in %s", (locale, messages) => {
 
     expectEveryTargetClearsTheFloor(container, name);
   });
+});
+
+
+/**
+ * **The per-row Remove on the record-a-tender form**, which is drawn only after a press
+ * and so is on no screen in the record above (#143).
+ *
+ * `NewTenderForm` opens on one Item row. A Tender needs at least one, so the control that
+ * takes a row off is not drawn until there are two — which makes *Add an item* the whole
+ * of the distance between the screen the record composes and the screen this measures.
+ * One press, and then the same floor over the same screen.
+ *
+ * In both locales for the reason the walk above gives: this is geometry, and 移除 is not
+ * automatically narrower than *Remove*.
+ */
+describe(`the record-a-tender form with a second Item row, at ${phone.width}px`, () => {
+  it.each(locales)(
+    "gives the per-row Remove a thumb-sized target: in %s",
+    async (locale, messages) => {
+      const user = userEvent.setup();
+      const { container } = render(
+        <Screen theme="light" locale={locale} messages={messages}>
+          {screens(messages)["recording a tender"].body}
+        </Screen>,
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: messages.tenders.item.add }),
+      );
+
+      // Both rows really drew one, so a form that stopped offering the control would fail
+      // here rather than pass by measuring a screen with nothing new on it (ADR-0016).
+      expect(
+        screen.getAllByRole("button", { name: messages.tenders.item.remove }),
+      ).toHaveLength(2);
+
+      expectEveryTargetClearsTheFloor(
+        container,
+        "recording a tender, with a second Item row",
+      );
+    },
+  );
 });

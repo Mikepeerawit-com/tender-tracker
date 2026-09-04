@@ -77,10 +77,15 @@ export function NewTenderForm({
                 {t("item.numbered", { number: index + 1 })}
               </span>
               {rowIds.length > 1 ? (
+                // `h-11` beside the `size="sm"`, the way every other small control in
+                // the page body carries it (#142). Drawn only once a second row exists,
+                // so `target.layout.test.tsx` reaches it by pressing *Add an item*
+                // rather than by walking the screens at rest.
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
+                  className="h-11"
                   onClick={() => setRowIds(rowIds.filter((id) => id !== rowId))}
                 >
                   {t("item.remove")}

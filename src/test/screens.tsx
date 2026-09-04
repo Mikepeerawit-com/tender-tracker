@@ -23,14 +23,27 @@ import { QuoteList } from "@/components/quotes/quote-list";
 import { SettingsFrame } from "@/components/settings/settings-nav";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
+import { EditTenderForm } from "@/components/tenders/edit-tender-form";
 import { MyWorkList } from "@/components/tenders/my-work-list";
+import { NewTenderForm } from "@/components/tenders/new-tender-form";
 import { OutstandingBand } from "@/components/tenders/outstanding-band";
+import { ReferenceImageGallery } from "@/components/tenders/reference-image-gallery";
+import { ReferenceImageUploader } from "@/components/tenders/reference-image-uploader";
 import { SourcingList } from "@/components/tenders/sourcing-list";
+import {
+  AddTenderItemForm,
+  EditTenderItemForm,
+} from "@/components/tenders/tender-item-forms";
 import { TenderFacts } from "@/components/tenders/tender-facts";
 import { TenderGroup } from "@/components/tenders/tender-group";
 import { QuoteForm } from "@/components/quotes/quote-form";
 import { Button } from "@/components/ui/button";
-import { Measure, type MeasureWidth, ScreenBody } from "@/components/ui/screen-body";
+import {
+  Measure,
+  type MeasureWidth,
+  ScreenBody,
+  type ScreenGap,
+} from "@/components/ui/screen-body";
 import { ScreenError } from "@/components/ui/screen-error";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { ScreenSkeleton } from "@/components/ui/screen-skeleton";
@@ -39,7 +52,7 @@ import { ScreenSkeleton } from "@/components/ui/screen-skeleton";
 import type { SheetItem } from "@/lib/comparison/sheet";
 import type { QuotePhoto } from "@/lib/images/quote-photos";
 import type { ReferenceImage } from "@/lib/images/reference-images";
-import type { Member, Membership } from "@/lib/org/members";
+import type { Member, Membership, OwnerOption } from "@/lib/org/members";
 import { blankQuote, quoteAsSubmitted } from "@/lib/quotes/quote-form";
 import type { NoSupplierFound, Quote } from "@/lib/quotes/quotes";
 import type { MyWorkRow } from "@/lib/tenders/my-work";
@@ -176,6 +189,33 @@ export function screens(m: Messages) {
         </Body>
       ),
     },
+    // ── The Owner's two forms, which until #143 no record held ──────────────────────
+    //
+    // Both are real routes carrying real forms, and neither was in this file — so neither
+    // was in a single guard this record confers. It is the fault #135 found on the working
+    // sheet, one ticket later and on two more screens, and ADR-0019 already carries the
+    // lesson: a contrast claim, a focus ring, a tap floor and a region width are each a
+    // claim about a *list of surfaces*, and the list is only as long as the screens
+    // somebody measured.
+    "recording a tender": {
+      measure: 768,
+      body: (
+        // `gap-6` because the page sets it: this screen is one long form, and the wider
+        // rhythm every other screen uses would push the submit off a phone.
+        <Body gap="gap-6">
+          <ScreenHeader heading={m.tenders.record}>
+            <p className="text-muted-foreground text-sm">{m.tenders.recordDescription}</p>
+          </ScreenHeader>
+          <Measure>
+            {/* The Owner recording it defaults to themselves, and the form opens on one
+                Item row — both the state a reader really arrives at. The per-row Remove
+                beside a second row is one press away and so is on no screen at rest;
+                `target.layout.test.tsx` presses the button and measures it there. */}
+            <NewTenderForm members={ownerChoices} defaultOwnerId="user-somchai" />
+          </Measure>
+        </Body>
+      ),
+    },
     "a tender": {
       measure: 768,
       body: (
@@ -250,6 +290,71 @@ export function screens(m: Messages) {
             members={members}
             callerId="user-nok"
             isOwner={false}
+          />
+        </Body>
+      ),
+    },
+    // The Owner's other form, and the densest screen in the app after the working sheet:
+    // the Tender's own fields, one form per Item, an uploader, a gallery of the client's
+    // pictures with a picker on every one, and the Assignee controls under all of it.
+    "editing a tender": {
+      measure: 768,
+      body: (
+        <Body location={editBar}>
+          <ScreenHeader eyebrow={tender.reference} heading={m.tenders.edit}>
+            <p className="text-muted-foreground text-sm">{m.tenders.editDescription}</p>
+          </ScreenHeader>
+
+          <Measure>
+            <EditTenderForm
+              tenderId={tender.id}
+              members={ownerChoices}
+              defaults={tender}
+            />
+          </Measure>
+
+          <Measure>
+            <section className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-sm font-medium">{m.tenders.item.plural}</h2>
+                <p className="text-muted-foreground text-xs">{m.tenders.item.hint}</p>
+              </div>
+
+              {/* All three Items, and `removable` on every one — the Tender has more than
+                  one, so the destructive Remove is drawn per row. A fixture with a single
+                  Item would compose the one shape of this screen that has no Remove on it
+                  at all. */}
+              {tender.items.map((item) => (
+                <EditTenderItemForm
+                  key={item.id}
+                  tenderId={tender.id}
+                  item={item}
+                  removable
+                />
+              ))}
+
+              <AddTenderItemForm tenderId={tender.id} />
+            </section>
+          </Measure>
+
+          {/* Outside the measure, as the page draws it: the gallery is a grid of tiles
+              scanned rather than a line of prose read along. */}
+          <section className="flex flex-col gap-4">
+            <h2 className="text-sm font-medium">{m.tenders.referenceImages.title}</h2>
+            <ReferenceImageUploader tenderId={tender.id} />
+            <ReferenceImageGallery
+              tenderId={tender.id}
+              images={referenceImages}
+              items={tender.items}
+            />
+          </section>
+
+          <AssigneeControls
+            tenderId={tender.id}
+            assignees={tender.assignees}
+            members={members}
+            callerId={tender.ownerUserId}
+            isOwner
           />
         </Body>
       ),
@@ -700,10 +805,13 @@ export function Ground({
 export function Body({
   measure,
   location,
+  gap,
   children,
 }: {
   measure?: MeasureWidth;
   location?: AppLocation;
+  /** What `@/components/screen`'s `Screen` takes and this did not. One screen sets it. */
+  gap?: ScreenGap;
   children: React.ReactNode;
 }) {
   return (
@@ -712,7 +820,9 @@ export function Body({
           and `Sign out` for everybody, so there is one bar rather than an admin's and a
           member's, and this composition is the one every member gets. */}
       <AppHeader location={location} />
-      <ScreenBody measure={measure}>{children}</ScreenBody>
+      <ScreenBody measure={measure} gap={gap}>
+        {children}
+      </ScreenBody>
     </>
   );
 }
@@ -830,6 +940,12 @@ const tenderBar = {
   detail: "ChulalongkornMemorialHospitalProcurementDepartment",
 } as const;
 
+/**
+ * The same bar one screen further in: the edit screen's back goes to the Tender it is
+ * editing rather than to the list, and that is the whole of what differs.
+ */
+const editBar = { ...tenderBar, backHref: "/tenders/8f14e45f" } as const;
+
 export const itemBar = {
   kind: "record",
   backHref: "/tenders/8f14e45f",
@@ -847,6 +963,26 @@ const members: Member[] = [
   // Not on this Tender, so the enrol-yourself picker has somebody left to name.
   { id: "user-ploy", name: "Ploy Sirikanya" },
 ];
+
+/**
+ * The Owner picker's options on both of the Owner's forms.
+ *
+ * `ownerOptions` builds these in the app and is `server-only`, so they are written out
+ * here rather than computed — the same reason `SheetItem` is a type import at the head of
+ * this file.
+ *
+ * **Every one of them current, and the `former` label deliberately not composed.** A
+ * Tender whose Owner has since been disabled draws that Owner as *"… (no longer a
+ * member)"*, which is the longest string the picker can hold — but `NativeSelect` is
+ * `w-full min-w-0`, so an option's text is not a width this record could measure either
+ * way. Composing a departed Owner here would buy a longer string that changes no
+ * rectangle, and would cost the fixture its agreement with `tender`, whose Owner is one
+ * of the four members above.
+ */
+const ownerChoices: OwnerOption[] = members.map((member) => ({
+  ...member,
+  former: false,
+}));
 
 /**
  * The org as the People screen reads it: one Org Admin, one ordinary member, one already

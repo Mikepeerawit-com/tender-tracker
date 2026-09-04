@@ -15,8 +15,14 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
+        // The ring is the full hue in both themes, not a wash of it (#143). Every other
+        // variant rings at `ring-ring`'s own strength; this one alone dropped to 20% in
+        // light and 40% in dark, which draws at 1.41:1 and 1.92:1 against the ground it
+        // sits on — under the 3:1 a focus indicator has to clear. It went unseen because
+        // the app's only `variant="destructive"` is the Remove on the tender edit screen,
+        // and that screen was outside `@/test/screens` until #143 put it in.
         destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive focus-visible:ring-destructive dark:bg-destructive/20 dark:hover:bg-destructive/30",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
