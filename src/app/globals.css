@@ -10,11 +10,17 @@
  * Four hues and what each one is allowed to say. **Signal** — something is expected of
  * you: primary actions, the Selected Quote, rank 1, the outstanding-for-you band.
  * **Alarm** — time, and only time: a missed submission, a passed deadline, an unsourced
- * Item after the internal date. It never touches a money figure, because in Chinese
- * financial convention red is up and a red negative Margin would be read as a gain by
- * half the people using this daily. **Flag** — a property of a Quote or a figure rather
+ * Item after the internal date. **It still never touches a money figure**, and the money
+ * hues below are its own tokens rather than an alias of it, so that urgency and good news
+ * cannot be repainted by one edit. **Flag** — a property of a Quote or a figure rather
  * than a state: an Alternative, a provisional Landed Cost. **Ink** — everything else,
  * over a warm paper ground.
+ *
+ * And two hues that carry direction on a *change* figure — a Margin, and nothing that is
+ * merely an amount of money. They are named by hue rather than by meaning because which
+ * meaning each one carries is decided by the language the screen is rendered in: red is a
+ * gain in `zh-Hans` and a loss in `en` (ADR-0023). Every other token in this file says
+ * what it means and leaves its value free; these two are the inverse, and deliberately.
  *
  * The values were repainted whole in #130 and every one of them is free to move again.
  * What is *not* free to move is the list above: a hue may change, and what it is allowed
@@ -67,6 +73,13 @@
   --color-flag-ink: var(--flag-ink);
   --color-flag-wash: var(--flag-wash);
   --color-flag-edge: var(--flag-edge);
+
+  /*
+   * Direction on a change figure. Ink only: the figure, its glyph and its sign are text,
+   * and a wash behind a number in a wrapping row would be a chip nobody asked for.
+   */
+  --color-money-red: var(--money-red);
+  --color-money-green: var(--money-green);
 
   /* Ink, and the two hairlines the ground is divided by. */
   --color-ink-faint: var(--ink-faint);
@@ -152,6 +165,26 @@
   --flag-wash: oklch(0.7 0.15 70 / 0.16);
   --flag-edge: oklch(0.7 0.15 70 / 0.34);
 
+  /*
+   * The direction pair, at ink weight rather than at the weight of a warning.
+   *
+   * **Money red is deliberately not alarm red**, and the comparison that matters is
+   * against `--alarm-ink` rather than `--alarm`: a passed deadline reaches the reader as
+   * a *sentence* in the ink tone, which is the thing a healthy `zh-Hans` Margin sits a
+   * few centimetres from on the Tender detail. What separates them first is form — a
+   * tabular figure carrying a triangle and a sign, against a line of prose beside a lamp
+   * — and the hue is the second line of defence rather than the first. It is a real one
+   * all the same: alarm ink is the warmer, more orange red at hue 27, money red the
+   * colder crimson at 12. They were within five degrees of each other in the first cut of
+   * this, which is to say they were the same colour.
+   *
+   * Sharing alarm's value outright would have been the cheap way to draw it, and would
+   * have made a future re-hue of alarm silently repaint every gain in the app — the exact
+   * fallback ADR-0023 leaves open if two reds on one screen prove to be one too many.
+   */
+  --money-red: oklch(0.44 0.165 12);
+  --money-green: oklch(0.45 0.11 152);
+
   /* Cards and popovers are the sheets: a shade lighter than the paper, not pure white. */
   --card: oklch(0.995 0.003 90);
   --card-foreground: var(--foreground);
@@ -231,6 +264,10 @@
   --flag-ink: oklch(0.86 0.1 78);
   --flag-wash: oklch(0.78 0.13 72 / 0.18);
   --flag-edge: oklch(0.78 0.13 72 / 0.4);
+
+  /* The same pair, lifted off a dark ground — and still well clear of alarm's ink. */
+  --money-red: oklch(0.72 0.165 12);
+  --money-green: oklch(0.775 0.12 155);
 
   --card: oklch(0.225 0.016 265);
   --card-foreground: var(--foreground);
@@ -312,7 +349,12 @@
   /**
    * A money figure, where money is the decision — the working sheet and the quote cards.
    * Tabular so the digits line up and eight competing offers read down the column as a
-   * column of numbers. Never given an alarm tone: see the note at the top of this file.
+   * column of numbers.
+   *
+   * **Uncoloured by itself.** An absolute price is an amount of money, not a movement of
+   * one, and it takes ink like any other figure. A hue arrives only where the figure is a
+   * *change* — where `ChangeFigure` puts one there — so that colour on a number always
+   * means direction and never merely means money. Alarm never touches either.
    */
   .money {
     font-family: var(--font-mono);

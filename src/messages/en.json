@@ -470,6 +470,13 @@
       "failed": "Could not record the selection. Try again."
     }
   },
+  "money": {
+    "direction": {
+      "gain": "Gain",
+      "loss": "Loss",
+      "flat": "Break-even"
+    }
+  },
   "people": {
     "title": "People",
     "description": "Everyone in the org. Accounts exist only by invitation — there is no sign-up page.",

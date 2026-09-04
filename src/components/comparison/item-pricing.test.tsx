@@ -74,9 +74,41 @@ describe("pricing inline in the Item's row", () => {
     renderRow(anItem());
     await user.type(sellingField(), "700");
 
-    expect(screen.getByText("THB 80.00")).toBeDefined();
+    // Signed, because a Margin is a change figure and says which way it went (ADR-0023).
+    expect(screen.getByText("+THB 80.00")).toBeDefined();
     // On the line, and so through the Item's quantity — never a per-unit figure summed.
-    expect(screen.getByText("THB 40,000.00")).toBeDefined();
+    expect(screen.getByText("+THB 40,000.00")).toBeDefined();
+  });
+
+  it("says which way the margin went in words as well as in a sign", async () => {
+    // The wiring, not the rule: which direction maps to which hue in which locale is
+    // pinned over `@/lib/money/direction`, where no colour has to be sampled to assert
+    // it. What is worth checking here is that the row reaches for it at all — that the
+    // figure carries the direction's name for a reader who hears the screen rather than
+    // sees it, on both of the Margins it draws.
+    const user = userEvent.setup();
+
+    renderRow(anItem());
+    await user.type(sellingField(), "500");
+
+    expect(screen.getAllByText("Loss")).toHaveLength(2);
+    expect(screen.getByText("-THB 120.00")).toBeDefined();
+    expect(screen.getByText("-THB 60,000.00")).toBeDefined();
+  });
+
+  it("gives a margin of nothing no direction to claim", async () => {
+    // Selling at exactly what it cost us went nowhere, so there is no triangle and no
+    // sign — and the figure is still a figure rather than an em dash, which is reserved
+    // for the Margin that cannot be computed at all.
+    const user = userEvent.setup();
+
+    renderRow(anItem());
+    await user.type(sellingField(), "620");
+
+    expect(screen.getAllByText("Break-even")).toHaveLength(2);
+    // Per unit and on the line alike: zero times a quantity is still zero.
+    expect(screen.getAllByText("THB 0.00")).toHaveLength(2);
+    expect(screen.queryByText("+THB 0.00")).toBeNull();
   });
 
   it("shows a margin from an unconfirmed landed cost as provisional, not as a number", async () => {
@@ -92,7 +124,7 @@ describe("pricing inline in the Item's row", () => {
     // chip of its own beside the landed-cost field, and the count is what keeps a second
     // marker from coming back: one state is marked once, on the Margin.
     expect(screen.getAllByText("Provisional")).toHaveLength(2);
-    expect(screen.queryByText("THB 80.00")).toBeNull();
+    expect(screen.queryByText("+THB 80.00")).toBeNull();
   });
 
   it("turns provisional into a number the moment the cost is hand-edited", async () => {
@@ -107,7 +139,7 @@ describe("pricing inline in the Item's row", () => {
     await user.clear(landedCostField());
     await user.type(landedCostField(), "640");
 
-    expect(screen.getByText("THB 60.00")).toBeDefined();
+    expect(screen.getByText("+THB 60.00")).toBeDefined();
     expect(screen.queryByText("Provisional")).toBeNull();
   });
 

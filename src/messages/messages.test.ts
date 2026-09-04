@@ -12,6 +12,7 @@ import { pricingProblems, selectionProblems } from "@/lib/comparison/sheet";
 import { fxBufferStatuses } from "@/lib/org/fx-buffer";
 import { membershipDisableStatuses } from "@/lib/org/members";
 import { imageProblems } from "@/lib/images/images";
+import { moneyDirections } from "@/lib/money/direction";
 import { matchTypes, quoteProblems } from "@/lib/quotes/quotes";
 import { tenderOutcomes } from "@/lib/tenders/outcome";
 import { groupRobotStatuses } from "@/lib/wecom/group-robot";
@@ -177,6 +178,18 @@ describe.each(locales)("%s wording", (locale) => {
     // was while somebody watches themselves type a new one.
     const missing = pricingProblems.filter(
       (problem) => !flat.has(`comparison.pricing.error.${problem}`),
+    );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("has a word for every direction a change figure can have gone", () => {
+    // The word *is* the glyph's accessible name: the triangle beside a Margin is
+    // `aria-hidden` and this is what a screen reader hears instead, so a missing one is a
+    // figure that reads out as a bare amount with no direction on it at all. Colour never
+    // carries the only copy of a meaning (ADR-0019), and neither does a shape.
+    const missing = moneyDirections.filter(
+      (direction) => !flat.has(`money.direction.${direction}`),
     );
 
     expect(missing).toEqual([]);
