@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { createServiceClient } from "@/lib/supabase/service-client";
 import { memoryCookieStore } from "@/lib/supabase/session-client";
+import { reportUnlessRoutine } from "@/test/postgres-notices";
 
 import { signIn } from "./session";
 import { setUpOrgAdmin, setupIsOpen } from "./setup";
@@ -34,7 +35,7 @@ const created: string[] = [];
 async function withSuperuser<T>(
   work: (sql: postgres.Sql) => Promise<T>,
 ): Promise<T> {
-  const sql = postgres(process.env.SUPABASE_DB_URL!, { max: 1 });
+  const sql = postgres(process.env.SUPABASE_DB_URL!, { max: 1, onnotice: reportUnlessRoutine });
 
   try {
     return await work(sql);
