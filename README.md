@@ -320,7 +320,7 @@ the first account cannot invite itself into existence. **`/setup` is where it co
 
 That is the whole procedure. It signs you in and lands on the language choice, exactly as
 an accepted invitation does. From here everyone else arrives by invitation from inside the
-app, at **/admin/people**.
+app, at **Settings → Organisation → People** (`/settings/people`).
 
 The screen guards itself twice: an unset `SETUP_SECRET` means **closed**, not "open with
 no password", and any row at all in `users` closes it permanently. So **create
@@ -343,7 +343,7 @@ is seeded by the schema migration, so its absence means §2 has not run.
 
 ### 7. When somebody leaves
 
-**Disable them at `/admin/people`, and never delete them.** A departing colleague owns
+**Disable them at `/settings/people`, and never delete them.** A departing colleague owns
 Tenders and entered the Quotes the comparison view is built on; deleting the row would
 orphan the history the whole screen is made of. Disabling ends the Membership and leaves
 every one of those rows readable.

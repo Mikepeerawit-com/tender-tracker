@@ -36,7 +36,7 @@ export function AuthScreen({
         {children}
 
         <footer className="flex justify-center pt-2">
-          <LocaleSwitcher prominent />
+          <LocaleSwitcher />
         </footer>
       </main>
     </div>

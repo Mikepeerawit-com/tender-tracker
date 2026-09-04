@@ -9,10 +9,12 @@ import { GroupRobotForm } from "@/components/admin/group-robot-form";
 import { InviteForm } from "@/components/admin/invite-form";
 import { MembershipList } from "@/components/admin/membership-list";
 import { ImageCountBadge } from "@/components/images/image-count-badge";
+import { LocaleSwitcher } from "@/components/locale-switcher";
 import { EditQuoteForm } from "@/components/quotes/edit-quote-form";
 import { ItemBrief } from "@/components/quotes/item-brief";
 import { NoSupplierFoundForm } from "@/components/quotes/no-supplier-found-form";
 import { QuoteList } from "@/components/quotes/quote-list";
+import { SettingsFrame } from "@/components/settings/settings-nav";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { MyWorkList } from "@/components/tenders/my-work-list";
 import { OutstandingBand } from "@/components/tenders/outstanding-band";
@@ -373,18 +375,34 @@ export function screens(m: Messages) {
         </Body>
       ),
     },
-    // ── The three screens an Org Admin runs the organisation from ──────────────────
+    // ── Settings: one destination, two groups, four screens ────────────────────────
     //
-    // They are here since #131. Nothing measured them before: each is an `async` Server
-    // Component behind an `isOrgAdmin` gate, and the record they were missing from is the
-    // one every layout guard is built on — so the three screens whose left edge ADR-0022
-    // is most visibly about were the three nothing could see. They are also where the
-    // second measure in the app is drawn, which is what keeps the per-screen half of that
-    // guard a claim rather than one number repeated.
+    // The three Org Admin screens arrived here in #131. Nothing measured them before: each
+    // is an `async` Server Component behind an `isOrgAdmin` gate, and the record they were
+    // missing from is the one every layout guard is built on — so the three screens whose
+    // left edge ADR-0022 is most visibly about were the three nothing could see. They are
+    // also where the second measure in the app is drawn, which is what keeps the
+    // per-screen half of that guard a claim rather than one number repeated.
+    //
+    // #132 put them behind one destination and gave them a sub-navigation column, so they
+    // are composed through `SettingsBody` now — the frame the router really assembles.
+    // Preferences is the fourth, and it is here **twice**: an Org Admin's, whose column
+    // carries both groups, and a member's, whose column carries Preferences alone. That
+    // second one is the screen story 6 of #129 is about, and the only composition in the
+    // app that differs by who is looking — which is why it is a screen in its own right
+    // here rather than a case inside another suite.
+    "the Preferences screen": {
+      measure: 672,
+      body: <SettingsBody>{preferences(m)}</SettingsBody>,
+    },
+    "the Preferences screen, for a member who is not an Org Admin": {
+      measure: 672,
+      body: <SettingsBody isOrgAdmin={false}>{preferences(m)}</SettingsBody>,
+    },
     "the People screen": {
       measure: 672,
       body: (
-        <Body measure="42rem">
+        <SettingsBody>
           <ScreenHeader heading={m.people.title}>
             <p className="text-muted-foreground text-sm">{m.people.description}</p>
           </ScreenHeader>
@@ -400,13 +418,13 @@ export function screens(m: Messages) {
             <h2 className="text-sm font-medium">{m.people.members}</h2>
             <MembershipList members={memberships} />
           </section>
-        </Body>
+        </SettingsBody>
       ),
     },
     "the WeCom group screen": {
       measure: 672,
       body: (
-        <Body measure="42rem">
+        <SettingsBody>
           <ScreenHeader heading={m.groupRobot.title}>
             <p className="text-muted-foreground text-sm">{m.groupRobot.description}</p>
           </ScreenHeader>
@@ -419,13 +437,13 @@ export function screens(m: Messages) {
               <GroupRobotForm configured updatedAt="2026-08-20T09:15:00Z" />
             </section>
           </Measure>
-        </Body>
+        </SettingsBody>
       ),
     },
     "the converting-foreign-prices screen": {
       measure: 672,
       body: (
-        <Body measure="42rem">
+        <SettingsBody>
           <ScreenHeader heading={m.currencyConversion.title}>
             <p className="text-muted-foreground text-sm">{m.currencyConversion.description}</p>
           </ScreenHeader>
@@ -439,7 +457,7 @@ export function screens(m: Messages) {
           <Measure>
             <p className="text-muted-foreground text-sm">{m.currencyConversion.affects}</p>
           </Measure>
-        </Body>
+        </SettingsBody>
       ),
     },
     // The two screens that stand in for the others, and are screens in their own right:
@@ -451,7 +469,7 @@ export function screens(m: Messages) {
       measure: 768,
       body: (
         <>
-          <AppHeader isOrgAdmin={false} />
+          <AppHeader />
           <ScreenSkeleton />
         </>
       ),
@@ -462,7 +480,7 @@ export function screens(m: Messages) {
       measure: 768,
       body: (
         <>
-          <AppHeader isOrgAdmin={false} />
+          <AppHeader />
           <ScreenError digest="3990102495" retry={() => {}} />
         </>
       ),
@@ -547,21 +565,21 @@ export function Ground({
 /**
  * A whole `(app)` page: its own app bar, then the wrapper it draws its body inside.
  *
- * **`Screen`'s two lines, without the session read.** It drew its own copy of the
- * wrapper's markup until #97, which was a copy that could drift from the component every
- * page really uses — and the thing #97 changed is exactly that markup, so a suite
- * measuring the copy would have measured nothing. `ScreenBody` and `AppHeader` are both
- * sync and reach for nothing, so this composes them; only `currentUser` is out of a
- * browser's reach, and `isOrgAdmin` stands in for it.
+ * **`Screen`'s two lines, exactly.** It drew its own copy of the wrapper's markup until
+ * #97, which was a copy that could drift from the component every page really uses — and
+ * the thing #97 changed is exactly that markup, so a suite measuring the copy would have
+ * measured nothing. `ScreenBody` and `AppHeader` are both sync and reach for nothing, so
+ * this composes them and there is nothing left standing in for anything: `Screen` stopped
+ * reading the session in #132, when the bar stopped varying by who was looking at it.
  *
  * `location` is a prop rather than something chosen here, because since #73 each page
  * draws the bar shape that names *where it is* — the list gets the wordmark, a Tender and
  * the sourcing screen get the record form with a reference and a client name in it.
  * Composing the wrong one would measure a screen the router never assembles.
  *
- * **`width` is one value and reaches both halves**, exactly as `Screen` hands it to both:
- * a fixture that told the bar one number and the body another could pass an alignment
- * check that the app fails.
+ * **`measure` is one value and reaches the body alone**, exactly as `Screen` hands it:
+ * nothing about a width reaches the bar any more, because there is one region and it is
+ * written on both sides rather than passed (ADR-0022).
  */
 export function Body({
   measure,
@@ -574,11 +592,65 @@ export function Body({
 }) {
   return (
     <>
-      {/* An org admin, always: it is the widest the bar ever is — the menu behind it
-          carries People, Group Robot and Converting foreign prices as well as Sign out —
-          and the bar's own suite is where the ordinary member's is measured. */}
-      <AppHeader isOrgAdmin location={location} />
+      {/* Nothing about the reader is handed in since #132: the app menu holds `Settings`
+          and `Sign out` for everybody, so there is one bar rather than an admin's and a
+          member's, and this composition is the one every member gets. */}
+      <AppHeader location={location} />
       <ScreenBody measure={measure}>{children}</ScreenBody>
+    </>
+  );
+}
+
+/**
+ * A **Settings** screen, in the frame `(app)/settings/layout.tsx` really draws round it.
+ *
+ * The four screens under Settings share a layout rather than each composing their own, so
+ * a fixture that drew only the page's own body would measure a screen the router never
+ * assembles — with no sub-navigation column beside it and therefore none of the width it
+ * takes off the measure at the desk.
+ *
+ * **The frame is {@link SettingsFrame}, imported rather than retyped**, for the reason at
+ * the head of this file: a copy of the layout's markup here is a copy that drifts from
+ * what a reader gets, and a padding changed in the real layout would fail nothing. What
+ * is left is the two things the layout states about a Settings screen — the measure, and
+ * who is looking.
+ *
+ * `isOrgAdmin` is the one thing that varies, and it varies for the reader rather than for
+ * the screen: it decides whether the Organisation group is drawn in the column, which is
+ * the whole of what #132 changed about what a member who administers nothing can see.
+ */
+export function SettingsBody({
+  isOrgAdmin = true,
+  children,
+}: {
+  isOrgAdmin?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Body measure="42rem">
+      <SettingsFrame isOrgAdmin={isOrgAdmin}>{children}</SettingsFrame>
+    </Body>
+  );
+}
+
+/**
+ * The Preferences screen's own body, which is in the record twice — once inside an Org
+ * Admin's column and once inside a member's — and is the same screen both times. Only the
+ * column around it differs, which is the whole of what the two entries are contrasting.
+ */
+function preferences(m: Messages) {
+  return (
+    <>
+      <ScreenHeader heading={m.preferences.title}>
+        <p className="text-muted-foreground text-sm">{m.preferences.description}</p>
+      </ScreenHeader>
+
+      <Measure>
+        <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
+          <h2 className="text-sm font-medium">{m.localeSwitcher.label}</h2>
+          <LocaleSwitcher />
+        </section>
+      </Measure>
     </>
   );
 }

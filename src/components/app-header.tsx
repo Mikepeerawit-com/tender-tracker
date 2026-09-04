@@ -3,7 +3,6 @@ import { useTranslations } from "next-intl";
 
 import { AppMenu } from "@/components/app-menu";
 import { TopNav } from "@/components/app-nav";
-import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -71,8 +70,14 @@ export type AppLocation =
  * able to wrap — `Button` is `shrink-0 whitespace-nowrap`, so not one of them gives up a
  * pixel — and the bar pushed every screen sideways. Letting it wrap fixed the overflow
  * and cost three rows on a phone, which is most of a small screen spent on navigation.
- * That reasoning is untouched: what is on the bar is location and the language, and
- * People, Group Robot and Sign out stay behind {@link AppMenu}.
+ * That reasoning is untouched, and #132 collected on it: what is on the bar is location
+ * and nothing else, since the language switcher moved into Settings under Preferences.
+ * The bar carries one control fewer in both scripts than the row #56 was raised about.
+ *
+ * **The bar is the same for everybody, and since #132 it is the same in the markup too.**
+ * It took an `isOrgAdmin` until the three Org Admin screens sat loose in {@link AppMenu};
+ * they are one `Settings` row now, which every member has, so there is no longer a
+ * question about the reader for this component to ask or for a caller to answer.
  *
  * **The location text is the one part that may be shortened.** A reference and a client
  * name are whatever the client calls them and neither has to contain a space, so
@@ -90,13 +95,7 @@ export type AppLocation =
  * this is. `loading.tsx` and `error.tsx` draw the `app` shape for the same reason a
  * skeleton draws boxes: at that moment nobody knows yet which record is coming.
  */
-export function AppHeader({
-  isOrgAdmin,
-  location = { kind: "app" },
-}: {
-  isOrgAdmin: boolean;
-  location?: AppLocation;
-}) {
+export function AppHeader({ location = { kind: "app" } }: { location?: AppLocation }) {
   const t = useTranslations("nav");
   const app = useTranslations("app");
 
@@ -157,8 +156,7 @@ export function AppHeader({
           {/* Above `md` only. Below it the same two destinations are a bottom bar, drawn
               by `(app)/layout.tsx` where a thumb reaches them (ADR-0021). */}
           <TopNav />
-          <LocaleSwitcher compact />
-          <AppMenu isOrgAdmin={isOrgAdmin} />
+          <AppMenu />
         </div>
       </div>
     </header>

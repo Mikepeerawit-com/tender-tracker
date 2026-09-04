@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { GroupRobotForm } from "@/components/admin/group-robot-form";
-import { Screen } from "@/components/screen";
 import { Measure } from "@/components/ui/screen-body";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { currentUser } from "@/lib/auth/session";
@@ -11,7 +10,7 @@ import { groupRobotStatus } from "@/lib/wecom/group-robot";
 
 /**
  * Where the org's Group Robot is set up — the webhook every reminder, outcome and
- * Digest leaves through.
+ * Digest leaves through. The second screen in Settings' **Organisation** group.
  *
  * Hidden from non-admins with `notFound()` rather than a redirect, for the same reason
  * the People screen is: a page that says "you are not allowed here" also says that here
@@ -35,7 +34,7 @@ export default async function GroupRobotPage() {
   if (status === null) notFound();
 
   return (
-    <Screen measure="42rem">
+    <>
       <ScreenHeader heading={t("title")}>
         <p className="text-muted-foreground text-sm">{t("description")}</p>
       </ScreenHeader>
@@ -45,6 +44,6 @@ export default async function GroupRobotPage() {
           <GroupRobotForm configured={status.configured} updatedAt={status.updatedAt} />
         </section>
       </Measure>
-    </Screen>
+    </>
   );
 }

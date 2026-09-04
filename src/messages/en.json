@@ -14,10 +14,6 @@
     "label": "Language",
     "en": "English",
     "zh-Hans": "简体中文",
-    "short": {
-      "en": "EN",
-      "zh-Hans": "中文"
-    },
     "switching": "Switching language…"
   },
   "login": {
@@ -84,6 +80,9 @@
   },
   "nav": {
     "signOut": "Sign out",
+    "settings": "Settings",
+    "settingsGroups": "Settings groups",
+    "organisation": "Organisation",
     "people": "People",
     "groupRobot": "WeCom group",
     "destinations": "Main navigation",
@@ -476,6 +475,10 @@
       "loss": "Loss",
       "flat": "Break-even"
     }
+  },
+  "preferences": {
+    "title": "Preferences",
+    "description": "How this app is set up for you. Nothing on this screen is seen by anyone else."
   },
   "people": {
     "title": "People",

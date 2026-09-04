@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { describe, expect, it, vi } from "vitest";
 
@@ -19,10 +19,13 @@ import { controlRows, expectNoSidewaysScroll, phone } from "@/test/layout";
  * #48 reported the tender list, a Tender **and** the comparison sheet all wider than the
  * phone — one symptom on three screens is one cause on the thing all three share.
  *
- * The admin case is the one that matters. An org admin's bar carries the widest set of
- * controls there is — Tenders, the two locales, and a menu holding People, Group Robot,
- * Converting foreign prices and Sign out — and `Button` is `shrink-0 whitespace-nowrap`,
- * so none of them gives up a pixel.
+ * **There is one bar, for everybody, since #132.** It used to have two shapes — an org
+ * admin's, whose menu held People, Group Robot and Converting foreign prices as well as
+ * Sign out, and a member's, whose menu held one row — so this suite ran every case twice
+ * and the admin's was the one that mattered. Those three are one `Settings` row now and
+ * the language switcher has left the bar for Preferences, so the widest bar there is is
+ * the only bar there is: a location, the two destinations above `md`, and one menu
+ * trigger. `Button` is `shrink-0 whitespace-nowrap`, so none of them gives up a pixel.
  *
  * Since #73 the bar also states **where the reader is**, which gives it two shapes and a
  * new way to overflow: the `record` shape carries a back control plus a reference and a
@@ -31,13 +34,9 @@ import { controlRows, expectNoSidewaysScroll, phone } from "@/test/layout";
  *
  * Both locales are measured, because the labels are translated and English is not
  * automatically the worst case: a Han glyph is about twice the width of a Latin letter,
- * so a shorter Chinese string is not necessarily a narrower button. The locale is handed
- * to the provider alongside its messages rather than pinned to `en` — `LocaleSwitcher`
- * reads `useLocale()` to decide which of its two buttons is `default` variant and which
- * is `outline`, and those are not the same width.
+ * so a shorter Chinese string is not necessarily a narrower button.
  */
 vi.mock("@/app/actions/auth", () => ({ signOutAction: async () => ({}) }));
-vi.mock("@/app/actions/locale", () => ({ switchLocale: async () => ({}) }));
 
 const locales = [
   ["en", en],
@@ -86,26 +85,15 @@ const locations = [
 describe(`the app header at ${phone.width}×${phone.height}`, () => {
   it.each(
     locales.flatMap(([locale, messages]) =>
-      locations.flatMap(([where, location]) =>
-        [
-          ["an org admin, who gets the two admin buttons", true],
-          ["an ordinary member", false],
-        ].map(
-          ([who, isOrgAdmin]) =>
-            [
-              `${who}, on ${where}, in ${locale}`,
-              isOrgAdmin as boolean,
-              locale,
-              messages,
-              location,
-            ] as const,
-        ),
+      locations.map(
+        ([where, location]) =>
+          [`${where}, in ${locale}`, locale, messages, location] as const,
       ),
     ),
-  )("does not push the page sideways for %s", (_case, isOrgAdmin, locale, messages, location) => {
+  )("does not push the page sideways on %s", (_case, locale, messages, location) => {
     render(
       <NextIntlClientProvider locale={locale} messages={messages} timeZone="Asia/Bangkok">
-        <AppHeader isOrgAdmin={isOrgAdmin} location={location} />
+        <AppHeader location={location} />
       </NextIntlClientProvider>,
     );
 
@@ -115,5 +103,12 @@ describe(`the app header at ${phone.width}×${phone.height}`, () => {
     // it just gets taller: the first fix for #56 did that and spent three of the phone's
     // rows on navigation, which is what this pins shut.
     expect(controlRows(document.querySelector("header")!)).toBe(1);
+
+    // The language switcher is **not** here (#132). It left for Preferences, and this is
+    // the row it left — a control put back on the bar would take its width back with it,
+    // and the one-row assertion above would go on passing until the day it did not.
+    expect(
+      screen.queryByRole("navigation", { name: messages.localeSwitcher.label }),
+    ).toBeNull();
   });
 });

@@ -241,8 +241,8 @@ different reason: correcting the day a Quote *claims* re-runs the freeze against
 date, at the buffer as it then stands, because the re-frozen row has to be one the create
 path could produce (ADR-0018).
 _Label_: en "Converting foreign prices" · zh 外币报价换算 — the screen is named for what it
-does to a price, because "buffer" is a word only we would have used for it. The menu row
-shortens to en "Foreign prices" · zh 外币换算, the way `localeSwitcher.short` does: a
+does to a price, because "buffer" is a word only we would have used for it. Its row in
+**Settings**' Organisation group shortens to en "Foreign prices" · zh 外币换算: a
 destination in a list of destinations is read at a glance, and the screen it opens is
 where the full name earns its length.
 _Avoid_: spread, markup, fx margin, safety factor
@@ -315,12 +315,32 @@ _Avoid_: pipeline, total quoted value, open value
 
 ### Identity
 
+**Settings**:
+The one place a member changes what is theirs and an Org Admin changes what is the
+organisation's. It has two groups, and which group a thing is in is the whole of what the
+grouping says: **Preferences** is what affects the reader alone — the language they read in
+— and every member has one. **Organisation** is what affects everybody, and only an **Org
+Admin** has one: People, the Group Robot and Converting foreign prices, which had been
+three loose rows in a menu with no collective name until this term existed.
+
+The two are named apart so that an Org Admin can tell at a glance which of their changes
+land on their colleagues' screens. Where the groups sit and what is drawn for whom is
+[ADR-0021](docs/adr/0021-two-destinations-and-the-device-follows-the-role.md)'s, not this
+entry's.
+_Label_: en "Settings" · zh 设置 · the groups: en "Preferences" / "Organisation" · zh
+偏好设置 / 组织.
+_Avoid_: admin, admin area, console, configuration, options
+
 **Org Admin**:
 A user who may invite others into one organisation. A capability, not a rank — an Org
 Admin has no extra visibility and no say over Tenders they don't own. Still a boolean and
 deliberately not a role enum, but it is a property of a **Membership** rather than of a
 person: admin of one organisation says nothing about any other. An organisation must
 always have at least one, so the last one cannot be Disabled (ADR-0017).
+
+It is what the **Organisation** group of **Settings** belongs to: those three screens are
+the whole of what the capability governs beyond inviting, and a member who is not an Org
+Admin has no such group.
 _Label_: en "Administrator" · zh 组织管理员.
 _Avoid_: admin, owner, superuser, manager
 

@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { CurrencyConversionForm } from "@/components/admin/currency-conversion-form";
-import { Screen } from "@/components/screen";
 import { Measure } from "@/components/ui/screen-body";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { currentUser } from "@/lib/auth/session";
@@ -13,11 +12,12 @@ import { getOrgSettings } from "@/lib/org/org";
 /**
  * Where the org says how much is added to the market exchange rate when a supplier's
  * foreign price is turned into Baht — the FX Buffer, which until this screen could only
- * be changed with SQL against production.
+ * be changed with SQL against production. The third screen in Settings' **Organisation**
+ * group.
  *
  * Hidden from non-admins with `notFound()` rather than a redirect, for the reason the
- * other two admin screens are: a page that says "you are not allowed here" also says that
- * here exists. The real gate is in the server action, because that is the public endpoint.
+ * other two do it: a page that says "you are not allowed here" also says that here
+ * exists. The real gate is in the server action, because that is the public endpoint.
  *
  * The setting is read through `getOrgSettings`, which is the same read every Quote's
  * `freezeRate` goes through — so what this screen shows and what the next Quote freezes
@@ -33,7 +33,7 @@ export default async function CurrencyConversionPage() {
   const { fxBufferPct } = await getOrgSettings(store);
 
   return (
-    <Screen measure="42rem">
+    <>
       <ScreenHeader heading={t("title")}>
         <p className="text-muted-foreground text-sm">{t("description")}</p>
       </ScreenHeader>
@@ -51,6 +51,6 @@ export default async function CurrencyConversionPage() {
       <Measure>
         <p className="text-muted-foreground text-sm">{t("affects")}</p>
       </Measure>
-    </Screen>
+    </>
   );
 }

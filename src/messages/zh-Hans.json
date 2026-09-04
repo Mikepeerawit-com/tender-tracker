@@ -14,10 +14,6 @@
     "label": "语言",
     "en": "English",
     "zh-Hans": "简体中文",
-    "short": {
-      "en": "EN",
-      "zh-Hans": "中文"
-    },
     "switching": "正在切换语言…"
   },
   "login": {
@@ -84,6 +80,9 @@
   },
   "nav": {
     "signOut": "退出登录",
+    "settings": "设置",
+    "settingsGroups": "设置分组",
+    "organisation": "组织",
     "people": "成员",
     "groupRobot": "群机器人",
     "destinations": "主导航",
@@ -476,6 +475,10 @@
       "loss": "亏损",
       "flat": "持平"
     }
+  },
+  "preferences": {
+    "title": "偏好设置",
+    "description": "这个应用为你个人所做的设置。此页面上的任何改动都只影响你自己，别人看不到。"
   },
   "people": {
     "title": "成员",

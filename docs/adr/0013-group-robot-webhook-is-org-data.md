@@ -12,7 +12,7 @@ Ticket [#38](https://github.com/Mikepeerawit-com/tender-tracker/issues/38). **Su
 
 - **The webhook lives in `group_robots`**, one row per org, and `WECOM_ROBOT_WEBHOOK` is gone from the code, `.env.example` and the README. One source of truth, so "which group did that go to" has one place to look.
 - **`sendGroupMessages` takes the webhook as its first argument.** It reaches for nothing.
-- **An Org Admin sets it at `/admin/group-robot`.** Gated in the server action, not by hiding the form.
+- **An Org Admin sets it at `/settings/group-robot`.** Gated in the server action, not by hiding the form.
 - **A pasted value is normalised and validated at write time** — trimmed, `https`, WeCom's host, non-empty `key` — and refused otherwise.
 - **An org with no robot is reported as unconfigured, never as a send failure.**
 
