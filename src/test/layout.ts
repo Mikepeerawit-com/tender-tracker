@@ -150,3 +150,34 @@ function describeElement(element: Element): string {
   // `className` is an `SVGAnimatedString` and stringifies to nothing anybody can search for.
   return `${element.tagName.toLowerCase()}.${element.getAttribute("class")} — "${text}"`;
 }
+
+/**
+ * A font stack token as the browser really substitutes it.
+ *
+ * Resolved through a real element rather than read off the custom property, because it is
+ * the *substituted* value that decides what gets drawn: a `var()` that fell through to
+ * nothing serialises as the token's own text and would pass a string comparison while the
+ * page rendered in Times. Which is the whole fault `type.layout.test.tsx` exists for, so
+ * the probe it uses and the one the working sheet compares its figures against have to be
+ * the same probe.
+ */
+export function fontStack(token: string): string {
+  const probe = document.createElement("span");
+
+  probe.style.fontFamily = `var(${token})`;
+  document.body.append(probe);
+
+  const substituted = getComputedStyle(probe).fontFamily;
+
+  probe.remove();
+
+  return substituted;
+}
+
+/** A computed `font-family` as the families a browser will try, in order, unquoted. */
+export function familiesIn(fontFamily: string): string[] {
+  return fontFamily
+    .split(",")
+    .map((family) => family.trim().replace(/^["']|["']$/g, ""))
+    .filter((family) => family !== "");
+}

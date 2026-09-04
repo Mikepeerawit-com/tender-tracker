@@ -356,23 +356,63 @@ export function screens(m: Messages) {
  * nothing and the bar lands directly under the last row of a short screen instead of at
  * the foot of the phone, where a thumb finds it — and the bar is drawn here, once, exactly
  * as `(app)/layout.tsx` draws it beneath every page.
+ *
+ * **`theme` is a parameter of this wrapper and not of any one suite**, so that a screen
+ * added to the record above is measured in both themes by whatever already measures it,
+ * and neither theme is a parallel seam somebody has to remember. It defaults to light,
+ * which is what every suite predating a theme was measuring anyway.
  */
 export function Screen({
   locale,
   messages,
+  theme = "light",
   children,
 }: {
   locale: Locale;
   messages: Messages;
+  theme?: Theme;
   children: React.ReactNode;
 }) {
   return (
     <NextIntlClientProvider locale={locale} messages={messages} timeZone="Asia/Bangkok">
-      <div className="flex min-h-dvh flex-col">
-        {children}
-        <BottomNav />
-      </div>
+      <Ground theme={theme}>
+        <div className="flex min-h-dvh flex-col">
+          {children}
+          <BottomNav />
+        </div>
+      </Ground>
     </NextIntlClientProvider>
+  );
+}
+
+/** The two themes the token file answers. */
+export const themes = ["light", "dark"] as const;
+
+export type Theme = (typeof themes)[number];
+
+/**
+ * The ground a screen is drawn on, carrying the theme the way the real root carries it.
+ *
+ * The class is what `.dark` in `globals.css` selects on, and the two utilities are what
+ * `@layer base` gives the real `body` — stated again here because a wrapper that only set
+ * the class would redefine every token and then paint them onto nothing, leaving a dark
+ * screen on a white page.
+ *
+ * Exported for the signed-out screens, which have no `(app)` shell around them and so
+ * cannot reach it through {@link Screen}: it is the same ground either way, which is the
+ * point of it being one component.
+ */
+export function Ground({
+  theme,
+  children,
+}: {
+  theme: Theme;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`${theme === "dark" ? "dark " : ""}bg-background text-foreground`}>
+      {children}
+    </div>
   );
 }
 

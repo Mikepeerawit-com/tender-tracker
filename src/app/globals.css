@@ -14,7 +14,11 @@
  * financial convention red is up and a red negative Margin would be read as a gain by
  * half the people using this daily. **Flag** — a property of a Quote or a figure rather
  * than a state: an Alternative, a provisional Landed Cost. **Ink** — everything else,
- * over a cool near-white ground.
+ * over a warm paper ground.
+ *
+ * The values were repainted whole in #130 and every one of them is free to move again.
+ * What is *not* free to move is the list above: a hue may change, and what it is allowed
+ * to say may not.
  *
  * The shadcn token *names* survive and only their values move, so nothing that already
  * consumes them breaks. The meaning-carrying hues are additionally exposed under their
@@ -27,25 +31,25 @@
   --color-foreground: var(--foreground);
 
   /*
-   * IBM Plex for Latin and numerals, and the CJK stack declared rather than inherited.
+   * Fira for Latin and numerals, and the CJK stack declared rather than inherited.
    * No CJK webfont is fetched: a Han face cannot be subset, so it is megabytes over a
    * phone network inside the WeCom webview — on the exact path a reminder link takes.
    * The device draws it, which is why the stack is named in full rather than left to
    * `sans-serif`.
    *
    * The `var()` fallbacks are load-bearing, not belt-and-braces. `next/font` defines
-   * `--font-ibm-plex-*` on the `html` element, and anything rendering these styles
-   * *without* it — a browser layout test, which is how this app's 390px guard works —
-   * would otherwise hit an undefined variable, invalidate the whole declaration at
+   * `--font-fira-*` on the `html` element, and anything rendering these styles *without*
+   * it — a browser layout test, which is how this app's 390px guard works — would
+   * otherwise hit an undefined variable, invalidate the whole declaration at
    * computed-value time and fall all the way back to the default serif. Naming the family
    * in the fallback keeps the rest of the stack, and the CJK half of it in particular,
-   * reachable either way.
+   * reachable either way. `type.layout.test.tsx` is that condition, asserted.
    */
   --font-sans:
-    var(--font-ibm-plex-sans, "IBM Plex Sans"), "PingFang SC", "Hiragino Sans GB",
+    var(--font-fira-sans, "Fira Sans"), "PingFang SC", "Hiragino Sans GB",
     "Source Han Sans SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
   --font-mono:
-    var(--font-ibm-plex-mono, "IBM Plex Mono"), "SF Mono", ui-monospace, "PingFang SC",
+    var(--font-fira-code, "Fira Code"), "SF Mono", ui-monospace, "PingFang SC",
     "Hiragino Sans GB", "Source Han Sans SC", "Noto Sans SC", "Microsoft YaHei",
     monospace;
   --font-heading: var(--font-sans);
@@ -109,39 +113,59 @@
 }
 
 :root {
-  /* A cool near-white, not cream, with a cool-cast ink over it. */
-  --background: oklch(0.986 0.004 200);
-  --foreground: oklch(0.2 0.014 235);
-  --ink-faint: oklch(0.66 0.012 235);
-  --hairline-soft: oklch(0.945 0.006 215);
+  /*
+   * A warm paper ground with a blue-black ink over it, and the sheets a shade lighter
+   * than the desk they lie on.
+   *
+   * The ground was a cool near-white until the repaint, and the reason it moved is the
+   * hue below it: signal is blue now, and blue over a cool near-white is the ground every
+   * dashboard has. Warm paper under blue ink is a working sheet, which is what this app
+   * is, and it is the half of the repaint a reader notices before any control.
+   */
+  --background: oklch(0.975 0.007 90);
+  --foreground: oklch(0.225 0.015 265);
+  /*
+   * The faintest tier of ink, and the darkest it has ever been: at its old value it drew
+   * 10.5px field labels and reference codes at 3.1:1, which is under the floor for text
+   * that size and was the worst legibility fault in the old palette. It is now the
+   * lightest ink that clears 4.5:1 on both the paper and a sheet.
+   */
+  --ink-faint: oklch(0.545 0.018 265);
+  --hairline-soft: oklch(0.935 0.008 90);
 
-  --signal: oklch(0.55 0.15 195);
-  --signal-ink: oklch(0.42 0.13 195);
-  --signal-wash: oklch(0.55 0.15 195 / 0.09);
-  --signal-edge: oklch(0.55 0.15 195 / 0.28);
-  --alarm: oklch(0.55 0.15 28);
-  --alarm-ink: oklch(0.46 0.16 28);
-  --alarm-wash: oklch(0.55 0.15 28 / 0.08);
-  --alarm-edge: oklch(0.55 0.15 28 / 0.3);
-  --flag: oklch(0.62 0.13 75);
-  --flag-ink: oklch(0.48 0.12 75);
-  --flag-wash: oklch(0.62 0.13 75 / 0.15);
-  --flag-edge: oklch(0.62 0.13 75 / 0.3);
+  /*
+   * Signal was teal and is blue, decided against the money hues that arrive next: a gain
+   * drawn in green beside a rank-1 chip drawn in teal is two greens on one screen meaning
+   * two different things. Blue is unambiguous against both green and red, and it keeps
+   * signal reading as *act on this* rather than as *good news*.
+   */
+  --signal: oklch(0.5 0.17 259);
+  --signal-ink: oklch(0.44 0.17 262);
+  --signal-wash: oklch(0.5 0.17 259 / 0.1);
+  --signal-edge: oklch(0.5 0.17 259 / 0.3);
+  --alarm: oklch(0.52 0.2 27);
+  --alarm-ink: oklch(0.46 0.165 27);
+  --alarm-wash: oklch(0.52 0.2 27 / 0.09);
+  --alarm-edge: oklch(0.52 0.2 27 / 0.32);
+  --flag: oklch(0.7 0.15 70);
+  --flag-ink: oklch(0.48 0.1 65);
+  --flag-wash: oklch(0.7 0.15 70 / 0.16);
+  --flag-edge: oklch(0.7 0.15 70 / 0.34);
 
-  /* Cards and popovers sit on the ground as plain white surfaces. */
-  --card: oklch(1 0 0);
+  /* Cards and popovers are the sheets: a shade lighter than the paper, not pure white. */
+  --card: oklch(0.995 0.003 90);
   --card-foreground: var(--foreground);
-  --popover: oklch(1 0 0);
+  --popover: oklch(0.995 0.003 90);
   --popover-foreground: var(--foreground);
 
   /* Primary *is* signal: a primary action is the definition of something expected of you. */
   --primary: var(--signal);
-  --primary-foreground: oklch(0.99 0.005 195);
-  --secondary: oklch(0.955 0.006 215);
+  --primary-foreground: oklch(0.985 0.006 259);
+  --secondary: oklch(0.945 0.008 90);
   --secondary-foreground: var(--foreground);
-  --muted: oklch(0.955 0.006 215);
-  --muted-foreground: oklch(0.52 0.016 235);
-  --accent: oklch(0.955 0.006 215);
+  --muted: oklch(0.945 0.008 90);
+  --muted-foreground: oklch(0.47 0.02 265);
+  --accent: oklch(0.945 0.008 90);
   --accent-foreground: var(--foreground);
   /*
    * The refusal hue: a write that was rejected, a control that destroys something, a
@@ -153,78 +177,98 @@
    * leave the ADR's rule looking broken in the token file. They are two meanings that
    * happen to share a value; a reader changing one should have to decide about the other.
    */
-  --destructive: oklch(0.55 0.15 28);
-  --border: oklch(0.905 0.008 215);
-  --input: oklch(0.905 0.008 215);
+  --destructive: oklch(0.52 0.2 27);
+  --border: oklch(0.885 0.012 90);
+  /*
+   * **A field's edge is darker than the rules that merely divide things**, and it is the
+   * one hairline held to a contrast floor: the line round an input is how a reader knows
+   * it is an input, which makes it information rather than decoration (WCAG 1.4.11, 3:1).
+   * `--border` separates what position already separates and is not held to it.
+   */
+  --input: oklch(0.635 0.02 90);
   --ring: var(--signal);
   --chart-1: var(--signal);
   --chart-2: var(--flag);
-  --chart-3: oklch(0.52 0.016 235);
-  --chart-4: oklch(0.66 0.012 235);
-  --chart-5: oklch(0.2 0.014 235);
+  --chart-3: oklch(0.47 0.02 265);
+  --chart-4: oklch(0.545 0.018 265);
+  --chart-5: oklch(0.225 0.015 265);
   --radius: 0.625rem;
-  --sidebar: oklch(1 0 0);
+  --sidebar: oklch(0.995 0.003 90);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--signal);
-  --sidebar-primary-foreground: oklch(0.99 0.005 195);
-  --sidebar-accent: oklch(0.955 0.006 215);
+  --sidebar-primary-foreground: oklch(0.985 0.006 259);
+  --sidebar-accent: oklch(0.945 0.008 90);
   --sidebar-accent-foreground: var(--foreground);
-  --sidebar-border: oklch(0.905 0.008 215);
+  --sidebar-border: oklch(0.885 0.012 90);
   --sidebar-ring: var(--signal);
 }
 
 /*
- * Nothing in this app turns dark mode on — there is no toggle and no `.dark` is ever
+ * Nothing in this app turns dark mode on yet — there is no toggle and no `.dark` is ever
  * applied. It is kept defined rather than deleted so that the hues resolve to something
  * deliberate if it ever is, instead of to nothing at all.
+ *
+ * Which is why it was repainted in the same pass as the light block rather than left
+ * behind: a theme nothing switches on is exactly the one that goes stale, and the
+ * contrast guard walks every screen through it so that the answer here is a measured one
+ * rather than a hopeful one.
  */
 .dark {
-  --background: oklch(0.19 0.012 235);
-  --foreground: oklch(0.965 0.004 200);
-  --ink-faint: oklch(0.62 0.012 235);
-  --hairline-soft: oklch(0.28 0.012 235);
+  --background: oklch(0.185 0.015 265);
+  --foreground: oklch(0.945 0.006 90);
+  --ink-faint: oklch(0.665 0.018 265);
+  --hairline-soft: oklch(0.285 0.014 265);
 
-  --signal: oklch(0.7 0.13 195);
-  --signal-ink: oklch(0.8 0.11 195);
-  --signal-wash: oklch(0.7 0.13 195 / 0.16);
-  --signal-edge: oklch(0.7 0.13 195 / 0.4);
-  --alarm: oklch(0.68 0.16 28);
-  --alarm-ink: oklch(0.78 0.13 28);
-  --alarm-wash: oklch(0.68 0.16 28 / 0.16);
-  --alarm-edge: oklch(0.68 0.16 28 / 0.4);
-  --flag: oklch(0.75 0.12 75);
-  --flag-ink: oklch(0.84 0.1 75);
-  --flag-wash: oklch(0.75 0.12 75 / 0.18);
-  --flag-edge: oklch(0.75 0.12 75 / 0.4);
+  --signal: oklch(0.7 0.14 259);
+  --signal-ink: oklch(0.8 0.09 259);
+  --signal-wash: oklch(0.7 0.14 259 / 0.16);
+  --signal-edge: oklch(0.7 0.14 259 / 0.4);
+  --alarm: oklch(0.685 0.17 27);
+  --alarm-ink: oklch(0.81 0.1 27);
+  --alarm-wash: oklch(0.685 0.17 27 / 0.16);
+  --alarm-edge: oklch(0.685 0.17 27 / 0.4);
+  --flag: oklch(0.78 0.13 72);
+  --flag-ink: oklch(0.86 0.1 78);
+  --flag-wash: oklch(0.78 0.13 72 / 0.18);
+  --flag-edge: oklch(0.78 0.13 72 / 0.4);
 
-  --card: oklch(0.23 0.013 235);
+  --card: oklch(0.225 0.016 265);
   --card-foreground: var(--foreground);
-  --popover: oklch(0.23 0.013 235);
+  --popover: oklch(0.225 0.016 265);
   --popover-foreground: var(--foreground);
   --primary: var(--signal);
-  --primary-foreground: oklch(0.17 0.02 195);
-  --secondary: oklch(0.28 0.012 235);
+  --primary-foreground: oklch(0.19 0.05 259);
+  --secondary: oklch(0.275 0.016 265);
   --secondary-foreground: var(--foreground);
-  --muted: oklch(0.28 0.012 235);
-  --muted-foreground: oklch(0.72 0.012 235);
-  --accent: oklch(0.28 0.012 235);
+  --muted: oklch(0.275 0.016 265);
+  --muted-foreground: oklch(0.745 0.016 265);
+  --accent: oklch(0.275 0.016 265);
   --accent-foreground: var(--foreground);
-  --destructive: var(--alarm);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 16%);
+  /*
+   * Its own value here too, for the reason the light block gives. It was `var(--alarm)`
+   * in this block alone, which left the token file stating a rule and breaking it four
+   * lines later depending on which theme you read.
+   */
+  --destructive: oklch(0.685 0.17 27);
+  /*
+   * A stated hairline rather than white at 12%, so that the two themes are answered the
+   * same way and a rule does not change weight with the surface it happens to cross.
+   */
+  --border: oklch(0.345 0.014 265);
+  --input: oklch(0.545 0.016 265);
   --ring: var(--signal);
   --chart-1: var(--signal);
   --chart-2: var(--flag);
-  --chart-3: oklch(0.72 0.012 235);
-  --chart-4: oklch(0.62 0.012 235);
-  --chart-5: oklch(0.965 0.004 200);
-  --sidebar: oklch(0.23 0.013 235);
+  --chart-3: oklch(0.745 0.016 265);
+  --chart-4: oklch(0.665 0.018 265);
+  --chart-5: oklch(0.945 0.006 90);
+  --sidebar: oklch(0.225 0.016 265);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--signal);
-  --sidebar-primary-foreground: oklch(0.17 0.02 195);
-  --sidebar-accent: oklch(0.28 0.012 235);
+  --sidebar-primary-foreground: oklch(0.19 0.05 259);
+  --sidebar-accent: oklch(0.275 0.016 265);
   --sidebar-accent-foreground: var(--foreground);
-  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-border: oklch(0.345 0.014 265);
   --sidebar-ring: var(--signal);
 }
 
