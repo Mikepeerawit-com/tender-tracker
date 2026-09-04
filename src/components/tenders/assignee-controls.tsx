@@ -151,7 +151,7 @@ function RemoveForm({
       <input type="hidden" name="tenderId" value={tenderId} />
       <input type="hidden" name="userId" value={userId} />
 
-      <Button type="submit" variant="ghost" size="sm" disabled={isPending}>
+      <Button type="submit" variant="ghost" size="sm" className="h-11" disabled={isPending}>
         {label}
       </Button>
 

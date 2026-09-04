@@ -145,6 +145,7 @@ function RemovePhotoForm({
         type="submit"
         variant="ghost"
         size="sm"
+        className="h-11"
         disabled={isPending}
         aria-label={t("removeNumbered", { position })}
       >
