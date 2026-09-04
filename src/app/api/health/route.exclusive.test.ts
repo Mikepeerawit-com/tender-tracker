@@ -3,6 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 import { runInstantHeader } from "@/lib/run-instant";
 import { migrationsOnDisk } from "@/lib/schema/migrations-on-disk.mts";
+import { reportUnlessRoutine } from "@/test/postgres-notices";
 
 import { GET } from "./route";
 
@@ -75,7 +76,7 @@ async function health(headers: Record<string, string> = {}): Promise<{
  * `class Pool extends …` cannot extend. This one is ESM throughout.
  */
 async function withSuperuser<T>(work: (sql: postgres.Sql) => Promise<T>): Promise<T> {
-  const sql = postgres(process.env.SUPABASE_DB_URL!, { max: 1 });
+  const sql = postgres(process.env.SUPABASE_DB_URL!, { max: 1, onnotice: reportUnlessRoutine });
 
   try {
     return await work(sql);
@@ -87,6 +88,11 @@ async function withSuperuser<T>(work: (sql: postgres.Sql) => Promise<T>): Promis
 /**
  * Put back anything a killed worker left withheld — the migration rows first, then the
  * probe function. Safe to run when there is nothing to restore, which is the usual case.
+ *
+ * Returns only once PostgREST is answering with `health_probe()` again, whether or not
+ * this call is the one that put it back: the caller's next line, and every test after it,
+ * asks the database through PostgREST, and a stale cache there is indistinguishable from
+ * a database no migration ever reached.
  */
 async function restoreWithheld(sql: postgres.Sql): Promise<void> {
   await sql`create schema if not exists withheld`;
@@ -112,11 +118,14 @@ async function restoreWithheld(sql: postgres.Sql): Promise<void> {
 
   if (hidden) {
     await sql`alter function public.health_probe_withheld() rename to health_probe`;
-    await reloadPostgrestSchema(sql);
-    // Wait for the cache, not just the rename. Returning early here is what a repair run
-    // would spend on tests aimed at a PostgREST that has not caught up yet.
-    await untilProbeIs(true);
   }
+
+  // The rename is not the restore: PostgREST answers RPCs out of a cached schema, so the
+  // probe is back when PostgREST answers with it and not before. Waited for on every
+  // call, not only the one that renamed — a previous run killed mid-test, or a cache that
+  // has drifted for its own reasons, is the same stale cache and the same wait.
+  await reloadPostgrestSchema(sql);
+  await untilProbeIs(true);
 }
 
 /**
@@ -159,25 +168,76 @@ async function withMigrationWithheld<T>(version: string, work: () => Promise<T>)
 
 /**
  * PostgREST answers RPCs out of a cached schema, so a function it has already seen stays
- * callable after it is renamed away. Ask for the reload and wait for it to bite, rather
- * than sleeping a guessed interval.
+ * callable after it is renamed away, and one it has not seen stays missing after it comes
+ * back. Ask for the reload and wait for it to bite, rather than sleeping a guessed
+ * interval.
+ *
+ * Supabase installs a `pgrst_ddl_watch` event trigger that sends this same notification
+ * on any DDL, so the rename has usually asked already. The ask is cheap and the trigger
+ * is not this suite's to rely on; the *waiting* is the part that carries the weight.
  */
 async function reloadPostgrestSchema(sql: postgres.Sql): Promise<void> {
   await sql.notify("pgrst", "reload schema");
 }
 
-async function untilProbeIs(present: boolean): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const { body } = await health();
-    const missing = body.schema.applied === null && body.database === "reachable";
+/** How the probe reads, or that this answer does not say. */
+type ProbeReading = "present" | "absent" | "unknown";
 
-    if (missing !== present) return;
+/**
+ * What one health response says about `health_probe()` — and, crucially, when it says
+ * nothing.
+ *
+ * `applied: null` is the answer of a database with no probe *and* the answer of a
+ * database nobody could reach, which is the whole of #125: reading the second as
+ * "the probe is there" let a single restart end a wait for a function nobody had seen
+ * come back, and the next test in this file went red naming a probe it never touched.
+ * An answer that could not reach the database is evidence about the network, not about
+ * the schema, so it is neither reading.
+ */
+async function readProbe(): Promise<ProbeReading> {
+  const { body } = await health();
+
+  if (body.database !== "reachable") return "unknown";
+
+  return body.schema.applied === null ? "absent" : "present";
+}
+
+/**
+ * Poll until the probe is observably where it is wanted. `unknown` is not an answer in
+ * either direction — it keeps the loop going, which is what both the arrival and the
+ * departure of a hiccup deserve.
+ *
+ * The whole budget has to fit inside vitest's 5s hook timeout, because `restoreWithheld`
+ * waits here from `beforeAll`: a PostgREST that is down would otherwise be reported as
+ * "hook timed out", which names nothing. It fails at 3s with the reading it kept getting
+ * instead — `unknown` throughout is a database nobody could reach, not a missing probe,
+ * and the two send a reader to different places.
+ */
+async function untilProbeIs(present: boolean, attempts = 60): Promise<void> {
+  const wanted: ProbeReading = present ? "present" : "absent";
+  let reading: ProbeReading = "unknown";
+
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    reading = await readProbe();
+
+    if (reading === wanted) return;
 
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 
-  throw new Error(`PostgREST never noticed health_probe() ${present ? "returning" : "leaving"}.`);
+  throw new Error(
+    reading === "unknown"
+      ? "Waited for health_probe() to be " +
+        `${wanted} and never reached the database at all — is PostgREST up?`
+      : `PostgREST never answered with health_probe() ${wanted}.`,
+  );
 }
+
+/**
+ * How `withProbeHidden` puts the probe back: `restoreWithheld`, except in the one test
+ * that defeats it to show what catches a restore that did not happen.
+ */
+type Restore = (sql: postgres.Sql) => Promise<void>;
 
 /**
  * Run `work` against a database whose `health_probe()` is not there at all — a database
@@ -185,19 +245,61 @@ async function untilProbeIs(present: boolean): Promise<void> {
  * rather than dropped: the body is what carries the probe, and a test that had to
  * recreate it would be asserting against its own copy.
  */
-async function withProbeHidden<T>(work: () => Promise<T>): Promise<T> {
+async function withProbeHidden<T>(
+  work: () => Promise<T>,
+  restore: Restore = restoreWithheld,
+): Promise<T> {
   return withSuperuser(async (sql) => {
     await restoreWithheld(sql);
     await sql`alter function public.health_probe() rename to health_probe_withheld`;
     await reloadPostgrestSchema(sql);
 
+    let failed: unknown;
+
     try {
       await untilProbeIs(false);
       return await work();
+    } catch (error) {
+      failed = error;
+      throw error;
     } finally {
-      await restoreWithheld(sql);
+      await handBackAProbeThatAnswers(sql, restore, failed);
     }
   });
+}
+
+/**
+ * However the block above ended, the next test must not be the one to discover that the
+ * probe is still renamed away. `restore` does the putting back and waits for PostgREST;
+ * the second read is what makes that wait a claim this file checks rather than trusts,
+ * for any `restore` that returns without having seen anything — which is what #125 was.
+ *
+ * Both halves fail into one message, and it names `withProbeHidden`: a hand-back that
+ * cannot be completed is read three tests later as "the probe is missing", pointing at a
+ * migration that ran fine. That misdirection is the cost this whole ticket was about.
+ *
+ * It throws from a `finally`, so it can displace a failure from the block it wrapped —
+ * deliberately, because a database handed on without its probe is the larger fault and
+ * the one nothing downstream can diagnose. The displaced message is carried along rather
+ * than dropped.
+ */
+async function handBackAProbeThatAnswers(
+  sql: postgres.Sql,
+  restore: Restore,
+  failed: unknown,
+): Promise<void> {
+  try {
+    await restore(sql);
+    await untilProbeIs(true, 10);
+  } catch (cause) {
+    const displaced = failed instanceof Error ? ` It displaced: ${failed.message}` : "";
+
+    throw new Error(
+      "withProbeHidden cannot hand on a database PostgREST answers health_probe() with." +
+        displaced,
+      { cause },
+    );
+  }
 }
 
 /** Run `work` against a database whose tables `authenticated` may no longer read. */
@@ -337,6 +439,46 @@ describe("GET /api/health", () => {
       const { body } = await withProbeHidden(() => health());
 
       expect(body.schema.error).toMatch(/health_probe/);
+    });
+  });
+
+  /**
+   * The scaffolding above, checked the way ADR-0016 asks a check to be checked: by
+   * breaking what it watches. #125 was a restore that was believed rather than seen — a
+   * single `database: "unreachable"` answer ended the wait for a probe nobody had
+   * observed come back, and the next test in the file paid for it, red on a
+   * `health_probe` it never touched.
+   */
+  describe("the seam that hides the probe", () => {
+    it("keeps waiting when the health answer could not reach the database", async () => {
+      // The probe is there and PostgREST knows it; this answer still says nothing about
+      // it, because a database that cannot be reached reads exactly like one with no
+      // probe. Anything that ends the wait here confirms the restore on a hiccup.
+      vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:1");
+
+      await expect(untilProbeIs(true, 3)).rejects.toThrow(/health_probe/);
+    });
+
+    it("goes red naming the probe rather than handing on a database still missing it", async () => {
+      // Defeat the restore — a `finally` that returns without the probe being back,
+      // which is all an early-returning wait amounts to — and every test after this one
+      // would be asking a database whose `health_probe` is renamed away. Instead the seam
+      // that hid it is the one that fails, and it says so.
+      try {
+        await expect(withProbeHidden(async () => undefined, async () => {})).rejects.toThrow(
+          /health_probe/,
+        );
+      } finally {
+        // In a `finally` for the reason the rest of the file is: this test is the one
+        // place that deliberately leaves the probe hidden, and an assertion above that
+        // fails — the message reworded, the check removed — must not also be the thing
+        // that hands the next test a database without it.
+        await withSuperuser((sql) => restoreWithheld(sql));
+      }
+
+      const { body } = await health();
+
+      expect(body.schema).toMatchObject({ applied: newest, behind: 0 });
     });
   });
 
