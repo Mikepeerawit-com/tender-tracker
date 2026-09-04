@@ -4,6 +4,8 @@ import { getTranslations } from "next-intl/server";
 
 import { EditQuoteForm } from "@/components/quotes/edit-quote-form";
 import { Screen } from "@/components/screen";
+import { Measure } from "@/components/ui/screen-body";
+import { ScreenHeader } from "@/components/ui/screen-header";
 import { currentUser } from "@/lib/auth/session";
 import { mayCorrectQuote, quoteAsSubmitted } from "@/lib/quotes/quote-form";
 import { listQuotes } from "@/lib/quotes/quotes";
@@ -80,23 +82,27 @@ export default async function EditQuotePage({
         }),
       }}
     >
-      <header className="flex flex-col gap-2">
-        <span className="text-muted-foreground text-xs break-words">
-          {`${tender.reference} · ${item.productName}`}
-        </span>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("editTitle")}</h1>
+      {/* `ScreenHeader` rather than a header of its own, which is what keeps ADR-0022's
+          split — the heading spanning the region, the line under it at the measure — in one
+          place instead of six copies of it. */}
+      <ScreenHeader
+        eyebrow={`${tender.reference} · ${item.productName}`}
+        heading={t("editTitle")}
+      >
         <p className="text-muted-foreground text-sm break-words">
           {t("sourcedBy", { name: quote.sourcedByName })}
         </p>
-      </header>
+      </ScreenHeader>
 
-      <EditQuoteForm
-        tenderId={tender.id}
-        tenderItemId={item.id}
-        quoteId={quote.id}
-        currency={quote.currency}
-        defaults={quoteAsSubmitted(quote)}
-      />
+      <Measure>
+        <EditQuoteForm
+          tenderId={tender.id}
+          tenderItemId={item.id}
+          quoteId={quote.id}
+          currency={quote.currency}
+          defaults={quoteAsSubmitted(quote)}
+        />
+      </Measure>
     </Screen>
   );
 }

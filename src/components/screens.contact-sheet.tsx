@@ -33,6 +33,14 @@ import { captureWindow } from "@/test/phone.mjs";
 // Hoisted per file and therefore not shareable with the layout suite, which declares the
 // same block for the same components. See the note in `@/test/screens`.
 vi.mock("@/app/actions/auth", () => ({ signOutAction: async () => ({}) }));
+vi.mock("@/app/actions/admin", () => ({
+  inviteAction: async () => ({}),
+  setWecomUseridAction: async () => ({}),
+  sendTestMentionAction: async () => ({}),
+  setMembershipDisabledAction: async () => ({}),
+  setGroupRobotAction: async () => ({}),
+  setFxBufferAction: async () => ({}),
+}));
 vi.mock("@/app/actions/locale", () => ({ switchLocale: async () => ({}) }));
 vi.mock("@/app/actions/tenders", () => ({
   addAssigneeAction: async () => ({}),
@@ -91,7 +99,8 @@ describe("the contact sheet", () => {
   it.each(
     locales.flatMap(([locale, messages]) =>
       Object.entries(screens(messages)).map(
-        ([name, body]) => [`${name}, in ${locale}`, name, locale, messages, body] as const,
+        ([name, entry]) =>
+          [`${name}, in ${locale}`, name, locale, messages, entry.body] as const,
       ),
     ),
   )("captures %s", async (_case, name, locale, messages, body) => {

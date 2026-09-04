@@ -4,6 +4,10 @@ import "@/app/globals.css";
 
 import { AppHeader, type AppLocation } from "@/components/app-header";
 import { BottomNav } from "@/components/app-nav";
+import { CurrencyConversionForm } from "@/components/admin/currency-conversion-form";
+import { GroupRobotForm } from "@/components/admin/group-robot-form";
+import { InviteForm } from "@/components/admin/invite-form";
+import { MembershipList } from "@/components/admin/membership-list";
 import { ImageCountBadge } from "@/components/images/image-count-badge";
 import { EditQuoteForm } from "@/components/quotes/edit-quote-form";
 import { ItemBrief } from "@/components/quotes/item-brief";
@@ -17,13 +21,13 @@ import { TenderFacts } from "@/components/tenders/tender-facts";
 import { TenderGroup } from "@/components/tenders/tender-group";
 import { QuoteForm } from "@/components/quotes/quote-form";
 import { Button } from "@/components/ui/button";
-import { ScreenBody, type ScreenWidth } from "@/components/ui/screen-body";
+import { Measure, type MeasureWidth, ScreenBody } from "@/components/ui/screen-body";
 import { ScreenError } from "@/components/ui/screen-error";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { ScreenSkeleton } from "@/components/ui/screen-skeleton";
 import type { QuotePhoto } from "@/lib/images/quote-photos";
 import type { ReferenceImage } from "@/lib/images/reference-images";
-import type { Member } from "@/lib/org/members";
+import type { Member, Membership } from "@/lib/org/members";
 import { blankQuote, quoteAsSubmitted } from "@/lib/quotes/quote-form";
 import type { NoSupplierFound, Quote } from "@/lib/quotes/quotes";
 import type { MyWorkRow } from "@/lib/tenders/my-work";
@@ -43,6 +47,15 @@ import zhHans from "@/messages/zh-Hans.json";
  * asserts, and the contact sheet, which photographs them for somebody to look at. They
  * have to be the *same* screens or the sheet stops being evidence about the thing under
  * test — so there is one copy, and adding a screen here adds it to both.
+ *
+ * **This record is the seam every layout guard is built on, and since #131 that is a
+ * promise rather than a happy accident.** A screen added below inherits all of them with
+ * nothing else to remember: no sideways scroll at 390px in both locales, the region at the
+ * desk, the bar and the body sharing a left edge, the one-row app bar, and a contrast walk
+ * over every word in both themes. What used to sit outside it — a hand-maintained table of
+ * per-screen widths in `screens.layout.test.tsx`, kept honest by a reconciliation test —
+ * has moved *into* each entry as `measure`, so there is one place to add a screen and one
+ * place to state what it commits to.
  *
  * Each entry is a screen as the router really assembles it: the page's own `AppHeader` —
  * carrying the location shape that screen really draws, since #73 — then the page's body
@@ -78,6 +91,14 @@ export type Messages = typeof en;
 /**
  * Each screen, as its page composes it under the `(app)` layout.
  *
+ * **`measure` is the width that screen's prose and its form fields commit to**, in the
+ * pixels a reader gets — the narrower column inside the region (ADR-0022). It is declared
+ * here, beside the composition it is a claim about, because it is the one thing the region
+ * rule leaves varying: the region is a single number stated once in the guard, and this is
+ * not. Stated in pixels rather than as the `MeasureWidth` handed to `ScreenBody`, so that
+ * the number asserted comes from somewhere other than the code under test — a declaration
+ * that read the same token the component does could only ever agree with itself.
+ *
  * A function, not a const: the fixtures it reads are declared at the bottom of the file,
  * the way this repo's other layout suites arrange them, and a top-level object would
  * touch them before they exist.
@@ -87,258 +108,365 @@ export function screens(m: Messages) {
     // The screen an Assignee actually opens (ADR-0021): their own Items, each linking
     // straight to the quote form. Composed at 390px, which is the width it is designed
     // for rather than one it merely has to survive.
-    "my work": (
-      <Body width="max-w-3xl">
-        <ScreenHeader heading={m.myWork.title}>
-          <p className="text-muted-foreground text-sm break-words">
-            {m.myWork.description}
-          </p>
-        </ScreenHeader>
-        <MyWorkList items={myWorkRows} />
-      </Body>
-    ),
+    "my work": {
+      measure: 768,
+      body: (
+        <Body>
+          <ScreenHeader heading={m.myWork.title}>
+            <p className="text-muted-foreground text-sm break-words">
+              {m.myWork.description}
+            </p>
+          </ScreenHeader>
+          <MyWorkList items={myWorkRows} />
+        </Body>
+      ),
+    },
     // The same screen with the work done, which is a screen in its own right rather than
     // the one above with rows removed: it draws one sentence and no list at all, and the
     // list reaching zero is the requirement this destination is built around.
-    "my work, finished": (
-      <Body width="max-w-3xl">
-        <ScreenHeader heading={m.myWork.title}>
-          <p className="text-muted-foreground text-sm break-words">
-            {m.myWork.description}
-          </p>
-        </ScreenHeader>
-        <MyWorkList items={[]} />
-      </Body>
-    ),
-    "the tender list": (
-      <Body width="max-w-7xl">
-        <ScreenHeader
-          heading={m.tenders.title}
-          actions={<Button className="h-11">{m.tenders.record}</Button>}
-        >
-          <p className="text-muted-foreground text-sm break-words">
-            {m.tenders.description}
-          </p>
-        </ScreenHeader>
-        {/* The pinned alarm band and an ordinary Progress group, which are the two
-            shapes the list has. The band is the wider of the two — it carries a hint
-            paragraph and a count inside a bordered box — so measuring only the plain
-            group would miss the case that actually pushes. */}
-        <TenderGroup
-          section={{ group: "submission_missed", tenders: [deadRow] }}
-          timezone="Asia/Bangkok"
-        />
-        <TenderGroup
-          section={{ group: "sourcing", tenders: [ordinaryRow, unbrokenRow] }}
-          timezone="Asia/Bangkok"
-        />
-      </Body>
-    ),
-    "a tender": (
-      <Body width="max-w-7xl" location={tenderBar}>
-        <ScreenHeader
-          heading={tender.clientName}
-          actions={
-            <Button variant="outline" className="h-11">
-              {m.tenders.edit}
-            </Button>
-          }
-        >
-          <p className="text-muted-foreground text-sm break-words">{tender.title}</p>
-        </ScreenHeader>
-        {/* The two Items the Owner has neither priced nor given up on, both named with
-            nothing in them to break at — which is the row this band has that can be any
-            width, because a product name is whatever the client called it. */}
-        <OutstandingBand tenderId={tender.id} items={yourOutstanding(tender.ownerUserId)} />
-        <TenderFacts tender={tender} />
-        <AssigneeControls
-          tenderId={tender.id}
-          assignees={tender.assignees}
-          members={members}
-          callerId="user-somchai"
-          isOwner
-        />
-      </Body>
-    ),
+    "my work, finished": {
+      measure: 768,
+      body: (
+        <Body>
+          <ScreenHeader heading={m.myWork.title}>
+            <p className="text-muted-foreground text-sm break-words">
+              {m.myWork.description}
+            </p>
+          </ScreenHeader>
+          <MyWorkList items={[]} />
+        </Body>
+      ),
+    },
+    "the tender list": {
+      measure: 768,
+      body: (
+        <Body>
+          <ScreenHeader
+            heading={m.tenders.title}
+            actions={<Button className="h-11">{m.tenders.record}</Button>}
+          >
+            <p className="text-muted-foreground text-sm break-words">
+              {m.tenders.description}
+            </p>
+          </ScreenHeader>
+          {/* The pinned alarm band and an ordinary Progress group, which are the two
+              shapes the list has. The band is the wider of the two — it carries a hint
+              paragraph and a count inside a bordered box — so measuring only the plain
+              group would miss the case that actually pushes. */}
+          <TenderGroup
+            section={{ group: "submission_missed", tenders: [deadRow] }}
+            timezone="Asia/Bangkok"
+          />
+          <TenderGroup
+            section={{ group: "sourcing", tenders: [ordinaryRow, unbrokenRow] }}
+            timezone="Asia/Bangkok"
+          />
+        </Body>
+      ),
+    },
+    "a tender": {
+      measure: 768,
+      body: (
+        <Body location={tenderBar}>
+          <ScreenHeader
+            heading={tender.clientName}
+            actions={
+              <Button variant="outline" className="h-11">
+                {m.tenders.edit}
+              </Button>
+            }
+          >
+            <p className="text-muted-foreground text-sm break-words">{tender.title}</p>
+          </ScreenHeader>
+          {/* The two Items the Owner has neither priced nor given up on, both named with
+              nothing in them to break at — which is the row this band has that can be any
+              width, because a product name is whatever the client called it. */}
+          <OutstandingBand tenderId={tender.id} items={yourOutstanding(tender.ownerUserId)} />
+          <TenderFacts tender={tender} />
+          <AssigneeControls
+            tenderId={tender.id}
+            assignees={tender.assignees}
+            members={members}
+            callerId="user-somchai"
+            isOwner
+          />
+        </Body>
+      ),
+    },
     // The same route, drawn for somebody who does not own the Tender (ADR-0020, #92).
     // A screen in its own right rather than a variant of the one above: it has the sheet
     // and the Outcome panel taken out and a list of your own sourcing put in, and that
     // list is markup no other screen draws.
-    "a tender somebody else owns": (
-      <Body width="max-w-7xl" location={tenderBar}>
-        <ScreenHeader
-          heading={tender.clientName}
-          actions={
-            <Button variant="outline" className="h-11">
-              {m.tenders.edit}
-            </Button>
-          }
-        >
-          <p className="text-muted-foreground text-sm break-words">{tender.title}</p>
-        </ScreenHeader>
-        {/* The one Item this reader still owes, which is the whole of what the band
-            says to somebody who has already priced two of the three. */}
-        <OutstandingBand tenderId={tender.id} items={yourOutstanding("user-nok")} />
-        <TenderFacts tender={tender} />
-        <SourcingList
-          tenderId={tender.id}
-          items={yourSourcing("user-nok")}
-          photos={quotePhotos}
-          referenceImages={referenceImages}
-        />
-        <AssigneeControls
-          tenderId={tender.id}
-          assignees={tender.assignees}
-          members={members}
-          callerId="user-nok"
-          isOwner={false}
-        />
-      </Body>
-    ),
-    "sourcing an item": (
-      <Body width="max-w-3xl" location={itemBar}>
-        {/* The brief, with the client's pictures in it — the block #75 put above the
-            form so an Assignee can check they are pricing the right thing. */}
-        <ItemBrief
-          productName={gloves.productName}
-          quantity={gloves.quantity}
-          unit={gloves.unit}
-          description={gloves.description}
-          internalQuoteDeadline={tender.internalQuoteDeadline}
-        />
-        <QuoteList
-          tenderId={tender.id}
-          tenderItemId={gloves.id}
-          quotes={gloveQuotes}
-          photos={new Map()}
-          // The Owner is reading, and a Quote is correctable by whoever sourced it or by
-          // them (`mayCorrectQuote`) — so every row draws its edit and delete controls,
-          // which is the crowded case and the one worth measuring at 390px.
-          callerId={tender.ownerUserId}
-          ownerUserId={tender.ownerUserId}
-          selectedQuoteId={selectedGloveQuoteId}
-          // Every Quote on the Item, both Assignees' — the Owner's view, and the widest
-          // this list gets. What a non-Owner reads is the screen below rather than this
-          // one with rows removed: it counts the list differently and carries a form this
-          // one does not (#94).
-          yourQuotesOnly={false}
-        />
-        <QuoteForm
-          tenderId={tender.id}
-          tenderItemId={gloves.id}
-          defaults={blankQuote({ unit: gloves.unit, today: "2026-08-12" })}
-        />
-      </Body>
-    ),
+    "a tender somebody else owns": {
+      measure: 768,
+      body: (
+        <Body location={tenderBar}>
+          <ScreenHeader
+            heading={tender.clientName}
+            actions={
+              <Button variant="outline" className="h-11">
+                {m.tenders.edit}
+              </Button>
+            }
+          >
+            <p className="text-muted-foreground text-sm break-words">{tender.title}</p>
+          </ScreenHeader>
+          {/* The one Item this reader still owes, which is the whole of what the band
+              says to somebody who has already priced two of the three. */}
+          <OutstandingBand tenderId={tender.id} items={yourOutstanding("user-nok")} />
+          <TenderFacts tender={tender} />
+          <SourcingList
+            tenderId={tender.id}
+            items={yourSourcing("user-nok")}
+            photos={quotePhotos}
+            referenceImages={referenceImages}
+          />
+          <AssigneeControls
+            tenderId={tender.id}
+            assignees={tender.assignees}
+            members={members}
+            callerId="user-nok"
+            isOwner={false}
+          />
+        </Body>
+      ),
+    },
+    "sourcing an item": {
+      measure: 768,
+      body: (
+        <Body location={itemBar}>
+          {/* The brief, with the client's pictures in it — the block #75 put above the
+              form so an Assignee can check they are pricing the right thing. */}
+          <ItemBrief
+            productName={gloves.productName}
+            quantity={gloves.quantity}
+            unit={gloves.unit}
+            description={gloves.description}
+            internalQuoteDeadline={tender.internalQuoteDeadline}
+          />
+          <QuoteList
+            tenderId={tender.id}
+            tenderItemId={gloves.id}
+            quotes={gloveQuotes}
+            photos={new Map()}
+            // The Owner is reading, and a Quote is correctable by whoever sourced it or by
+            // them (`mayCorrectQuote`) — so every row draws its edit and delete controls,
+            // which is the crowded case and the one worth measuring at 390px.
+            callerId={tender.ownerUserId}
+            ownerUserId={tender.ownerUserId}
+            selectedQuoteId={selectedGloveQuoteId}
+            // Every Quote on the Item, both Assignees' — the Owner's view, and the widest
+            // this list gets. What a non-Owner reads is the screen below rather than this
+            // one with rows removed: it counts the list differently and carries a form this
+            // one does not (#94).
+            yourQuotesOnly={false}
+          />
+          <Measure>
+            <QuoteForm
+              tenderId={tender.id}
+              tenderItemId={gloves.id}
+              defaults={blankQuote({ unit: gloves.unit, today: "2026-08-12" })}
+            />
+          </Measure>
+        </Body>
+      ),
+    },
     // The same route, drawn for an Assignee who does not own the Tender (ADR-0020, #93):
     // their own Quotes and nobody else's, counted in words that say whose they are. This
     // is the screen the reduction is really for — an Assignee opens it several times per
     // Item off a run of supplier calls, and it is the one place they type anything — so
     // it is composed whole here, down to the form and the refusal box the Owner's copy
     // above leaves out.
-    "sourcing an item on a tender somebody else owns": (
-      <Body width="max-w-3xl" location={itemBar}>
-        <ItemBrief
-          productName={gloves.productName}
-          quantity={gloves.quantity}
-          unit={gloves.unit}
-          description={gloves.description}
-          internalQuoteDeadline={tender.internalQuoteDeadline}
-          // What the client sent, narrowed to this Item as `loadItemSourcingScreen`
-          // narrows it — an Assignee shows their supplier the picture of the thing they
-          // are being asked to price, and a picture of another Item is not it. The badge
-          // draws nothing at all when there are none, so no guard is written here.
-          images={
-            <ReferenceImages label={gloves.productName} images={imagesOn(gloves.id)} />
-          }
-        />
-
-        <section className="flex flex-col gap-4">
-          {/* "2 quotes from you", never "2 quotes recorded": the heading counts this
-              reader's own work rather than making a claim about the Item that ADR-0020
-              has just decided they do not get told. */}
-          <YourQuotesHeading count={yourGloveQuotes.length} />
-          <QuoteList
-            tenderId={tender.id}
-            tenderItemId={gloves.id}
-            quotes={yourGloveQuotes}
-            photos={quotePhotos}
-            callerId="user-nok"
-            ownerUserId={tender.ownerUserId}
-            // The Owner picked somebody else's Quote, so the loader drops the id rather
-            // than pointing it at a row this reader was never handed.
-            selectedQuoteId={null}
-            yourQuotesOnly
+    "sourcing an item on a tender somebody else owns": {
+      measure: 768,
+      body: (
+        <Body location={itemBar}>
+          <ItemBrief
+            productName={gloves.productName}
+            quantity={gloves.quantity}
+            unit={gloves.unit}
+            description={gloves.description}
+            internalQuoteDeadline={tender.internalQuoteDeadline}
+            // What the client sent, narrowed to this Item as `loadItemSourcingScreen`
+            // narrows it — an Assignee shows their supplier the picture of the thing they
+            // are being asked to price, and a picture of another Item is not it. The badge
+            // draws nothing at all when there are none, so no guard is written here.
+            images={
+              <ReferenceImages label={gloves.productName} images={imagesOn(gloves.id)} />
+            }
           />
-        </section>
 
-        <section className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-sm font-medium">{m.quotes.add}</h2>
-            <p className="text-muted-foreground text-xs">{m.quotes.addHint}</p>
-          </div>
-          <QuoteForm
-            tenderId={tender.id}
-            tenderItemId={gloves.id}
-            defaults={blankQuote({ unit: gloves.unit, today: "2026-08-12" })}
-          />
-        </section>
+          <section className="flex flex-col gap-4">
+            {/* "2 quotes from you", never "2 quotes recorded": the heading counts this
+                reader's own work rather than making a claim about the Item that ADR-0020
+                has just decided they do not get told. */}
+            <YourQuotesHeading count={yourGloveQuotes.length} />
+            <QuoteList
+              tenderId={tender.id}
+              tenderItemId={gloves.id}
+              quotes={yourGloveQuotes}
+              photos={quotePhotos}
+              callerId="user-nok"
+              ownerUserId={tender.ownerUserId}
+              // The Owner picked somebody else's Quote, so the loader drops the id rather
+              // than pointing it at a row this reader was never handed.
+              selectedQuoteId={null}
+              yourQuotesOnly
+            />
+          </section>
 
-        {/* The third state, in the dashed box the page gives it: an Assignee saying
-            they could not source this at all. It draws the form rather than a record,
-            because nobody has given up on the gloves — this reader has not, and the two
-            colleagues who could have have both priced them instead. A colleague's note,
-            when there is one, is shown as fact and is measured on the Tender detail. */}
-        <section className="border-border rounded-lg border border-dashed p-4">
-          <NoSupplierFoundForm
-            tenderId={tender.id}
-            tenderItemId={gloves.id}
-            mine={null}
-            others={refusalsOn(gloves.id).filter(
-              (refusal) => refusal.userId !== "user-nok",
-            )}
-          />
-        </section>
-      </Body>
-    ),
-    "correcting a quote": (
-      <Body width="max-w-3xl" location={itemBar}>
-        <header className="flex flex-col gap-2">
-          <span className="text-muted-foreground text-xs break-words">
-            {`${tender.reference} · Nitrile examination glove, powder-free, size M`}
-          </span>
-          <h1 className="text-2xl font-semibold tracking-tight">{m.quotes.editTitle}</h1>
-        </header>
-        <EditQuoteForm
-          tenderId={tender.id}
-          tenderItemId={gloves.id}
-          quoteId={gloveQuotes[0].id}
-          // A non-THB Quote, so the read-only currency cell is drawn carrying a real
-          // currency rather than the reporting one it would default to.
-          currency={gloveQuotes[0].currency}
-          defaults={quoteAsSubmitted(gloveQuotes[0])}
-        />
-      </Body>
-    ),
+          <Measure>
+            <section className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-sm font-medium">{m.quotes.add}</h2>
+                <p className="text-muted-foreground text-xs">{m.quotes.addHint}</p>
+              </div>
+              <QuoteForm
+                tenderId={tender.id}
+                tenderItemId={gloves.id}
+                defaults={blankQuote({ unit: gloves.unit, today: "2026-08-12" })}
+              />
+            </section>
+          </Measure>
+
+          {/* The third state, in the dashed box the page gives it: an Assignee saying
+              they could not source this at all. It draws the form rather than a record,
+              because nobody has given up on the gloves — this reader has not, and the two
+              colleagues who could have have both priced them instead. A colleague's note,
+              when there is one, is shown as fact and is measured on the Tender detail. */}
+          <Measure>
+            <section className="border-border rounded-lg border border-dashed p-4">
+              <NoSupplierFoundForm
+                tenderId={tender.id}
+                tenderItemId={gloves.id}
+                mine={null}
+                others={refusalsOn(gloves.id).filter(
+                  (refusal) => refusal.userId !== "user-nok",
+                )}
+              />
+            </section>
+          </Measure>
+        </Body>
+      ),
+    },
+    "correcting a quote": {
+      measure: 768,
+      body: (
+        <Body location={itemBar}>
+          <ScreenHeader
+            eyebrow={`${tender.reference} · Nitrile examination glove, powder-free, size M`}
+            heading={m.quotes.editTitle}
+          >
+            <SourcedBy name={gloveQuotes[0].sourcedByName} />
+          </ScreenHeader>
+          <Measure>
+            <EditQuoteForm
+              tenderId={tender.id}
+              tenderItemId={gloves.id}
+              quoteId={gloveQuotes[0].id}
+              // A non-THB Quote, so the read-only currency cell is drawn carrying a real
+              // currency rather than the reporting one it would default to.
+              currency={gloveQuotes[0].currency}
+              defaults={quoteAsSubmitted(gloveQuotes[0])}
+            />
+          </Measure>
+        </Body>
+      ),
+    },
+    // ── The three screens an Org Admin runs the organisation from ──────────────────
+    //
+    // They are here since #131. Nothing measured them before: each is an `async` Server
+    // Component behind an `isOrgAdmin` gate, and the record they were missing from is the
+    // one every layout guard is built on — so the three screens whose left edge ADR-0022
+    // is most visibly about were the three nothing could see. They are also where the
+    // second measure in the app is drawn, which is what keeps the per-screen half of that
+    // guard a claim rather than one number repeated.
+    "the People screen": {
+      measure: 672,
+      body: (
+        <Body measure="42rem">
+          <ScreenHeader heading={m.people.title}>
+            <p className="text-muted-foreground text-sm">{m.people.description}</p>
+          </ScreenHeader>
+
+          <Measure>
+            <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
+              <h2 className="text-sm font-medium">{m.people.invite.title}</h2>
+              <InviteForm />
+            </section>
+          </Measure>
+
+          <section className="flex flex-col gap-4">
+            <h2 className="text-sm font-medium">{m.people.members}</h2>
+            <MembershipList members={memberships} />
+          </section>
+        </Body>
+      ),
+    },
+    "the WeCom group screen": {
+      measure: 672,
+      body: (
+        <Body measure="42rem">
+          <ScreenHeader heading={m.groupRobot.title}>
+            <p className="text-muted-foreground text-sm">{m.groupRobot.description}</p>
+          </ScreenHeader>
+
+          <Measure>
+            <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
+              {/* Set up, which is the fuller of the two shapes: it draws the sentence
+                  saying when it was last changed and the control that removes it, neither
+                  of which exists on an org that has never saved one. */}
+              <GroupRobotForm configured updatedAt="2026-08-20T09:15:00Z" />
+            </section>
+          </Measure>
+        </Body>
+      ),
+    },
+    "the converting-foreign-prices screen": {
+      measure: 672,
+      body: (
+        <Body measure="42rem">
+          <ScreenHeader heading={m.currencyConversion.title}>
+            <p className="text-muted-foreground text-sm">{m.currencyConversion.description}</p>
+          </ScreenHeader>
+
+          <Measure>
+            <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
+              <CurrencyConversionForm percent={2.5} />
+            </section>
+          </Measure>
+
+          <Measure>
+            <p className="text-muted-foreground text-sm">{m.currencyConversion.affects}</p>
+          </Measure>
+        </Body>
+      ),
+    },
     // The two screens that stand in for the others, and are screens in their own right:
     // whoever taps a link on a phone sees the first of these before anything else, and
     // sees the second instead of a blank page when the fetch behind it fails (#57).
     // Neither is wrapped in `Body` — a route-level `loading.tsx` and `error.tsx` replace
     // the page, so each has to draw the page's own wrapper itself, and does.
-    "the loading fallback": (
-      <>
-        <AppHeader isOrgAdmin={false} />
-        <ScreenSkeleton />
-      </>
-    ),
+    "the loading fallback": {
+      measure: 768,
+      body: (
+        <>
+          <AppHeader isOrgAdmin={false} />
+          <ScreenSkeleton />
+        </>
+      ),
+    },
     // A digest of the length Next really mints, since it is the one string on this screen
     // that nobody chose the width of.
-    "a screen that threw": (
-      <>
-        <AppHeader isOrgAdmin={false} />
-        <ScreenError digest="3990102495" retry={() => {}} />
-      </>
-    ),
+    "a screen that threw": {
+      measure: 768,
+      body: (
+        <>
+          <AppHeader isOrgAdmin={false} />
+          <ScreenError digest="3990102495" retry={() => {}} />
+        </>
+      ),
+    },
   };
 }
 
@@ -436,11 +564,11 @@ export function Ground({
  * check that the app fails.
  */
 export function Body({
-  width,
+  measure,
   location,
   children,
 }: {
-  width?: ScreenWidth;
+  measure?: MeasureWidth;
   location?: AppLocation;
   children: React.ReactNode;
 }) {
@@ -449,8 +577,8 @@ export function Body({
       {/* An org admin, always: it is the widest the bar ever is — the menu behind it
           carries People, Group Robot and Converting foreign prices as well as Sign out —
           and the bar's own suite is where the ordinary member's is measured. */}
-      <AppHeader isOrgAdmin location={location} width={width} />
-      <ScreenBody width={width}>{children}</ScreenBody>
+      <AppHeader isOrgAdmin location={location} />
+      <ScreenBody measure={measure}>{children}</ScreenBody>
     </>
   );
 }
@@ -468,6 +596,21 @@ function YourQuotesHeading({ count }: { count: number }) {
   const t = useTranslations("quotes");
 
   return <h2 className="text-sm font-medium">{t("yours.recorded", { count })}</h2>;
+}
+
+/**
+ * "Sourced by Nok Wattanapong", as the correct-a-Quote page draws it under its heading.
+ *
+ * A component for the reason {@link YourQuotesHeading} is one: it is a message with a
+ * value in it, and the raw ICU pasted into the markup would draw its own source rather
+ * than the words a reader sees.
+ */
+function SourcedBy({ name }: { name: string }) {
+  const t = useTranslations("quotes");
+
+  return (
+    <p className="text-muted-foreground text-sm break-words">{t("sourcedBy", { name })}</p>
+  );
 }
 
 /** The client's own pictures for one Item, as the sourcing page hands them to the brief. */
@@ -506,6 +649,53 @@ const members: Member[] = [
   { id: "user-wei", name: "Wei Zhang" },
   // Not on this Tender, so the enrol-yourself picker has somebody left to name.
   { id: "user-ploy", name: "Ploy Sirikanya" },
+];
+
+/**
+ * The org as the People screen reads it: one Org Admin, one ordinary member, one already
+ * Disabled, and one with no `wecom_userid` recorded.
+ *
+ * The four together are the widest that screen gets — both badges are drawn, and the Test
+ * Mention control is drawn in both of its states — which is what a row measured at 390px
+ * has to hold. The names are the same colleagues the pickers elsewhere in this file name,
+ * because two fixtures naming two different orgs would photograph as two products.
+ */
+const memberships: Membership[] = [
+  {
+    id: "user-somchai",
+    name: "Somchai Prasertkul",
+    email: "somchai@taihue.example",
+    wecomUserid: "SomchaiP",
+    isOrgAdmin: true,
+    disabledAt: null,
+  },
+  {
+    id: "user-nok",
+    name: "Nok Wattanapong",
+    email: "nok@taihue.example",
+    wecomUserid: "NokW",
+    isOrgAdmin: false,
+    disabledAt: null,
+  },
+  {
+    id: "user-wei",
+    name: "Wei Zhang",
+    email: "wei@taihue.example",
+    // Nobody has recorded one, so the Test Mention control is drawn in the state that
+    // cannot be pressed — which is the half of that row an org with a new colleague in it
+    // actually sees.
+    wecomUserid: null,
+    isOrgAdmin: false,
+    disabledAt: null,
+  },
+  {
+    id: "user-ploy",
+    name: "Ploy Sirikanya",
+    email: "ploy@taihue.example",
+    wecomUserid: "PloyS",
+    isOrgAdmin: false,
+    disabledAt: "2026-07-30T02:11:00Z",
+  },
 ];
 
 const rowBase = {

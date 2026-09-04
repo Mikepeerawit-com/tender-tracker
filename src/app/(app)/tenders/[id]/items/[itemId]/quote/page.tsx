@@ -8,6 +8,7 @@ import { NoSupplierFoundForm } from "@/components/quotes/no-supplier-found-form"
 import { QuoteForm } from "@/components/quotes/quote-form";
 import { QuoteList } from "@/components/quotes/quote-list";
 import { Screen } from "@/components/screen";
+import { Measure } from "@/components/ui/screen-body";
 import { AssigneeControls } from "@/components/tenders/assignee-controls";
 import { currentUser } from "@/lib/auth/session";
 import { todayIn } from "@/lib/calendar-date";
@@ -160,46 +161,56 @@ export default async function ItemSourcingPage({
         />
       </section>
 
+      {/* Everything below the list is a field or a sentence, so it is drawn at the
+          screen's measure rather than across the region (ADR-0022). The list above spans:
+          it is scanned down a column of Quotes, and a price is read against the row it is
+          in rather than along a line. */}
       {isAssignee ? (
         <>
-          <section className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <h2 className="text-sm font-medium">{t("add")}</h2>
-              <p className="text-muted-foreground text-xs">{t("addHint")}</p>
-            </div>
+          <Measure>
+            <section className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-sm font-medium">{t("add")}</h2>
+                <p className="text-muted-foreground text-xs">{t("addHint")}</p>
+              </div>
 
-            <QuoteForm
-              tenderId={tender.id}
-              tenderItemId={item.id}
-              defaults={blankQuote({ unit: item.unit, today })}
-            />
-          </section>
+              <QuoteForm
+                tenderId={tender.id}
+                tenderItemId={item.id}
+                defaults={blankQuote({ unit: item.unit, today })}
+              />
+            </section>
+          </Measure>
 
-          <section className="border-border rounded-lg border border-dashed p-4">
-            <NoSupplierFoundForm
-              tenderId={tender.id}
-              tenderItemId={item.id}
-              mine={refusals.find((row) => row.userId === user.id) ?? null}
-              others={refusals.filter((row) => row.userId !== user.id)}
-            />
-          </section>
+          <Measure>
+            <section className="border-border rounded-lg border border-dashed p-4">
+              <NoSupplierFoundForm
+                tenderId={tender.id}
+                tenderItemId={item.id}
+                mine={refusals.find((row) => row.userId === user.id) ?? null}
+                others={refusals.filter((row) => row.userId !== user.id)}
+              />
+            </section>
+          </Measure>
         </>
       ) : (
-        <section className="flex flex-col gap-4">
-          <p className="border-border rounded-lg border px-3 py-2 text-sm">
-            {t("notAssignee")}
-          </p>
+        <Measure>
+          <section className="flex flex-col gap-4">
+            <p className="border-border rounded-lg border px-3 py-2 text-sm">
+              {t("notAssignee")}
+            </p>
 
-          {/* The way in, on the page that just said no — rather than a sentence sending
-              somebody back to a screen to find a control they have not seen. */}
-          <AssigneeControls
-            tenderId={tender.id}
-            assignees={tender.assignees}
-            members={members ?? []}
-            callerId={user.id}
-            isOwner={tender.ownerUserId === user.id}
-          />
-        </section>
+            {/* The way in, on the page that just said no — rather than a sentence sending
+                somebody back to a screen to find a control they have not seen. */}
+            <AssigneeControls
+              tenderId={tender.id}
+              assignees={tender.assignees}
+              members={members ?? []}
+              callerId={user.id}
+              isOwner={tender.ownerUserId === user.id}
+            />
+          </section>
+        </Measure>
       )}
     </Screen>
   );

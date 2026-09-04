@@ -7,9 +7,9 @@ import { ScreenSkeleton } from "@/components/ui/screen-skeleton";
  * One file at the top of `(app)` covers every screen under it: `loading.tsx` wraps the
  * segment's `page.tsx` *and* every nested layout and page below, and every one of those
  * screens opens with a `ScreenHeader` over a column of blocks, which is exactly what
- * `ScreenSkeleton` draws. Since #97 two of them are drawn in a wider column than this one
- * is; the note in `screen-skeleton.tsx` says why that is a cost taken rather than a
- * fallback split four ways.
+ * `ScreenSkeleton` draws. Since ADR-0022 they are all drawn in the same region as this
+ * one, so nothing widens when the page lands; the note in `screen-skeleton.tsx` says what
+ * is left of that, which is the measure and nothing else.
  *
  * It sits here rather than at the app root on purpose. The `(app)` layout gates on
  * `currentUser`, and a fallback above that gate would paint the signed-in shape at

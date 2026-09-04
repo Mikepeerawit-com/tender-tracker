@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { Measure } from "@/components/ui/screen-body";
+
 /**
  * The block at the top of a screen: what this is, and what can be done to it.
  *
@@ -12,6 +14,13 @@ import type { ReactNode } from "react";
  * Server Components, two of them gated on `currentUser`, so a browser test cannot reach
  * them; this is sync, takes only what it draws, and is guarded by
  * `screen-header.layout.test.tsx` at 390px.
+ *
+ * **The heading spans the region; the lines under it do not** (ADR-0022, #131). The text
+ * column grows to fill what the actions leave, so the heading starts at the region's left
+ * edge and is bounded by nothing but the screen — and the detail lines beneath it are
+ * prose, so they sit in the screen's {@link Measure}. Without the `grow` the column is
+ * shrink-to-fit and a measure inside it would report whatever the longest line happened to
+ * need, which is not a width anybody committed to.
  *
  * **Why `min-w-0` is on the text column.** A flex item's `min-width` defaults to `auto`,
  * which means it refuses to shrink below its own longest unbroken word. A client name or
@@ -42,19 +51,21 @@ export function ScreenHeader({
   heading: ReactNode;
   /** The screen's buttons. They wrap to their own line before the heading gives way. */
   actions?: ReactNode;
-  /** The detail lines under the heading. */
+  /** The detail lines under the heading. Prose, and so drawn at the screen's measure. */
   children?: ReactNode;
 }) {
   return (
     <header className="flex flex-wrap items-start justify-between gap-4">
-      <div className="flex min-w-0 flex-col gap-2">
+      <div className="flex min-w-0 grow flex-col gap-2">
         {eyebrow ? (
           <span className="text-muted-foreground font-mono text-xs break-words">
             {eyebrow}
           </span>
         ) : null}
         <h1 className="text-2xl font-semibold tracking-tight break-words">{heading}</h1>
-        {children}
+        {children ? (
+          <Measure className="flex flex-col gap-2">{children}</Measure>
+        ) : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </header>

@@ -63,14 +63,22 @@ import { locales, type Locale, Screen, screens } from "@/test/screens";
  *
  * The screens themselves come from `@/test/screens`, so what is budgeted here is the same
  * composition `screens.layout.test.tsx` measures and the contact sheet photographs. They
- * are named inline rather than through a table, which is why there is no guard here of the
- * kind `columnAtADesk` carries: a screen renamed in that file is a type error at this call
- * site, rather than a budget left quietly measuring a column with nothing in it.
+ * are named inline rather than walked, which is what makes a screen renamed in that file a
+ * type error at this call site rather than a budget left quietly measuring a column with
+ * nothing in it.
  */
 
 // Hoisted per file and therefore not shareable, the way `screens.layout.test.tsx` and the
 // contact sheet each declare their own. See the note in `@/test/screens`.
 vi.mock("@/app/actions/auth", () => ({ signOutAction: async () => ({}) }));
+vi.mock("@/app/actions/admin", () => ({
+  inviteAction: async () => ({}),
+  setWecomUseridAction: async () => ({}),
+  sendTestMentionAction: async () => ({}),
+  setMembershipDisabledAction: async () => ({}),
+  setGroupRobotAction: async () => ({}),
+  setFxBufferAction: async () => ({}),
+}));
 vi.mock("@/app/actions/locale", () => ({ switchLocale: async () => ({}) }));
 vi.mock("@/app/actions/tenders", () => ({
   addAssigneeAction: async () => ({}),
@@ -100,9 +108,9 @@ vi.mock("@/app/actions/quote-photos", () => ({
  * Latin letter and this pair is still the narrower, which is exactly the reason #56 gives
  * for measuring both scripts instead of assuming English is the worst case.
  *
- * Typed rather than inferred, the way `columnAtADesk` is: `Locale` is the union
- * `@/test/screens` derives from the locales it lists, so a third one added there is a
- * failure here at `tsc` rather than a budget that silently covers two scripts out of three.
+ * Typed rather than inferred: `Locale` is the union `@/test/screens` derives from the
+ * locales it lists, so a third one added there is a failure here at `tsc` rather than a
+ * budget that silently covers two scripts out of three.
  */
 const budget = {
   tenderDetail: { en: 8, "zh-Hans": 8 },
@@ -128,7 +136,7 @@ describe(`the control-row budgets at ${phone.width}×${phone.height}`, () => {
     (locale, m) => {
       render(
         <Screen locale={locale} messages={m}>
-          {screens(m)["a tender somebody else owns"]}
+          {screens(m)["a tender somebody else owns"].body}
         </Screen>,
       );
 
@@ -160,7 +168,7 @@ describe(`the control-row budgets at ${phone.width}×${phone.height}`, () => {
   it.each(locales)(`holds the sourcing screen to its budgets: in %s`, (locale, m) => {
     render(
       <Screen locale={locale} messages={m}>
-        {screens(m)["sourcing an item on a tender somebody else owns"]}
+        {screens(m)["sourcing an item on a tender somebody else owns"].body}
       </Screen>,
     );
 

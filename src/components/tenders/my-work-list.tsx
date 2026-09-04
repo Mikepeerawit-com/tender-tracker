@@ -4,6 +4,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { deadlineReading } from "@/components/tenders/deadline-reading";
 import { IndicatorLamp, toneTextClass } from "@/components/ui/indicator-lamp";
 import { RowChevron } from "@/components/ui/row-chevron";
+import { Measure } from "@/components/ui/screen-body";
 import { calendarDate, calendarDateFormat } from "@/lib/calendar-date";
 import type { MyWorkRow } from "@/lib/tenders/my-work";
 
@@ -55,7 +56,13 @@ export function MyWorkList({ items }: { items: MyWorkRow[] }) {
   // row at all — so "nothing recorded yet" and "you are on nothing" are the same sentence
   // here: you owe nobody a price.
   if (items.length === 0) {
-    return <p className="text-muted-foreground text-sm">{t("empty")}</p>;
+    // The sentence is prose and the list is not: this screen reaching zero is a thing to
+    // read, and the rows above are a thing to scan (ADR-0022).
+    return (
+      <Measure>
+        <p className="text-muted-foreground text-sm">{t("empty")}</p>
+      </Measure>
+    );
   }
 
   return (
