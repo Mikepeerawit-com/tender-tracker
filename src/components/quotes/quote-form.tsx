@@ -284,6 +284,7 @@ export function QuoteForm({
                       type="button"
                       variant="ghost"
                       size="sm"
+                      className="h-11"
                       disabled={isPending}
                       aria-label={t("photos.removeHeld", { name: photo.file.name })}
                       onClick={() => {

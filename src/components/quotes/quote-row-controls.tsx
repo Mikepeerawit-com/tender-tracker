@@ -61,6 +61,7 @@ export function QuoteRowControls({
         <Button
           variant="outline"
           size="sm"
+          className="h-11"
           nativeButton={false}
           render={
             <Link
@@ -79,6 +80,7 @@ export function QuoteRowControls({
             type="button"
             variant="ghost"
             size="sm"
+            className="h-11"
             onClick={() => setConfirming(true)}
           >
             {t("delete")}
@@ -95,6 +97,7 @@ export function QuoteRowControls({
               type="submit"
               variant={confirming ? "destructive" : "ghost"}
               size="sm"
+              className="h-11"
               disabled={isPending}
             >
               {confirming ? t("deleteConfirm") : t("delete")}
@@ -107,6 +110,7 @@ export function QuoteRowControls({
             type="button"
             variant="ghost"
             size="sm"
+            className="h-11"
             disabled={isPending}
             onClick={() => setConfirming(false)}
           >

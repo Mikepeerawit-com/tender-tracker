@@ -193,7 +193,7 @@ function RemoveForm({ tenderId, imageId }: { tenderId: string; imageId: string }
       <input type="hidden" name="tenderId" value={tenderId} />
       <input type="hidden" name="imageId" value={imageId} />
 
-      <Button type="submit" variant="ghost" size="sm" disabled={isPending}>
+      <Button type="submit" variant="ghost" size="sm" className="h-11" disabled={isPending}>
         {t("remove")}
       </Button>
 
