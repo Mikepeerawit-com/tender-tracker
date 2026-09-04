@@ -8,6 +8,12 @@ import { CurrencyConversionForm } from "@/components/admin/currency-conversion-f
 import { GroupRobotForm } from "@/components/admin/group-robot-form";
 import { InviteForm } from "@/components/admin/invite-form";
 import { MembershipList } from "@/components/admin/membership-list";
+import { AuthScreen } from "@/components/auth/auth-screen";
+import { ChooseLanguageOptions } from "@/components/auth/choose-language-options";
+import { LoginForm } from "@/components/auth/login-form";
+import { SetPasswordForm } from "@/components/auth/set-password-form";
+import { SetupForm } from "@/components/auth/setup-form";
+import { WorkingSheet } from "@/components/comparison/working-sheet";
 import { ImageCountBadge } from "@/components/images/image-count-badge";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { EditQuoteForm } from "@/components/quotes/edit-quote-form";
@@ -28,6 +34,9 @@ import { Measure, type MeasureWidth, ScreenBody } from "@/components/ui/screen-b
 import { ScreenError } from "@/components/ui/screen-error";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { ScreenSkeleton } from "@/components/ui/screen-skeleton";
+// A type only, and it has to stay one: the module is `server-only`, so a value
+// imported from it would throw the moment a browser test loaded this file.
+import type { SheetItem } from "@/lib/comparison/sheet";
 import type { QuotePhoto } from "@/lib/images/quote-photos";
 import type { ReferenceImage } from "@/lib/images/reference-images";
 import type { Member, Membership } from "@/lib/org/members";
@@ -186,6 +195,17 @@ export function screens(m: Messages) {
               width, because a product name is whatever the client called it. */}
           <OutstandingBand tenderId={tender.id} items={yourOutstanding(tender.ownerUserId)} />
           <TenderFacts tender={tender} />
+          {/* The densest thing in the app, and until #135 the one screen no shared guard
+              could see: it was measured only by its own suite, on a bare page, in one
+              locale and one theme. `--money-red` and `--money-green` are drawn here and
+              nowhere else, so a Margin that went unreadable in the dark was a defect with
+              no test standing anywhere near it. */}
+          <WorkingSheet
+            tenderId={tender.id}
+            items={sheetItems}
+            photos={quotePhotos}
+            referenceImages={referenceImages}
+          />
           <AssigneeControls
             tenderId={tender.id}
             assignees={tender.assignees}
@@ -487,6 +507,101 @@ export function screens(m: Messages) {
       ),
     },
   };
+}
+
+/**
+ * **The screens reached before signing in**, which the record above cannot hold.
+ *
+ * They have no `(app)` shell — no app bar, no bottom bar, and a `main` of their own at
+ * `max-w-sm` rather than the region — so they are composed through {@link SignedOut}
+ * instead of {@link Screen}, and the width and region guards leave them to
+ * `auth-screen.layout.test.tsx`. What they share with everything else is the palette, the
+ * type and the controls, which is exactly what the colour, keyboard and motion suites ask
+ * about — so those three walk this record and the one above, and neither has a screen the
+ * other cannot see.
+ *
+ * **All four, since #135.** Only the sign-in screen was ever measured, hand-composed twice
+ * over in two suites, and the reason given was that `LoginForm` is the busiest of the
+ * three forms. That is true of a *width* — the busiest column is the one that pushes — and
+ * it is not true of a colour: `/setup` draws a shared-secret field with a hint under it
+ * that no other screen has, and `/choose-language` draws no field at all and two full-width
+ * buttons instead. A palette that failed on either would have failed unwatched.
+ *
+ * Each is a fragment rather than a whole page, for the reason the record above gives:
+ * whoever is drawing it decides the theme and the locale.
+ *
+ * **`body` on each entry, the way {@link screens} carries one**, though there is nothing
+ * beside it here and no `measure` for a signed-out screen to commit to. The three suites
+ * that walk both records walk them in the same line of code, and a record that answered a
+ * bare node would make each of them write the difference out — which is five places to get
+ * it wrong, to save one word.
+ */
+export function signedOutScreens(m: Messages) {
+  return {
+    "the sign-in screen": {
+      body: (
+        <AuthScreen title={m.login.title} description={m.login.description}>
+          <LoginForm />
+        </AuthScreen>
+      ),
+    },
+    // Where somebody invited into the org lands from their email link, and the only
+    // screen in the app with two password fields on it.
+    "the set-a-password screen": {
+      body: (
+        <AuthScreen title={m.setPassword.title} description={m.setPassword.description}>
+          <SetPasswordForm />
+        </AuthScreen>
+      ),
+    },
+    // The guarded screen the very first Org Admin arrives through (ADR-0017). The longest
+    // signed-out form there is, and the only one carrying a hint under a field.
+    "the first-admin setup screen": {
+      body: (
+        <AuthScreen title={m.setup.title} description={m.setup.description}>
+          <SetupForm />
+        </AuthScreen>
+      ),
+    },
+    // Asked before anything else, and drawn in both languages at once because whoever is
+    // reading it cannot yet be assumed to read either (ADR-0011). No field on it at all,
+    // which makes it the one signed-out screen that is nothing but controls.
+    "the choose-a-language screen": {
+      body: (
+        <AuthScreen title={m.chooseLanguage.title}>
+          <ChooseLanguageOptions />
+        </AuthScreen>
+      ),
+    },
+  };
+}
+
+/**
+ * A signed-out screen, in the box the real `body` gives it.
+ *
+ * {@link Screen}'s two lines minus the shell: the same {@link Ground}, so the theme is
+ * carried the same way, and the same full-height flex column, because `AuthScreen` takes
+ * `flex-1` inside it and centres itself in what that gives — which it can only do if
+ * something above it has a height.
+ */
+export function SignedOut({
+  locale,
+  messages,
+  theme = "light",
+  children,
+}: {
+  locale: Locale;
+  messages: Messages;
+  theme?: Theme;
+  children: React.ReactNode;
+}) {
+  return (
+    <NextIntlClientProvider locale={locale} messages={messages} timeZone="Asia/Bangkok">
+      <Ground theme={theme}>
+        <div className="flex min-h-dvh flex-col">{children}</div>
+      </Ground>
+    </NextIntlClientProvider>
+  );
 }
 
 /**
@@ -1020,8 +1135,12 @@ const everyQuote: Quote[] = [
     unitPriceThb: 2.074272,
     fxRateMid: 32.8,
     fxRateApplied: 33.456,
-    fxRateAsOf: "2026-08-10",
-    fxRateIsStale: false,
+    // A Stale Rate, and the cheapest row on the Item — which is the pair `tooCloseToCall`
+    // exists for: it leads the next Quote by 2.4%, and a lead that narrow can be an
+    // artifact of two rates frozen a week apart rather than a real difference in price.
+    // It is what makes the working sheet draw a banner at all on this fixture.
+    fxRateAsOf: "2026-08-04",
+    fxRateIsStale: true,
     leadTimeDays: 45,
     matchType: "exact",
     alternativeProductName: null,
@@ -1091,15 +1210,22 @@ const everyQuote: Quote[] = [
     sourcedByName: "Wei Zhang",
   },
   /* The Owner's own, and the only Item they have priced — which is what leaves them
-     owing the two the outstanding band names on their screen. */
+     owing the two the outstanding band names on their screen.
+
+     It is also **priced by the box against an Item the client buys by the piece**, which
+     is the one thing the comparison sheet refuses to rank rather than quietly dividing by
+     a hundred to get a comparable figure (ADR-0009). That refusal is the Item's
+     `unit_mismatch` banner, and the only surface in the app drawn in `--destructive` over
+     its own wash — so it is the one this fixture has to draw for #135's sweep to have
+     seen it in the dark. */
   {
     id: "q3b",
     tenderItemId: "item-syringes",
     supplierName: "Siam Pharma Supply Co., Ltd.",
-    unitPrice: 5.4,
+    unitPrice: 540,
     currency: "THB",
-    quotedUnit: "piece",
-    unitPriceThb: 5.4,
+    quotedUnit: "box of 100",
+    unitPriceThb: 540,
     fxRateMid: 1,
     fxRateApplied: 1,
     fxRateAsOf: "2026-08-14",
@@ -1207,6 +1333,99 @@ function yourSourcing(callerId: string): SourcingItem[] {
     yourNoSupplierFound:
       refusalsOn(item.id).find((refusal) => refusal.userId === callerId) ?? null,
   }));
+}
+
+/**
+ * The Tender's Items as the **comparison working sheet** reads them — the Owner's half of
+ * the detail screen (ADR-0020), and the only place in the app a money direction hue is
+ * drawn at all.
+ *
+ * Built from the same `items` and the same Quotes as everything else here, through
+ * {@link sheetItem}, so the sheet and the sourcing screens cannot come to disagree about
+ * what the client asked for or what anybody quoted. What is stated below is only the four
+ * facts a `SheetItem` carries that a `TenderItem` does not: whether the Item is decided,
+ * and the two prices with the confirmation between them.
+ *
+ * **Between them the three Items draw every surface this screen can reach**, which is
+ * what makes them worth composing rather than listing:
+ *
+ * - **The gloves are undecided**, so the Item opens and the ranked quote table is drawn —
+ *   the rank-1 chip in signal, the Alternative's flag tint and chip, the Stale Rate
+ *   marking, and the photo and reference-image badges. That stale rate on the cheapest row
+ *   is also what raises the `warn` banner: a 2.4% lead frozen a week apart is a lead the
+ *   sheet declines to trust. The landed cost is Confirmed and the selling price is above
+ *   it, so the Margin is a **gain** — green in `en`, and red in `zh-Hans` (ADR-0023).
+ * - **The masks are decided**, on the Quote whose supplier is the unbroken run — which is
+ *   what puts a 44-character token with nowhere to break in the narrowest column on the
+ *   screen. Their landed cost is Unconfirmed, so the Margin is drawn **provisional** in
+ *   flag ink rather than in a direction (ADR-0014), and Nok's refusal puts the second
+ *   sourcing chip beside the first.
+ * - **The syringes are undecided and unrankable** — the Owner quoted them by the box
+ *   against an Item the client buys by the piece — so they carry the `stop` banner, the
+ *   one surface in the app drawn in `--destructive` over its own wash. Sold under what
+ *   they cost, so the Margin is a **loss**, and therefore the other hue of the pair on the
+ *   same screen as the gain.
+ *
+ * A screen with one Margin on it would photograph as a screen with one hue on it, and the
+ * risk #129 leaves open — a gain and a passed deadline both red in `zh-Hans` — can only be
+ * judged where both directions are on screen at once.
+ */
+const sheetItems: SheetItem[] = [
+  sheetItem(items[0], {
+    selectedQuoteId: null,
+    landedCostPerUnit: 2.08,
+    landedCostConfirmedAt: "2026-08-14T04:00:00Z",
+    sellingPricePerUnit: 2.6,
+  }),
+  sheetItem(items[1], {
+    selectedQuoteId: "q2a",
+    landedCostPerUnit: 316.2,
+    // Nothing added for shipping, duty or handling yet (ADR-0014), which is what makes
+    // the Margin beside it provisional rather than a direction.
+    landedCostConfirmedAt: null,
+    sellingPricePerUnit: 372,
+  }),
+  sheetItem(items[2], {
+    // Two numbers somebody typed while deciding, on an Item nothing has been chosen on:
+    // the Margin is what they are moving the selling price to find, and it recomputes as
+    // they type. Unrankable is not the same as unpriceable.
+    selectedQuoteId: null,
+    landedCostPerUnit: 5.82,
+    landedCostConfirmedAt: "2026-08-14T05:00:00Z",
+    sellingPricePerUnit: 5.4,
+  }),
+];
+
+/**
+ * One Item as the sheet reads it: the Item, its Quotes, and the pricing stated beside it.
+ *
+ * The Quotes and the sourcing record are **derived rather than repeated** — `quotesOn` and
+ * `refusalsOn` are the same two functions every other fixture in this file asks — so a
+ * Quote added above appears on the sheet without anybody remembering to add it twice, and
+ * a count here cannot drift from the rows it is counting.
+ */
+function sheetItem(
+  item: TenderItem,
+  pricing: Pick<
+    SheetItem,
+    | "selectedQuoteId"
+    | "landedCostPerUnit"
+    | "landedCostConfirmedAt"
+    | "sellingPricePerUnit"
+  >,
+): SheetItem {
+  const quotes = quotesOn(item.id);
+
+  return {
+    id: item.id,
+    productName: item.productName,
+    description: item.description,
+    quantity: item.quantity,
+    unit: item.unit,
+    quotes,
+    sourcing: { quoteCount: quotes.length, noSupplierFound: refusalsOn(item.id) },
+    ...pricing,
+  };
 }
 
 /**

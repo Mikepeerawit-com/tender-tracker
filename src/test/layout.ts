@@ -157,7 +157,7 @@ export function overflowing(root: HTMLElement): string[] {
     .filter((element) => !["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName))
     .filter((element) => !clipsHorizontally(element))
     .filter((element) => element.scrollWidth > element.clientWidth)
-    .map(describeElement);
+    .map(describeBox);
 }
 
 /** Whether the element hides its own horizontal overflow rather than passing it on. */
@@ -165,8 +165,16 @@ function clipsHorizontally(element: HTMLElement): boolean {
   return ["hidden", "clip"].includes(getComputedStyle(element).overflowX);
 }
 
-/** Enough of an element to find it in the markup from a failure message. */
-function describeElement(element: Element): string {
+/**
+ * Enough of an element to find it in the markup from a failure message, **by what it is**.
+ *
+ * The overflow suites want the tag and its classes, because a box too wide for its parent
+ * is found by its layout rather than by its words — and half the offenders are wrappers
+ * with no words of their own. {@link describeElement} is the other question, asked by the
+ * suites about colour, and the two are deliberately different descriptions rather than one
+ * stretched over both.
+ */
+function describeBox(element: Element): string {
   const text = (element.textContent ?? "").trim().slice(0, 40);
 
   // `getAttribute`, not `className`: on an SVG — and lucide's chevrons are in this tree —
@@ -203,4 +211,22 @@ export function familiesIn(fontFamily: string): string[] {
     .split(",")
     .map((family) => family.trim().replace(/^["']|["']$/g, ""))
     .filter((family) => family !== "");
+}
+
+/**
+ * Enough of an element to find it in the markup from a failure message, **by what it
+ * says**.
+ *
+ * What a colour, a focus ring or a running animation was found on is identified by the
+ * words it drew: those suites walk elements that carry text of their own, and a class list
+ * would name a `<span>` among four hundred of them. {@link describeBox} is the other
+ * question — see the note there.
+ */
+export function describeElement(element: HTMLElement): string {
+  const words = [...element.childNodes]
+    .filter((node) => node.nodeType === Node.TEXT_NODE)
+    .map((node) => node.textContent?.trim())
+    .join(" ");
+
+  return `<${element.localName}> ${words.slice(0, 60)}`.trim();
 }

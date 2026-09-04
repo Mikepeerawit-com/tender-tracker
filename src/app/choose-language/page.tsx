@@ -2,10 +2,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { chooseLanguageAction } from "@/app/actions/auth";
 import { AuthScreen } from "@/components/auth/auth-screen";
-import { Button } from "@/components/ui/button";
-import { locales } from "@/i18n/config";
+import { ChooseLanguageOptions } from "@/components/auth/choose-language-options";
 import { currentUser } from "@/lib/auth/session";
 
 /**
@@ -29,20 +27,7 @@ export default async function ChooseLanguagePage() {
 
   return (
     <AuthScreen title={t("title")}>
-      <div className="flex flex-col gap-3">
-        {locales.map((locale) => (
-          <form key={locale} action={chooseLanguageAction}>
-            <input type="hidden" name="locale" value={locale} />
-            <Button
-              type="submit"
-              variant="outline"
-              className="h-11 w-full justify-start text-base"
-            >
-              {t(`option.${locale}`)}
-            </Button>
-          </form>
-        ))}
-      </div>
+      <ChooseLanguageOptions />
     </AuthScreen>
   );
 }

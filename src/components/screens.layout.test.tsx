@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
 import { QuoteForm } from "@/components/quotes/quote-form";
 import { blankQuote } from "@/lib/quotes/quote-form";
-import { Body, itemBar, locales, Screen, screens, tender } from "@/test/screens";
+import { Body, itemBar, locales, Screen, screens, tender, themes } from "@/test/screens";
 import {
   column,
   controlRows,
@@ -36,42 +36,17 @@ import {
  * Both locales, for the reason #56 gives — *"the labels are translated, so English is not
  * the worst case"*. A Han glyph is about twice the width of a Latin letter, so a shorter
  * Chinese string is not automatically a narrower button.
+ *
+ * **And both themes at the phone, since #135.** The failure bar the whole layout project
+ * is built on is stated at one width; the theme is a second axis across it, and *"holds at
+ * 390px in light `en`"* is not evidence about dark `zh-Hans`. A repaint moves borders and
+ * washes as well as ink — a hairline that gained a pixel, a chip that took a background it
+ * did not have — and every one of those is a width. The desk suite below stays in one
+ * theme deliberately: what it pins is the region and the measure, which are lengths
+ * written in the stylesheet and cannot be moved by a colour.
  */
 
-// Hoisted per file and therefore not shareable: the contact sheet declares its own copy
-// of this block for the same components. See the note in `@/test/screens`.
-vi.mock("@/app/actions/auth", () => ({ signOutAction: async () => ({}) }));
-vi.mock("@/app/actions/admin", () => ({
-  inviteAction: async () => ({}),
-  setWecomUseridAction: async () => ({}),
-  sendTestMentionAction: async () => ({}),
-  setMembershipDisabledAction: async () => ({}),
-  setGroupRobotAction: async () => ({}),
-  setFxBufferAction: async () => ({}),
-}));
-vi.mock("@/app/actions/locale", () => ({ switchLocale: async () => ({}) }));
-vi.mock("@/app/actions/theme", () => ({ switchTheme: async () => ({}) }));
-vi.mock("@/app/actions/tenders", () => ({
-  addAssigneeAction: async () => ({}),
-  removeAssigneeAction: async () => ({}),
-}));
-vi.mock("@/app/actions/quotes", () => ({
-  createQuoteAction: async () => ({}),
-  updateQuoteAction: async () => ({}),
-  deleteQuoteAction: async () => ({}),
-  // The reduced sourcing screen draws `NoSupplierFoundForm`, which reaches for both of
-  // these through `useActionState` — an undefined action there throws on render.
-  recordNoSupplierFoundAction: async () => ({}),
-  clearNoSupplierFoundAction: async () => ({}),
-}));
-// `QuoteList` draws each Quote's photo controls, which reach for these.
-vi.mock("@/app/actions/quote-photos", () => ({
-  recordQuotePhotosAction: async () => ({}),
-  removeQuotePhotoAction: async () => ({}),
-  signQuotePhotoUploadsAction: async () => ({}),
-}));
-
-describe(`a whole screen at ${phone.width}×${phone.height}`, () => {
+describe.each(themes)(`a whole %s screen at ${phone.width}×${phone.height}`, (theme) => {
   it.each(
     locales.flatMap(([locale, messages]) =>
       Object.entries(screens(messages)).map(
@@ -80,7 +55,7 @@ describe(`a whole screen at ${phone.width}×${phone.height}`, () => {
     ),
   )("does not scroll sideways: %s", (_case, locale, messages, { body }) => {
     render(
-      <Screen locale={locale} messages={messages}>
+      <Screen theme={theme} locale={locale} messages={messages}>
         {body}
       </Screen>,
     );

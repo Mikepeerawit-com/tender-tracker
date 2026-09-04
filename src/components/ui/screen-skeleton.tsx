@@ -86,13 +86,13 @@ export function ScreenSkeleton() {
 /**
  * One grey bar standing in for a line of text.
  *
- * `motion-reduce:animate-none` because this is a whole screen of things pulsing at once,
- * which is the case the preference exists for.
+ * It pulses, and it is the loudest motion in the app — a whole screen of things pulsing at
+ * once, which is exactly the case `prefers-reduced-motion` exists for. This carried its own
+ * `motion-reduce:animate-none` until #135, when the preference stopped being one
+ * component's business: `globals.css` now answers it for everything, so a class here would
+ * be a second place to state a rule that is already stated, and the one place a reader
+ * would look to change it would be the wrong one.
  */
 function Bar({ className }: { className: string }) {
-  return (
-    <span
-      className={`bg-muted block animate-pulse rounded motion-reduce:animate-none ${className}`}
-    />
-  );
+  return <span className={`bg-muted block animate-pulse rounded ${className}`} />;
 }

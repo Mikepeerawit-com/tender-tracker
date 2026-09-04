@@ -20,5 +20,11 @@ export const phone = { width: 390, height: 844 };
  * Same reason this lives beside `phone`: `vitest.config.mts` sets it and
  * `screens.contact-sheet.tsx` checks against it, and a number those two disagreed about
  * would silently produce a shrunken sheet rather than an error.
+ *
+ * It was 3000 until #135 put the comparison working sheet on the Tender detail, which is
+ * by a wide margin the tallest screen in the app: at 390px its quote tables are one
+ * stacked card per Quote, so the Owner's screen is most of a Tender laid end to end. The
+ * number is a window, not a claim — nothing is asserted about how tall a screen may be,
+ * only that the tool photographed it at full size rather than scaling it down.
  */
-export const captureWindow = { width: 1200, height: 3000 };
+export const captureWindow = { width: 1200, height: 6000 };

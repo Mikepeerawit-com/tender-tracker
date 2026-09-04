@@ -65,7 +65,7 @@ export function ItemDisclosure({
           aria-expanded={open}
           aria-controls={panelId}
           aria-label={open ? foldLabel : openLabel}
-          className="hover:bg-muted focus-visible:ring-ring/50 inline-flex size-11 shrink-0 items-center justify-center rounded-lg focus-visible:ring-3 focus-visible:outline-none"
+          className="hover:bg-muted focus-visible:ring-ring inline-flex size-11 shrink-0 items-center justify-center rounded-lg focus-visible:ring-3 focus-visible:outline-none"
           onClick={() => setOverride(!open)}
         >
           {open ? (

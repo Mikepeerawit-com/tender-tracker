@@ -118,7 +118,7 @@ export function QuoteFieldInputs({
           {matchTypes.map((option) => (
             <label
               key={option}
-              className="border-input has-checked:border-ring has-checked:bg-muted focus-within:ring-ring/50 flex h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm focus-within:ring-3"
+              className="border-input has-checked:border-ring has-checked:bg-muted focus-within:ring-ring flex h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm focus-within:ring-3"
             >
               <input
                 type="radio"
