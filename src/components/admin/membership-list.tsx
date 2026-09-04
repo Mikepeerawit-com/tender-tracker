@@ -14,7 +14,7 @@ import type { Membership } from "@/lib/org/members";
  * address, two badges and a row of controls — rather than read along, and narrowing it to
  * a line of prose would wrap the controls under the name on a monitor with room for them.
  *
- * Split out of `(app)/admin/people/page.tsx` for the reason `vitest.config.mts` gives for
+ * Split out of `(app)/settings/people/page.tsx` for the reason `vitest.config.mts` gives for
  * every other such component: the page is an `async` Server Component behind an
  * `isOrgAdmin` gate and no browser test can reach it, so the list nothing measured was the
  * one thing on that screen with rows in it. This is sync and takes only what it draws,

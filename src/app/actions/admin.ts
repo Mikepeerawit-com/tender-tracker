@@ -35,7 +35,7 @@ export async function inviteAction(
 
   if (!result.ok) return { status: result.reason };
 
-  revalidatePath("/admin/people");
+  revalidatePath("/settings/people");
 
   return { status: "sent" };
 }
@@ -58,7 +58,7 @@ export async function setWecomUseridAction(
 
   if (!result.ok) return { status: result.reason };
 
-  revalidatePath("/admin/people");
+  revalidatePath("/settings/people");
 
   return { status: "saved" };
 }
@@ -118,7 +118,7 @@ export async function setMembershipDisabledAction(
 
   if (!result.ok) return { status: result.reason };
 
-  revalidatePath("/admin/people");
+  revalidatePath("/settings/people");
 
   return { status: readmitting ? "readmitted" : "disabled" };
 }
@@ -145,7 +145,7 @@ export async function setGroupRobotAction(
 
   if (!result.ok) return { status: result.reason };
 
-  revalidatePath("/admin/group-robot");
+  revalidatePath("/settings/group-robot");
 
   return { status: clearing ? "cleared" : "saved" };
 }
@@ -177,7 +177,7 @@ export async function setFxBufferAction(
 
   if (!result.ok) return { status: result.reason };
 
-  revalidatePath("/admin/currency-conversion");
+  revalidatePath("/settings/currency-conversion");
 
   return { status: "saved" };
 }

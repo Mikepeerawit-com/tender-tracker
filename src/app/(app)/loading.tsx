@@ -22,15 +22,13 @@ import { ScreenSkeleton } from "@/components/ui/screen-skeleton";
  * **It draws the bar itself**, because since #73 the bar states where the reader is and
  * so belongs to the page rather than the layout — and a page being replaced by this
  * fallback takes its bar with it. The wordmark shape is the honest one to draw here: at
- * this moment nobody knows yet which record is coming. `isOrgAdmin` is false for the same
- * reason — this is a server component with no session read of its own, and the menu is
- * the one thing on the bar that nobody reaches for during a fallback that lasts a few
- * hundred milliseconds.
+ * this moment nobody knows yet which record is coming — and since #132 the bar asks
+ * nothing about the reader either, so this draws the same one every other screen does.
  */
 export default function Loading() {
   return (
     <>
-      <AppHeader isOrgAdmin={false} />
+      <AppHeader />
       <ScreenSkeleton />
     </>
   );

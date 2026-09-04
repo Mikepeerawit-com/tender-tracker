@@ -9,37 +9,33 @@ import { locales, type Locale } from "@/i18n/config";
 import { Button } from "@/components/ui/button";
 
 /**
- * `prominent` is for the signed-out screens. Everywhere else this is a secondary
- * control tucked into a header, but on the login page it is the only way past a form
- * you cannot read — so there it gets the same 44px tap target as the form itself. The
- * default 28px is fine for a mouse and too small for a thumb.
+ * The way out of a language you cannot read: both of them, named in their own script.
  *
- * `compact` names each language by its own short form — `EN`, `中文` — instead of in
- * full. It is what the app bar uses, where two full language names cost more width than
- * the row has (#56). **Both languages stay on screen either way**, which is the part that
- * must not be traded for space: a reader who cannot read the language they are looking at
- * needs to see the other one, not find it behind a menu.
+ * **One shape, since #132.** It had two — a full-size pair for the signed-out screens and
+ * a `compact` pair naming each language `EN` / `中文` for the app bar, which #56 had run
+ * out of width on. The switcher has left the bar: behind the login it lives on the
+ * Preferences screen, which is a settings screen with a column to itself, and both places
+ * it is now drawn are places a thumb has to hit it. So both get the 44px target and both
+ * get the language's full name, and the shortened pair went with the prop.
+ *
+ * **Both languages stay on screen**, which is the part that must not be traded for space:
+ * a reader who cannot read the language they are looking at needs to see the other one,
+ * not find it behind a menu. That is the whole argument for the switcher being on the
+ * signed-out screens at all — somebody who cannot read the login form cannot get past it
+ * — and it is why it is still there, as prominent as it ever was, after leaving the bar.
  *
  * **The spinner, and why it is not a word.** Switching used to set nothing but
  * `disabled`: the two buttons greyed out and that was the whole signal, which the #48
  * hand-check read exactly as it looks — *"the change are also slow"*, with nothing saying
- * work was under way (#57). So the button that was pressed grows a spinner. It is an icon
- * rather than a "Switching…" label because that label is on the app bar, and #56 was the
- * bill for a bar that ran out of width; the sentence is still said, `sr-only`, where it
- * costs no pixels and is the half a screen reader needs. `locale-switcher.layout.test.tsx`
- * measures the spun state at 390px, since a control only wide enough before it is pressed
- * is one nobody measured.
+ * work was under way (#57). So the button that was pressed grows a spinner, and the
+ * sentence is said `sr-only`, where it costs no pixels and is the half a screen reader
+ * needs. `locale-switcher.layout.test.tsx` measures the spun state at 390px, since a
+ * control only wide enough before it is pressed is one nobody measured.
  *
  * Which button spins is state of its own rather than something derived from `isPending`,
  * which says only that *a* transition is running and not which language it is for.
  */
-export function LocaleSwitcher({
-  prominent = false,
-  compact = false,
-}: {
-  prominent?: boolean;
-  compact?: boolean;
-}) {
+export function LocaleSwitcher() {
   const t = useTranslations("localeSwitcher");
   const current = useLocale();
   const [isPending, startTransition] = useTransition();
@@ -51,8 +47,7 @@ export function LocaleSwitcher({
         <Button
           key={locale}
           type="button"
-          size={prominent ? "default" : "sm"}
-          className={prominent ? "h-11 px-4" : compact ? "h-11 px-2.5" : undefined}
+          className="h-11 px-4"
           variant={locale === current ? "default" : "outline"}
           aria-current={locale === current}
           disabled={isPending}
@@ -61,7 +56,7 @@ export function LocaleSwitcher({
             startTransition(() => switchLocale(locale));
           }}
         >
-          {compact ? t(`short.${locale}`) : t(locale)}
+          {t(locale)}
           {isPending && switchingTo === locale ? (
             <Loader2 aria-hidden className="size-3.5 animate-spin" />
           ) : null}

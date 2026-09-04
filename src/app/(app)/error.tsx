@@ -29,7 +29,7 @@ export default function AppError({
   // back to the list — which is the one thing this screen must not take away.
   return (
     <>
-      <AppHeader isOrgAdmin={false} />
+      <AppHeader />
       <ScreenError digest={error.digest} retry={retry} />
     </>
   );

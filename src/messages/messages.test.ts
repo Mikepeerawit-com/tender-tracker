@@ -104,10 +104,6 @@ describe.each(others)("%s", (locale) => {
         // cannot read the current one has to be able to find their way out.
         "localeSwitcher.en",
         "localeSwitcher.zh-Hans",
-        // The same names again, shortened for the app bar (#56). Same reason: the way out
-        // of a language you cannot read has to be legible from inside it.
-        "localeSwitcher.short.en",
-        "localeSwitcher.short.zh-Hans",
         "chooseLanguage.title",
         "chooseLanguage.option.en",
         "chooseLanguage.option.zh-Hans",

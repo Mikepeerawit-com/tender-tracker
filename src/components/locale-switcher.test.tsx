@@ -27,12 +27,12 @@ vi.mock("@/app/actions/locale", () => ({ switchLocale: () => new Promise(() => {
 async function pressTheOtherLanguage() {
   render(
     <NextIntlClientProvider locale="en" messages={en} timeZone="Asia/Bangkok">
-      <LocaleSwitcher compact />
+      <LocaleSwitcher />
     </NextIntlClientProvider>,
   );
 
   await userEvent.click(
-    screen.getByRole("button", { name: en.localeSwitcher.short["zh-Hans"] }),
+    screen.getByRole("button", { name: en.localeSwitcher["zh-Hans"] }),
   );
 }
 
@@ -46,8 +46,8 @@ describe("switching language", () => {
     // Which one spins cannot be derived from `isPending`, which says only that *a*
     // transition is running. Getting this wrong puts the spinner on the language the
     // reader is already in, i.e. on the one they are trying to leave.
-    expect(spinner(en.localeSwitcher.short["zh-Hans"])).not.toBeNull();
-    expect(spinner(en.localeSwitcher.short.en)).toBeNull();
+    expect(spinner(en.localeSwitcher["zh-Hans"])).not.toBeNull();
+    expect(spinner(en.localeSwitcher.en)).toBeNull();
   });
 
   it("says a switch is under way, for a reader who cannot see the spinner", async () => {
@@ -63,7 +63,7 @@ describe("switching language", () => {
     // The constraint documented on the component, and the one a spinner is most likely to
     // be traded against: whoever cannot read the language they are looking at has to be
     // able to find the way out of it, including during the wait.
-    for (const label of [en.localeSwitcher.short.en, en.localeSwitcher.short["zh-Hans"]]) {
+    for (const label of [en.localeSwitcher.en, en.localeSwitcher["zh-Hans"]]) {
       expect(screen.getByRole("button", { name: label })).toBeDefined();
     }
   });

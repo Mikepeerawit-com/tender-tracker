@@ -43,7 +43,6 @@ import { controlRows, drawn, expectNoSidewaysScroll, phone } from "@/test/layout
  * letter, so a shorter Chinese string is not automatically a narrower control.
  */
 vi.mock("@/app/actions/auth", () => ({ signOutAction: async () => ({}) }));
-vi.mock("@/app/actions/locale", () => ({ switchLocale: async () => ({}) }));
 
 const locales = [
   ["en", en],
@@ -54,7 +53,7 @@ const locales = [
 function renderShell(locale: string, messages: typeof en) {
   render(
     <NextIntlClientProvider locale={locale} messages={messages} timeZone="Asia/Bangkok">
-      <AppHeader isOrgAdmin />
+      <AppHeader />
       <BottomNav />
     </NextIntlClientProvider>,
   );
@@ -65,7 +64,7 @@ function renderShell(locale: string, messages: typeof en) {
  *
  * The top one is inside the `header` and the bottom one is not, which is the structural
  * fact — a selector on a Tailwind class would pass on a bar that had stopped being drawn.
- * `aria-label` narrows past the locale switcher, which is a `nav` too.
+ * `aria-label` narrows to the destinations, which is what both bars are for.
  */
 function bars(messages: typeof en) {
   const all = [
@@ -165,7 +164,6 @@ describe("the app bar at 768px, where the destinations join it", () => {
     render(
       <NextIntlClientProvider locale={locale} messages={messages} timeZone="Asia/Bangkok">
         <AppHeader
-          isOrgAdmin
           location={{
             kind: "record",
             backHref: "/tenders/8f14e45f",

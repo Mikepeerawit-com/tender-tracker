@@ -4,19 +4,24 @@ import { getTranslations } from "next-intl/server";
 
 import { InviteForm } from "@/components/admin/invite-form";
 import { MembershipList } from "@/components/admin/membership-list";
-import { Screen } from "@/components/screen";
 import { Measure } from "@/components/ui/screen-body";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { currentUser } from "@/lib/auth/session";
 import { listMemberships } from "@/lib/org/members";
 
 /**
- * The only administrative screen in v1: who is in the org, inviting someone new, and
- * the WeCom userid the group robot needs to @mention them.
+ * Who is in the org, inviting someone new, and the WeCom userid the group robot needs to
+ * @mention them. The first of the three screens in Settings' **Organisation** group.
  *
  * Hidden from non-admins with `notFound()` rather than a redirect, because a page that
  * announces "you are not allowed here" also announces that here exists. The real gate
- * is in the server actions — this only decides what gets drawn.
+ * is in the server actions — this only decides what gets drawn. The Organisation group is
+ * not drawn in the sub-navigation for a non-admin either (#132), and this is why that is
+ * a second answer to the same question rather than the only one: a group left out of a
+ * column is not a gate, and typing the address has to fail too.
+ *
+ * The frame — the app bar, the region, the measure and the sub-navigation beside it — is
+ * `(app)/settings/layout.tsx`, shared with the other three.
  */
 export default async function PeoplePage() {
   const store = await cookies();
@@ -32,7 +37,7 @@ export default async function PeoplePage() {
   const members = await listMemberships(store);
 
   return (
-    <Screen measure="42rem">
+    <>
       <ScreenHeader heading={t("title")}>
         <p className="text-muted-foreground text-sm">{t("description")}</p>
       </ScreenHeader>
@@ -48,6 +53,6 @@ export default async function PeoplePage() {
         <h2 className="text-sm font-medium">{t("members")}</h2>
         <MembershipList members={members} />
       </section>
-    </Screen>
+    </>
   );
 }

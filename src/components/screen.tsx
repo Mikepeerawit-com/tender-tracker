@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 
 import { AppHeader, type AppLocation } from "@/components/app-header";
@@ -7,7 +6,6 @@ import {
   type MeasureWidth,
   type ScreenGap,
 } from "@/components/ui/screen-body";
-import { currentUser } from "@/lib/auth/session";
 
 /**
  * The frame every screen behind the login sits in — the app bar, then the body's wrapper.
@@ -21,14 +19,14 @@ import { currentUser } from "@/lib/auth/session";
  * bought. A shell that guessed the shape from the route would put the knowledge back in
  * the layout, where the Tender's reference and client name cannot be reached.
  *
- * **`isOrgAdmin` does not.** It was passed at all eight call sites: the same question,
- * about the same session, asked eight times. `currentUser` is wrapped in React `cache()`,
- * so asking it here costs nothing — `(app)/layout.tsx` has already gated on the answer
- * and this is served from the request rather than the network. The `?? false` is the
- * type being satisfied rather than a case that arises: nothing renders a `Screen` without
- * having passed that gate, and the admin menu is all it would decide.
+ * **Nothing about the reader reaches the bar any more either** (#132). It took an
+ * `isOrgAdmin` — asked here of `currentUser` so that eight call sites did not each have to
+ * — because the app menu drew three extra rows for an Org Admin. Those three are one
+ * `Settings` row now, which every member has, so the bar is the same markup for everybody
+ * and this composes it with no session read at all. Who may see the Organisation group is
+ * asked once, in `(app)/settings/layout.tsx`, on the screen it decides.
  *
- * **Nothing about the width reaches the bar any more, because there is nothing to say**
+ * **Nothing about the width reaches the bar either, because there is nothing to say**
  * (ADR-0022, #131). Every screen behind the login draws in one region, so `AppHeader` and
  * `ScreenBody` both write it themselves and a page has no way to hand them different
  * answers. What a page may still vary is `measure` — how wide a line of its prose and its
@@ -39,7 +37,7 @@ import { currentUser } from "@/lib/auth/session";
  * moment nobody knows which record is coming, and their bodies compose {@link ScreenBody}
  * directly. Their reasoning is written down in those files; do not undo it.
  */
-export async function Screen({
+export function Screen({
   location,
   measure,
   gap,
@@ -52,11 +50,9 @@ export async function Screen({
   gap?: ScreenGap;
   children: ReactNode;
 }) {
-  const user = await currentUser(await cookies());
-
   return (
     <>
-      <AppHeader isOrgAdmin={user?.isOrgAdmin ?? false} location={location} />
+      <AppHeader location={location} />
       <ScreenBody measure={measure} gap={gap}>
         {children}
       </ScreenBody>
