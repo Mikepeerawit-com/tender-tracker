@@ -52,6 +52,20 @@ yarn-error.log*
 # macos
 .DS_Store
 
+# Phantom "name 2.ext" twins. Something on this machine intermittently preserves a
+# file's previous content under a macOS-style " 2" name when the original is unlinked
+# and rewritten shortly after — seen in node_modules (during an install), in .next
+# (between two builds), and in src/ across a branch switch that deleted and restored
+# the same files. It is not a sync client: iCloud Desktop & Documents is off, Google
+# Drive mirrors nothing, and there is no endpoint agent. The culprit is unidentified
+# and it does not reproduce on demand.
+#
+# Ignored so that `git add -A` can never commit one. A duplicate `.ts`/`.tsx` is a
+# duplicate *module*, which breaks `npm run typecheck` for everybody — so the loud
+# signal stays typecheck, not `git status`. Clear them with:
+#   find . -name "* [0-9].*" -not -path "./node_modules/*" -not -path "./.git/*" -delete
+* [0-9].*
+
 # Wizard scratch: captured secrets and hand-check results. Never committed.
 .wizard/
 
