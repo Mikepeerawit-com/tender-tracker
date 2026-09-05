@@ -87,7 +87,18 @@ export type TenderSummary = TenderFields & {
  */
 export type TenderListItem = { id: string; outcome: ItemOutcome | null };
 
-export type TenderListRow = TenderSummary & { items: TenderListItem[] };
+export type TenderListRow = TenderSummary & {
+  items: TenderListItem[];
+  /**
+   * The user ids of everybody working this Tender — ids alone, never names.
+   *
+   * The list needs to answer one question about people: *is this mine*. A name would
+   * answer a different one, cost a second embed on every row, and put a colleague's name
+   * in a payload the row never draws it in. `ownerName` is the exception and stays one:
+   * the row states who owns a Tender, and states nothing about who is sourcing it.
+   */
+  assigneeUserIds: string[];
+};
 
 /**
  * An Item as a reader gets it — its fields, and how it ended.
@@ -151,6 +162,7 @@ type TenderDbRow = {
 
 type TenderListDbRow = Omit<TenderDbRow, "items" | "assignees"> & {
   items: TenderListItem[];
+  assignees: { user_id: string }[];
 };
 
 export async function createTender(
@@ -577,7 +589,7 @@ export async function listTenders(store: SessionCookieStore): Promise<TenderList
     .from("tenders")
     .select(
       `${tenderColumns}, owner:users!tenders_owner_user_id_fkey(name), ` +
-        `items:tender_items(id, outcome)`,
+        `items:tender_items(id, outcome), assignees:tender_assignees(user_id)`,
     )
     // The reader's screen states two dates on every row, and the client's is only the
     // first of them: two Tenders due to the client on the same day are told apart by
@@ -589,7 +601,11 @@ export async function listTenders(store: SessionCookieStore): Promise<TenderList
     .order("id")
     .overrideTypes<TenderListDbRow[], { merge: false }>();
 
-  return (data ?? []).map((row) => ({ ...tenderSummary(row), items: row.items }));
+  return (data ?? []).map((row) => ({
+    ...tenderSummary(row),
+    items: row.items,
+    assigneeUserIds: row.assignees.map((assignee) => assignee.user_id),
+  }));
 }
 
 /** One Tender with its Items and Assignees, or null if the caller cannot see it. */

@@ -165,13 +165,24 @@ const floor = 44;
  * under `ItemOutcomePicker` and the one under `ItemPricing` exist for a browser running no
  * JavaScript, where changing a `<select>` submits nothing. Neither is seen, so neither has
  * anything to say.
+ *
+ * **A `method="get"` form is excluded because it is a navigation, not a write.** The one
+ * in the app is the tender list's search (`ReduceBar`), and nothing about it is in this
+ * suite's claim: it posts nothing, it starts no action, `useActionState` never sees it,
+ * and it cannot go dim because the press that would fade it is the press that leaves the
+ * page. Pressing it here does not fail the assertion — it navigates the harness iframe
+ * out from under the run, which is how it announced itself. Server Actions compose as
+ * `POST` and are untouched by this, so the selector stays as narrow as the reason for it.
  */
 function submits(container: HTMLElement): HTMLButtonElement[] {
   return [
     ...container.querySelectorAll<HTMLButtonElement>("button[type='submit']"),
   ].filter(
     (control) =>
-      drawn(control) && control.tabIndex >= 0 && control.closest(".sr-only") === null,
+      drawn(control) &&
+      control.tabIndex >= 0 &&
+      control.closest(".sr-only") === null &&
+      control.closest("form[method='get']") === null,
   );
 }
 

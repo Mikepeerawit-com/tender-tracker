@@ -1480,7 +1480,8 @@ describe("where a reminder and the Digest send people", () => {
 
     const digest = digestOf(robot);
 
-    expect(digest.split("\n").at(-1)).toBe(`${origin}/tenders`);
+    // Everything, not the reader's own Mine: one message, one group, many readers.
+    expect(digest.split("\n").at(-1)).toBe(`${origin}/tenders?mine=0`);
     // Not one per line — that trade is paid in Tenders that stop being listed at all.
     expect(digest.match(/https:\/\//g)).toHaveLength(1);
   });

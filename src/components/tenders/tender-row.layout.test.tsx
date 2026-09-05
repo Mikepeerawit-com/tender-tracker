@@ -88,6 +88,7 @@ const base = {
   dueDeadlines: ["internal_quote"],
   status: { kind: "due", tone: "signal", deadline: "internal_quote", days: 1 },
   notYetSourced: 0,
+  assigneeUserIds: [],
 } satisfies WorklistRow;
 
 const ordinary: WorklistRow = {

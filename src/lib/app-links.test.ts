@@ -38,7 +38,7 @@ describe("reading the app's origin from the environment", () => {
     vi.stubEnv("APP_ORIGIN", `${origin}/`);
 
     expect(appOrigin()).toEqual({ origin, error: null });
-    expect(linksFor(appOrigin().origin).tenders()).toBe(`${origin}/tenders`);
+    expect(linksFor(appOrigin().origin).tenders()).toBe(`${origin}/tenders?mine=0`);
   });
 
   /**
@@ -81,7 +81,9 @@ describe("the links themselves", () => {
   const links = linksFor(origin);
 
   it("points at the Tenders list, one Tender, and one Tender Item", () => {
-    expect(links.tenders()).toBe(`${origin}/tenders`);
+    // `?mine=0` and not a bare `/tenders`, which means Mine. The Digest is one message
+    // to a whole group and every reader taps the same link — see `linksFor`.
+    expect(links.tenders()).toBe(`${origin}/tenders?mine=0`);
     expect(links.tender("t-1")).toBe(`${origin}/tenders/t-1`);
     expect(links.tenderItem("t-1", "i-9")).toBe(`${origin}/tenders/t-1/items/i-9/quote`);
   });
@@ -124,6 +126,7 @@ describe("the links themselves", () => {
       "src/app/(app)/tenders/[id]/items/[itemId]/quote/page.tsx",
     ],
   ])("resolves %s to a route that exists on disk", (path, file) => {
+    // Paths only: a query string is the screen's business and not a route on disk.
     const root = fileURLToPath(new URL("../../", import.meta.url));
 
     expect(existsSync(`${root}${file}`)).toBe(true);
@@ -135,7 +138,7 @@ describe("the links themselves", () => {
     const built = [links.tenders(), links.tender("id"), links.tenderItem("id", "itemId")];
 
     expect(built.map((link) => link!.slice(origin.length))).toEqual([
-      "/tenders",
+      "/tenders?mine=0",
       "/tenders/id",
       "/tenders/id/items/itemId/quote",
     ]);
