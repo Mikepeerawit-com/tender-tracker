@@ -57,6 +57,9 @@ export function AssigneeControls({
                   tenderId={tenderId}
                   userId={assignee.id}
                   label={assignee.id === callerId ? t("removeMe") : t("remove")}
+                  pendingLabel={
+                    assignee.id === callerId ? t("removingMe") : t("removing")
+                  }
                 />
               ) : null}
             </li>
@@ -66,7 +69,12 @@ export function AssigneeControls({
 
       <div className="flex flex-wrap items-end gap-3">
         {assigned.has(callerId) ? null : (
-          <AddForm tenderId={tenderId} userId={callerId} label={t("addMe")} />
+          <AddForm
+            tenderId={tenderId}
+            userId={callerId}
+            label={t("addMe")}
+            pendingLabel={t("addingMe")}
+          />
         )}
 
         {isOwner && unassigned.length > 0 ? (
@@ -81,10 +89,13 @@ function AddForm({
   tenderId,
   userId,
   label,
+  pendingLabel,
 }: {
   tenderId: string;
   userId: string;
   label: string;
+  /** What the button says while the write is in flight — see {@link RemoveForm}. */
+  pendingLabel: string;
 }) {
   const [state, formAction, isPending] = useActionState(addAssigneeAction, initialState);
 
@@ -96,7 +107,7 @@ function AddForm({
       <TenderProblemNotice error={state.error} />
 
       <Button type="submit" variant="outline" disabled={isPending} className="h-11">
-        {label}
+        {isPending ? pendingLabel : label}
       </Button>
     </form>
   );
@@ -125,21 +136,33 @@ function AddPicker({ tenderId, members }: { tenderId: string; members: Member[] 
           ))}
         </NativeSelect>
         <Button type="submit" variant="outline" disabled={isPending} className="h-11">
-          {t("add")}
+          {isPending ? t("adding") : t("add")}
         </Button>
       </div>
     </form>
   );
 }
 
+/**
+ * Taking one person off, whether that is themselves or a colleague.
+ *
+ * Both words are handed in rather than chosen here, because the caller is the only thing
+ * that knows which of the two this row is — and the pending word has to be the *same*
+ * kind of sentence as the idle one. *Take me off* becoming *Taking you off…* is what
+ * makes the second press unnecessary; a shared *Removing…* under both would be a control
+ * that answered in a voice it does not otherwise use (#144).
+ */
 function RemoveForm({
   tenderId,
   userId,
   label,
+  pendingLabel,
 }: {
   tenderId: string;
   userId: string;
   label: string;
+  /** What it says instead, for as long as the write is in flight. */
+  pendingLabel: string;
 }) {
   const [state, formAction, isPending] = useActionState(
     removeAssigneeAction,
@@ -152,7 +175,7 @@ function RemoveForm({
       <input type="hidden" name="userId" value={userId} />
 
       <Button type="submit" variant="ghost" size="sm" className="h-11" disabled={isPending}>
-        {label}
+        {isPending ? pendingLabel : label}
       </Button>
 
       <TenderProblemNotice error={state.error} />

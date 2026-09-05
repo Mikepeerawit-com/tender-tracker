@@ -100,18 +100,27 @@ export function QuoteRowControls({
               className="h-11"
               disabled={isPending}
             >
-              {confirming ? t("deleteConfirm") : t("delete")}
+              {isPending
+                ? t("deleting")
+                : confirming
+                  ? t("deleteConfirm")
+                  : t("delete")}
             </Button>
           </form>
         )}
 
-        {confirming ? (
+        {/* Not drawn once the delete is away, rather than drawn and greyed out (#144).
+            *Keep it* is the only control in this row that does no work of its own — it
+            takes back a question, and there is no question left to take back the moment
+            the answer has gone to the server. A disabled button beside a working one is
+            the fade this ticket is about, and the word that would explain it is already
+            on the button next door: the row reads *Deleting…* and nothing else. */}
+        {confirming && !isPending ? (
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="h-11"
-            disabled={isPending}
             onClick={() => setConfirming(false)}
           >
             {t("deleteCancel")}

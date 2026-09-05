@@ -145,11 +145,28 @@ function RemovePhotoForm({
         type="submit"
         variant="ghost"
         size="sm"
-        className="h-11"
+        // **The picture decides how wide this is, not the word inside it.** Three
+        // thumbnails to a row at 390px leaves each cell about 97px, and `size="sm"`'s own
+        // `px-2.5` on a nowrap label had *Removing…* measuring 95 of them — green on a
+        // machine with the Latin face installed and two pixels over the side of the phone
+        // on the runner, which is where #144 first found it. `w-full` takes the width from
+        // the cell and `px-1` gives the label the rest of it, so the control is sized by
+        // the grid it lives in and a longer word cannot push it out again. Still far past
+        // the 44px floor in both dimensions, and a wider target under the thumbnail it
+        // belongs to.
+        className="h-11 w-full px-1"
         disabled={isPending}
-        aria-label={t("removeNumbered", { position })}
+        // The accessible name moves with the visible one. The label beside a thumbnail is
+        // short and the name carries the position, so a `removeNumbered` left standing
+        // while the button reads *Removing…* would be the one reader who still hears
+        // nothing happening (#144).
+        aria-label={
+          isPending
+            ? t("removingNumbered", { position })
+            : t("removeNumbered", { position })
+        }
       >
-        {t("remove")}
+        {isPending ? t("removing") : t("remove")}
       </Button>
 
       <ImageProblemNotice error={state.error} />

@@ -35,7 +35,7 @@ export function WecomUseridForm({
         className="h-11 max-w-56"
       />
       <Button type="submit" variant="outline" disabled={isPending} className="h-11">
-        {t("save")}
+        {isPending ? t("saving") : t("save")}
       </Button>
       {state.status ? (
         <span

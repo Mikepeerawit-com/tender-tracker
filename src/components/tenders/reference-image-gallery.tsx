@@ -135,6 +135,21 @@ export function ReferenceImageGallery({
   );
 }
 
+/**
+ * Which Item a picture is of, as a picker that saves itself.
+ *
+ * **Never disabled for the beat the write takes**, which is `ItemOutcomePicker`'s answer
+ * and, since #144, this one's too. The two are the same kind of control — a `<select>`
+ * that submits itself — and they disagreed: this one greyed out on pending and that one
+ * deliberately did not. The reason written there holds here unchanged. Somebody placing
+ * five pictures works down them from the keyboard, and a control that disables loses the
+ * focus of whoever is doing that; picking again before the first save lands simply writes
+ * the second answer over it.
+ *
+ * The greying was also the fade #144 is about — a control that goes dim and says nothing —
+ * and a `<select>` has no label to swap a word into. So the answer is to stop taking the
+ * control away rather than to find something for it to say.
+ */
 function AssignForm({
   tenderId,
   image,
@@ -145,10 +160,7 @@ function AssignForm({
   items: ItemOption[];
 }) {
   const t = useTranslations("tenders.referenceImages");
-  const [state, formAction, isPending] = useActionState(
-    assignReferenceImageAction,
-    initialState,
-  );
+  const [state, formAction] = useActionState(assignReferenceImageAction, initialState);
 
   return (
     <form action={formAction} className="flex flex-col gap-1.5">
@@ -159,7 +171,6 @@ function AssignForm({
         name="tenderItemId"
         aria-label={t("assignTo")}
         className="h-11"
-        disabled={isPending}
         // Uncontrolled, and re-read from here on every submit: React resets the form each
         // time, and the value it resets to is whatever the server has just revalidated
         // into these props.
@@ -204,7 +215,7 @@ function RemoveForm({ tenderId, imageId }: { tenderId: string; imageId: string }
       <input type="hidden" name="imageId" value={imageId} />
 
       <Button type="submit" variant="ghost" size="sm" className="h-11" disabled={isPending}>
-        {t("remove")}
+        {isPending ? t("removing") : t("remove")}
       </Button>
 
       <ImageProblemNotice error={state.error} />

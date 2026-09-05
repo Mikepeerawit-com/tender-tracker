@@ -29,6 +29,13 @@ const initialState: QuoteFormState = {};
  * than divide (ADR-0004): one of them failing to find a supplier is a fact about their
  * suppliers, not a verdict on the Item, and a colleague may well be holding a price for
  * the same thing.
+ *
+ * **The pending words stay in the voice the buttons are written in** (#144). `CONTEXT.md`
+ * says this control is stated as something the Assignee did rather than a status they set
+ * — *I could not source this* / *I found one after all* — so the beat between the press
+ * and the write is *Recording it…* and *Taking it back…*, which are still that act in
+ * progress. A bare *Saving…* would answer a sentence about a person in the voice of a
+ * form, at the one moment the person is watching to see whether they were heard.
  */
 export function NoSupplierFoundForm({
   tenderId,
@@ -105,7 +112,7 @@ function RecordForm({
 
       <div>
         <Button type="submit" variant="outline" disabled={isPending} className="h-11">
-          {t("record")}
+          {isPending ? t("recording") : t("record")}
         </Button>
       </div>
     </form>
@@ -143,7 +150,7 @@ function ClearForm({
 
       <div>
         <Button type="submit" variant="ghost" disabled={isPending} className="h-11">
-          {t("clear")}
+          {isPending ? t("clearing") : t("clear")}
         </Button>
       </div>
     </form>
