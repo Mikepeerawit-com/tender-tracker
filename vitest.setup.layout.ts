@@ -53,8 +53,21 @@ vi.mock("@/app/actions/admin", () => ({
 vi.mock("@/app/actions/locale", () => ({ switchLocale: async () => ({}) }));
 vi.mock("@/app/actions/theme", () => ({ switchTheme: async () => ({}) }));
 vi.mock("@/app/actions/tenders", () => ({
+  createTenderAction: async () => ({}),
+  updateTenderAction: async () => ({}),
+  addTenderItemAction: async () => ({}),
+  updateTenderItemAction: async () => ({}),
+  removeTenderItemAction: async () => ({}),
   addAssigneeAction: async () => ({}),
   removeAssigneeAction: async () => ({}),
+}));
+// The Owner's edit screen alone: nothing else in the record uploads a picture against a
+// Tender or places one on an Item.
+vi.mock("@/app/actions/reference-images", () => ({
+  signReferenceImageUploadsAction: async () => ({}),
+  recordReferenceImagesAction: async () => ({}),
+  assignReferenceImageAction: async () => ({}),
+  removeReferenceImageAction: async () => ({}),
 }));
 vi.mock("@/app/actions/quotes", () => ({
   createQuoteAction: async () => ({}),

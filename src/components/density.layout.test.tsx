@@ -51,6 +51,17 @@ import { locales, type Locale, Screen, screens } from "@/test/screens";
  * Assignee records a price — what #98 calls *the quote form*. The third, the tender edit
  * screen, is the Owner's and was left alone.
  *
+ * **That third absence is deliberate and is about budgets alone** (#143). #98 reduced two
+ * screens and did not touch the edit screen, so it has no reduction to hold and a budget
+ * written for it here would be a number nobody set — a ceiling above what the screen
+ * renders, which is the thing this file's own opening says is not a check. It is *not* a
+ * decision to leave that screen unmeasured: since #143 it is `"editing a tender"` in
+ * `@/test/screens`, and it carries every shared guard that walks that record — contrast,
+ * focus, motion, the region width and the tap floor — exactly as the rest do. (Not
+ * `type.layout.test.tsx`: that one asserts the declared stack once, for the app, and
+ * walks no screens at all.) Read the gap here as
+ * "no budget was set", never as "this screen is not looked at".
+ *
  * At 390×844, the layout project's viewport, because ADR-0021's rule is that the device
  * follows the role and an Assignee is on a phone for both of these. Width decides the
  * number — controls that share a row at a desk take two on a phone — so the count is the
