@@ -86,7 +86,7 @@ function RemoveTenderItemForm({
 
       <div>
         <Button type="submit" variant="destructive" disabled={isPending} className="h-11">
-          {t("item.remove")}
+          {isPending ? t("item.removing") : t("item.remove")}
         </Button>
       </div>
     </form>

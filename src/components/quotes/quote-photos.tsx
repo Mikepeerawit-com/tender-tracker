@@ -147,9 +147,17 @@ function RemovePhotoForm({
         size="sm"
         className="h-11"
         disabled={isPending}
-        aria-label={t("removeNumbered", { position })}
+        // The accessible name moves with the visible one. The label beside a thumbnail is
+        // short and the name carries the position, so a `removeNumbered` left standing
+        // while the button reads *Removing…* would be the one reader who still hears
+        // nothing happening (#144).
+        aria-label={
+          isPending
+            ? t("removingNumbered", { position })
+            : t("removeNumbered", { position })
+        }
       >
-        {t("remove")}
+        {isPending ? t("removing") : t("remove")}
       </Button>
 
       <ImageProblemNotice error={state.error} />

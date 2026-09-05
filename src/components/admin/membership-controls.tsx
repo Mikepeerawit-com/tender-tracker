@@ -57,7 +57,13 @@ export function MembershipControls({
         ) : (
           <UserMinus className="size-4" aria-hidden />
         )}
-        {readmitting ? t("restore") : t("disable")}
+        {readmitting
+          ? isPending
+            ? t("restoring")
+            : t("restore")
+          : isPending
+            ? t("disabling")
+            : t("disable")}
       </Button>
       {state.status ? (
         <span

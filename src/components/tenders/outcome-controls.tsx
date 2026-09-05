@@ -30,7 +30,12 @@ export function RecordSubmissionButton({ tenderId }: { tenderId: string }) {
   const t = useTranslations("tenders.outcome");
 
   return (
-    <SubmissionForm tenderId={tenderId} action={recordSubmissionAction} label={t("record")} />
+    <SubmissionForm
+      tenderId={tenderId}
+      action={recordSubmissionAction}
+      label={t("record")}
+      pendingLabel={t("recording")}
+    />
   );
 }
 
@@ -49,6 +54,7 @@ export function ClearSubmissionButton({ tenderId }: { tenderId: string }) {
       tenderId={tenderId}
       action={clearSubmissionAction}
       label={t("clear")}
+      pendingLabel={t("clearing")}
       // Quieter than the button that records one: taking the submission off is the rarer
       // act and the more destructive, and should not sit there inviting a press.
       variant="ghost"
@@ -56,16 +62,25 @@ export function ClearSubmissionButton({ tenderId }: { tenderId: string }) {
   );
 }
 
-/** The two of them are one form: a Tender id, a button, and whatever it refused. */
+/**
+ * The two of them are one form: a Tender id, a button, and whatever it refused.
+ *
+ * Each carries its own pending word rather than sharing one, because the two acts are
+ * opposites and *Recording…* over the button that takes a submission back would say the
+ * wrong thing at the one moment somebody is watching to see whether it worked (#144).
+ */
 function SubmissionForm({
   tenderId,
   action,
   label,
+  pendingLabel,
   variant = "default",
 }: {
   tenderId: string;
   action: (previous: TenderFormState, formData: FormData) => Promise<TenderFormState>;
   label: string;
+  /** What it says for as long as the write is in flight. */
+  pendingLabel: string;
   variant?: "default" | "ghost";
 }) {
   const [state, formAction, isPending] = useActionState(action, initialState);
@@ -75,7 +90,7 @@ function SubmissionForm({
       <input type="hidden" name="tenderId" value={tenderId} />
 
       <Button type="submit" variant={variant} disabled={isPending} className="h-11">
-        {label}
+        {isPending ? pendingLabel : label}
       </Button>
 
       <TenderProblemNotice error={state.error} />
@@ -129,7 +144,10 @@ export function ItemOutcomePicker({
         className="h-11 w-56"
         // Never disabled for the beat the write takes: a disabled control loses the focus
         // of somebody working down the Items from the keyboard, and picking again before
-        // the first save lands simply writes the second answer over it.
+        // the first save lands simply writes the second answer over it. Since #144 this is
+        // the app's one answer for a `<select>` that submits itself, rather than this
+        // control's alone — `ReferenceImageGallery`'s assign-to picker used to disable and
+        // now agrees.
         defaultValue={outcome ?? ""}
         // Two taps rather than three. A Save beside the picker is one more thing to miss
         // on a phone, and an Outcome has no draft state worth keeping — it is either
