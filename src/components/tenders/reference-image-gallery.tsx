@@ -73,7 +73,17 @@ export function ReferenceImageGallery({
     <div className="flex flex-col gap-6">
       {groups.map((group) => (
         <section key={group.key} className="flex flex-col gap-2">
-          <h3 className="text-muted-foreground text-xs font-medium">{group.label}</h3>
+          {/* `min-w-0 break-words`, the way every other client-supplied string in the app
+              carries it (#56, and the note in `my-work-list.tsx`). The label is a product
+              name — whatever the client called it — and a run with nothing in it to break
+              at pushes this heading past the column and takes the page sideways with it.
+              It was drawn on no measured screen until #143 put the edit screen into
+              `@/test/screens`, and it went red on the runner rather than locally: the
+              harness resolves no Latin webfont, so the same string is narrower here than
+              a reader ever sees it. */}
+          <h3 className="text-muted-foreground min-w-0 text-xs font-medium break-words">
+            {group.label}
+          </h3>
 
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {group.images.map((image) => (
