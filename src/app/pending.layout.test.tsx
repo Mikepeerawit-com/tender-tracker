@@ -73,6 +73,15 @@ import {
  * floor and ADR-0009's bar are asserted here too — on the screen mid-press, which is the
  * state neither of those suites can reach, because both photograph a screen at rest.
  *
+ * **Green here is not green on the runner, for the width half of it.** The harness
+ * resolves no Latin webfont, so every English string measures narrower on a developer's
+ * machine than a reader ever sees it — the note in `reference-image-gallery.tsx` records
+ * the last time that cost a red build, and #144 spent one too: the Remove under a Quote
+ * Photo had two pixels of daylight locally and none on CI once *Remove* became
+ * *Removing…*. The lesson is written into the control rather than into this file — that
+ * button now takes its width from the cell it sits in — but a width assertion that passes
+ * here is evidence and not proof, and the runner is where it is settled.
+ *
  * ## What it does not reach, stated so nobody reads the green as wider than it is
  *
  * **Controls that exist only after an interaction the record cannot compose**, the blind
