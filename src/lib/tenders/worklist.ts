@@ -15,6 +15,11 @@ import {
 } from "@/lib/tenders/progress";
 import { countItemSourcing } from "@/lib/quotes/quotes";
 import { listTenders, type TenderSummary } from "@/lib/tenders/tenders";
+import {
+  everything,
+  matchesFilter,
+  type WorklistFilter,
+} from "@/lib/tenders/worklist-filter";
 import type { SessionCookieStore } from "@/lib/supabase/session-client";
 
 /**
@@ -70,6 +75,14 @@ export type WorklistRow = TenderSummary & {
    * sentence quotes and the count the row holds cannot drift apart.
    */
   notYetSourced: number;
+  /**
+   * Everybody sourcing this Tender, by id.
+   *
+   * Carried onto the row rather than consumed and dropped by the filter, because the row
+   * itself has a use for it: in a list that is now mostly other people's work, *is this
+   * mine* is a thing the row has to be able to say without the reader opening it.
+   */
+  assigneeUserIds: string[];
 };
 
 export type WorklistSection = { group: WorklistGroup; tenders: WorklistRow[] };
@@ -85,6 +98,39 @@ export type Worklist = {
    * everything. Counted here rather than re-queried, since the rows are already in hand.
    */
   total: number;
+  /**
+   * How many Tenders are **on the list at all**, before the filter — the size of the
+   * backlog rather than the size of what is being looked at.
+   *
+   * The pair `matched` / `onList` is what lets the reduce bar say "12 of 47" honestly. A
+   * reader narrowing a list needs to know what they narrowed *from*, or the filter is a
+   * thing that makes rows vanish.
+   */
+  onList: number;
+  /** How many survived the filter. Equal to `onList` when nothing is being filtered. */
+  matched: number;
+  /**
+   * Missed submissions the filter hid.
+   *
+   * **The one thing this screen refuses to let a filter bury.** ADR-0007 calls Submission
+   * Missed *"the failure the product exists to prevent"* and pins it above every group so
+   * that nobody has to go looking for it. A filter that silently dropped one would undo
+   * exactly that, and quietly — the row would not be marked missing, it would just not be
+   * there.
+   *
+   * The alternative was exempting the group from filtering altogether, and it was
+   * rejected: a reader who asked for Mine and got somebody else's Tenders back has been
+   * told their filter does not mean what it says, which breaks every other control on the
+   * bar. So the filter applies uniformly and the screen states the cost instead.
+   *
+   * Counted the same whether or not the reader revealed them: this is *how many the
+   * filter excludes*, and the reveal changes whether they are drawn, not whether the
+   * filter would have kept them. The screen reads `revealMissed` to pick which of the
+   * two sentences to say, and the number is the same in both.
+   *
+   * Revealed rows are **not** in {@link matched}, which counts what survived the filter.
+   */
+  suppressedMissed: number;
 };
 
 /**
@@ -101,7 +147,18 @@ export type Worklist = {
 export async function listWorklist(
   today: string,
   store: SessionCookieStore,
+  /**
+   * What the URL asked for, and who is asking.
+   *
+   * Optional, and defaulting to **Everything** rather than to what a bare `/tenders`
+   * means, because the filter is a property of one screen's URL and not of the worklist
+   * itself — the digest and the reminder job both read this list, and neither has a
+   * reader for Mine to resolve against or a query string to read one from.
+   */
+  options: { filter?: WorklistFilter; viewerId?: string | null } = {},
 ): Promise<Worklist> {
+  const filter = options.filter ?? everything;
+  const viewerId = options.viewerId ?? null;
   // Already soonest Client Submission Deadline first, which is the order every group
   // inherits: grouping decides *which* pile a Tender is in, never where in the pile.
   const tenders = await listTenders(store);
@@ -112,6 +169,9 @@ export async function listWorklist(
   const sections = new Map<WorklistGroup, WorklistRow[]>(
     worklistGroups.map((group) => [group, []]),
   );
+  let onList = 0;
+  let matched = 0;
+  let suppressedMissed = 0;
 
   for (const { items: listItems, ...summary } of tenders) {
     const items: SourcedItem[] = listItems.map((item) => ({
@@ -125,19 +185,52 @@ export async function listWorklist(
     // are off the list, not hidden in it: the work on them is done.
     if (group === null) continue;
 
-    sections.get(group)!.push({
+    onList += 1;
+
+    const row = {
       ...summary,
       itemCount: items.length,
       progress: tenderProgress(classified),
       dueDeadlines: comingUpDeadlines(classified, today),
       status: rowStatus(classified, today),
       notYetSourced: notYetSourcedCount(classified),
-    });
+    };
+
+    // The filter reads the row rather than the Tender, because two of the four things it
+    // tests — Progress, and whether anything is Not Yet Sourced — are derived above and
+    // exist nowhere else. This is the same reason the filter is not a `where` clause.
+    const missed = group === "submission_missed";
+    const passes = matchesFilter(row, filter, viewerId);
+
+    if (passes) {
+      matched += 1;
+    } else {
+      // Where the filter drops a missed submission, the reader is told rather than left
+      // to not notice — and `revealMissed` is them taking that offer up. It is the only
+      // thing on this screen that puts a row back, and only ever this group's.
+      if (!missed) continue;
+
+      // Counted whether or not it was revealed, because the notice has two jobs: naming
+      // what a filter hid, and naming what is on screen in spite of one. A count that
+      // fell to zero on reveal would take the only way back off with it.
+      suppressedMissed += 1;
+
+      if (!filter.revealMissed) continue;
+
+      // Deliberately not counted in `matched`, which means *survived the filter*. Two
+      // Submission Missed rows next to "2 of 47" when nothing matched would be the
+      // screen lying about its own arithmetic to make one sentence read better.
+    }
+
+    sections.get(group)!.push(row);
   }
 
   return {
     sections: worklistGroups.map((group) => ({ group, tenders: sections.get(group)! })),
     total: tenders.length,
+    onList,
+    matched,
+    suppressedMissed,
   };
 }
 

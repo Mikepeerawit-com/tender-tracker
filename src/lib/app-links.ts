@@ -1,5 +1,7 @@
 import "server-only";
 
+import { everything, worklistFilterQuery } from "@/lib/tenders/worklist-filter";
+
 /**
  * Where the app lives, and the three places a group message can send somebody.
  *
@@ -128,7 +130,17 @@ export function linksFor(origin: string | null): AppLinks {
   const id = encodeURIComponent;
 
   return {
-    tenders: () => link("/tenders"),
+    /**
+     * The list as **Everything**, spelled out rather than left to the default.
+     *
+     * A bare `/tenders` means Mine (ADR-0025), and this is the one link in the product
+     * that is read by people who did not build it: the Digest posts a single message to
+     * a group and every reader taps the same URL. Pointed at the default, it would show
+     * each of them their own subset of a count the message states for the whole org —
+     * and a colleague who owns none of the listed Tenders would tap "12 need attention"
+     * and land on an empty list. The reduce bar is one tap from here either way.
+     */
+    tenders: () => link(`/tenders${worklistFilterQuery(everything)}`),
     tender: (tenderId) => link(`/tenders/${id(tenderId)}`),
     tenderItem: (tenderId, itemId) =>
       link(`/tenders/${id(tenderId)}/items/${id(itemId)}/quote`),

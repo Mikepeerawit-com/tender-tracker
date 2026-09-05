@@ -93,7 +93,8 @@ Leaving them on would mean an Assignee reaching zero only by claiming they could
 source something that was never wanted.
 
 _Label_: the screen is "My work"; a row is never headed "pending".
-_Avoid_: no quote, missing, blank, pending
+_Avoid_: no quote, missing, blank, pending, unsourced — the last is the abbreviation a URL
+key reaches for, and it is still a second name for this
 
 **Assignee**:
 A user working a Tender. Several Assignees work the same Tender at once, each
@@ -112,6 +113,14 @@ going out on time; receives submission and decision reminders. Usually also an
 Assignee. A role, not a rank — every user can create Tenders and be an Assignee.
 _Label_: en "Owner" · zh 负责人 — held for this term alone.
 _Avoid_: manager, admin, lead
+
+**Mine**:
+A Tender you own or are an Assignee on. Spans both roles deliberately: an Owner does not
+stop working a Tender because a colleague is sourcing it, and an Assignee's own suppliers
+are their work whoever owns the Tender.
+_Label_: en "Mine" · zh 我的.
+_Avoid_: my work — which is narrower and already taken, naming the Items you are Not Yet
+Sourced on rather than the Tenders you are working; my tenders, assigned to me, involved
 
 **Selected**:
 The Quote we chose to build our Bid from, per Tender Item. Different Tender Items on
@@ -161,7 +170,11 @@ _Avoid_: expired, lapsed, overdue
 **Awaiting Decision**:
 Submitted, with Outcomes still unrecorded. Not a failure — the normal resting state of
 a live Tender, and a prompt to chase the client.
-_Avoid_: pending, open, in progress
+
+Progress `submitted` draws this same set, which is why ADR-0007's 29 August 2026 amendment
+demoted this from a heading to a term. Two names for one set is already one more than the
+screens need; a **third** is what the reduce bar's "with the client" would have been.
+_Avoid_: pending, open, in progress, with the client
 
 **Decision Chase**:
 The Owner's own reminder to go and ask the client how it went, on a day they name

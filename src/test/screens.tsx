@@ -35,6 +35,7 @@ import {
   EditTenderItemForm,
 } from "@/components/tenders/tender-item-forms";
 import { TenderFacts } from "@/components/tenders/tender-facts";
+import { ReduceBar } from "@/components/tenders/reduce-bar";
 import { TenderGroup } from "@/components/tenders/tender-group";
 import { QuoteForm } from "@/components/quotes/quote-form";
 import { Button } from "@/components/ui/button";
@@ -174,6 +175,34 @@ export function screens(m: Messages) {
               {m.tenders.description}
             </p>
           </ScreenHeader>
+          {/*
+            The reduce bar in its **widest and busiest** state, because every state
+            narrower than this one is a subset of it and a record that drew the resting
+            bar would confer its guards on almost none of the controls.
+
+            Three things are true of it at once here, and each pulls a different way:
+            the filter is active, so the count and Clear are drawn; no View matches it,
+            so the fine controls are unfolded and every chip is measured; and it has a
+            missed submission the filter rejected, so the alarm notice is drawn under it
+            — the one part of this screen that is allowed to say a filter has a cost.
+
+            `revealMissed` is on because that is the notice's **longer** sentence in
+            `zh-Hans` — "不受此筛选限制，正在显示" against "被此筛选隐藏" — and its Hide
+            link is geometrically identical to the Show link it replaces. Recording the
+            wider of two states measures both; recording the narrower measures one.
+          */}
+          <ReduceBar
+            filter={{
+              mine: true,
+              text: "gloves",
+              progress: ["sourcing", "quoted"],
+              notYetSourced: true,
+              revealMissed: true,
+            }}
+            matched={2}
+            onList={47}
+            suppressedMissed={1}
+          />
           {/* The pinned alarm band and an ordinary Progress group, which are the two
               shapes the list has. The band is the wider of the two — it carries a hint
               paragraph and a count inside a bordered box — so measuring only the plain
@@ -1045,6 +1074,7 @@ const rowBase = {
   dueDeadlines: ["internal_quote"],
   status: { kind: "due", tone: "signal", deadline: "internal_quote", days: 1 },
   notYetSourced: 0,
+  assigneeUserIds: [],
   reference: "",
   clientName: "",
   title: "",

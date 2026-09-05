@@ -20,6 +20,7 @@ import {
 } from "./tenders";
 import { worklistGroups, type WorklistGroup } from "./progress";
 import { listWorklist } from "./worklist";
+import { everything } from "./worklist-filter";
 
 /**
  * The worklist, read the way the screen reads it: through the session client, against
@@ -493,6 +494,40 @@ describe("listWorklist", () => {
     expect(await groupOf(id)).toBeNull();
     expect(list.sections.flatMap((section) => section.tenders)).toEqual([]);
     expect(list.total).toBe(1);
+  });
+
+  it("counts the missed submissions a filter hid, and puts them back on request", async () => {
+    // ADR-0007 calls Submission Missed the failure the product exists to prevent, and
+    // ADR-0025 refuses to let a filter bury it *silently*. Both halves are asserted here
+    // because the second is meaningless without the first.
+    const { id } = await aTender({
+      internalQuoteDeadline: "2026-08-01",
+      clientSubmissionDeadline: "2026-08-05",
+    });
+    const store = await signedInAs(owner.email);
+    const carries = (list: Awaited<ReturnType<typeof listWorklist>>) =>
+      list.sections.flatMap((section) => section.tenders).some((row) => row.id === id);
+
+    // A filter nothing on this list satisfies, so the missed submission is dropped like
+    // any other row rather than exempted from the filter it does not match.
+    const hidden = { ...everything, text: "no such client" };
+
+    expect(carries(await listWorklist(today, store, { filter: hidden }))).toBe(false);
+    expect((await listWorklist(today, store, { filter: hidden })).suppressedMissed).toBe(1);
+
+    // The reveal puts back exactly what it counted, and nothing it did not: the search
+    // text still holds, so this is not a second Clear wearing a different label.
+    const revealed = await listWorklist(today, store, {
+      filter: { ...hidden, revealMissed: true },
+    });
+
+    expect(carries(revealed)).toBe(true);
+    // Still counted, because the notice has to keep saying why a row nothing matched is
+    // on screen — and because the control that turns the reveal off lives in it.
+    expect(revealed.suppressedMissed).toBe(1);
+    // And still not `matched`, which means *survived the filter*. "1 of 1" beside a row
+    // the filter rejected would be the screen lying about its own arithmetic.
+    expect(revealed.matched).toBe(0);
   });
 
   it("shows another org nothing, and a stranger nothing at all", async () => {
