@@ -1,13 +1,17 @@
 import "server-only";
 
+import { defaultLocale, isLocale, type Locale } from "@/i18n/config";
 import { appLinks } from "@/lib/app-links";
-import { createServiceClient } from "@/lib/supabase/service-client";
-import { webhookFor } from "@/lib/wecom/group-robot";
+import { sendEmails, type EmailBoundary, type EmailMessage } from "@/lib/email/send";
 import {
+  otherQuotesOutcomeEmail,
   otherQuotesOutcomeMessage,
+  selectedQuoteOutcomeEmail,
   selectedQuoteOutcomeMessage,
   type AnnouncedOutcome,
-} from "@/lib/wecom/messages";
+} from "@/lib/messaging/messages";
+import { createServiceClient } from "@/lib/supabase/service-client";
+import { webhookFor } from "@/lib/wecom/group-robot";
 import { sendGroupMessages, type GroupMessage, type RobotBoundary } from "@/lib/wecom/robot";
 
 /**
@@ -61,21 +65,34 @@ type ItemRow = {
 
 type QuoterRow = { id: string; created_by_user_id: string };
 
-type Recipient = { name: string; wecomUserid: string | null };
+type Recipient = {
+  name: string;
+  email: string;
+  locale: Locale;
+  disabled: boolean;
+  wecomUserid: string | null;
+};
+
+/** Both outbound boundaries the announcement stands at, injected together. */
+export type OutboundBoundary = { robot?: RobotBoundary; email?: EmailBoundary };
 
 /**
- * Tell the group, and leave a bell row for everybody who quoted.
+ * Tell everybody who quoted — by email always, in the group as well when the org has a
+ * robot (ADR-0034) — and leave a bell row for each of them.
  *
  * Best effort throughout: it returns nothing, and every branch that cannot proceed simply
- * stops rather than reporting. Nothing it calls raises — `supabase-js` answers with an
- * `error` field rather than an exception, `sendGroupMessages` turns every transport and
- * protocol failure into a `SendOutcome`, and the one throw it does have (a blank webhook)
- * is unreachable because `webhookFor` reports a blank as no robot at all. That matters
- * because it is called from inside a server action whose real job has already succeeded.
+ * stops rather than reporting. Nothing it calls raises past it — `supabase-js` answers
+ * with an `error` field rather than an exception, both transports turn every wire and
+ * protocol failure into a `SendOutcome`, `sendGroupMessages`'s one throw (a blank
+ * webhook) is unreachable because `webhookFor` reports a blank as no robot at all, and
+ * `sendEmails`'s one throw (blank `RESEND_API_KEY`/`EMAIL_FROM`) is caught and logged
+ * below, because `/api/health` is where that deployment fault belongs (ADR-0034). All
+ * of that matters because this is called from inside a server action whose real job
+ * has already succeeded.
  */
 export async function announceOutcome(
   { itemId, outcome }: { itemId: string; outcome: AnnouncedOutcome },
-  boundary: RobotBoundary = {},
+  boundary: OutboundBoundary = {},
 ): Promise<void> {
   const service = createServiceClient();
 
@@ -125,24 +142,63 @@ export async function announceOutcome(
     link: appLinks().tenderItem(item.tender_id, item.id),
   });
 
-  // Written whatever the send does, and **this is where it differs from the reminder
-  // path**. A reminder that WeCom refused is retried tomorrow, so writing its bell rows
-  // now would double them; this fires once and is never retried, so a refused post that
-  // also skipped the bell would leave the loser of a Tender told by nothing at all.
+  // Written whatever the sends do, and **this is where it differs from the reminder
+  // path**. A reminder that a transport refused is retried tomorrow, so writing its
+  // bell rows now would double them; this fires once and is never retried, so a
+  // refused post that also skipped the bell would leave the loser of a Tender told by
+  // nothing at all.
   await writeNotifications(item, outcome, quoterIds, selectedBy);
+
+  // Email first, because it is the floor (ADR-0034): it reaches every quoter for every
+  // org, robot or none, in each reader's own language. Fire-once like the post — a
+  // refusal is logged with the provider's words and nothing is queued.
+  const emails = outcomeEmails({
+    reference: item.tender.reference,
+    client: item.tender.client_name,
+    item: item.product_name,
+    outcome,
+    selectedBy,
+    quoterIds,
+    people,
+    link: appLinks().tenderItem(item.tender_id, item.id),
+  });
+
+  try {
+    const emailOutcomes = await sendEmails(emails, boundary.email);
+
+    for (const [index, result] of emailOutcomes.entries()) {
+      if (result.ok) continue;
+
+      // The address and the provider's words, never the content: this line reaches the
+      // deployment's logs, and what was said is the org's business.
+      console.warn(
+        `Outcome news email to ${emails[index].to} for tender_item ${item.id} was refused: ${result.detail}`,
+      );
+    }
+  } catch (cause) {
+    // The transport throws on a blank key or sender, and `/api/health` is where that
+    // deployment fault is caught (ADR-0034). It must not be caught *here* by failing a
+    // write that already succeeded — the never-raises contract above stands — and it
+    // must not cost the group post below, which is the channel such a deployment still
+    // has.
+    console.warn(
+      `Outcome news email for tender_item ${item.id} was not sent — email is not configured: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+  }
 
   if (messages.length === 0) return;
 
   const webhook = await webhookFor(item.org_id);
 
-  // An org that has not set up a Group Robot is not a failed send. There is nowhere to
-  // post and nothing to retry; the bell rows above are what that org gets.
+  // An org that has not set up a Group Robot has not failed a send. There is nowhere
+  // to post and nothing to retry; the emails and bell rows above are what it gets —
+  // which since ADR-0034 is the whole story rather than a downgrade.
   if (webhook === null) return;
 
   // One call rather than two, so the ~3s pacing sits between the winner's message and the
   // rest — a two-message burst is inside the cap either way, but pacing lives in the
   // sender and splitting the batch would be the one caller that opts out of it.
-  const outcomes = await sendGroupMessages(webhook, messages, boundary);
+  const outcomes = await sendGroupMessages(webhook, messages, boundary.robot);
 
   for (const result of outcomes) {
     if (result.ok) continue;
@@ -153,6 +209,65 @@ export async function announceOutcome(
       `Outcome news for tender_item ${item.id} was refused: ${result.detail}`,
     );
   }
+}
+
+/**
+ * The same two audiences as {@link outcomeMessages}, told the same two facts, one
+ * reader at a time: the Assignee whose Quote we bid, and everybody else who quoted.
+ * A Disabled quoter is sent nothing on any channel — though their name may still be
+ * the one the others are given, because "we bid Nok's quote" stays true of a Nok who
+ * has since left.
+ */
+function outcomeEmails({
+  reference,
+  client,
+  item,
+  outcome,
+  selectedBy,
+  quoterIds,
+  people,
+  link,
+}: {
+  reference: string;
+  client: string;
+  item: string;
+  outcome: AnnouncedOutcome;
+  selectedBy: string | null;
+  quoterIds: string[];
+  people: Map<string, Recipient>;
+  link: string | null;
+}): EmailMessage[] {
+  return quoterIds.flatMap((userId) => {
+    const person = people.get(userId);
+
+    if (person === undefined || person.disabled) return [];
+
+    const content =
+      userId === selectedBy
+        ? selectedQuoteOutcomeEmail({
+            locale: person.locale,
+            reference,
+            client,
+            item,
+            outcome,
+            link,
+          })
+        : otherQuotesOutcomeEmail({
+            locale: person.locale,
+            reference,
+            client,
+            item,
+            outcome,
+            // A colleague's name, never a supplier's — the disclosure ADR-0012 permits
+            // in the same breath as forbidding the supplier's. Null when we have no
+            // name to give.
+            selectedBy:
+              selectedBy === null ? null : (people.get(selectedBy)?.name ?? null),
+            link,
+          });
+
+    return [{ to: person.email, ...content }];
+  });
 }
 
 /**
@@ -253,7 +368,7 @@ async function peopleById(
 ): Promise<Map<string, Recipient>> {
   const { data } = await createServiceClient()
     .from("users")
-    .select("id, name, wecom_userid, disabled_at")
+    .select("id, name, email, locale, wecom_userid, disabled_at")
     .in("id", userIds)
     .eq("org_id", orgId);
 
@@ -262,8 +377,13 @@ async function peopleById(
       user.id,
       {
         name: user.name,
-        // A Disabled colleague reads nothing and can act on none of it, so @-ing them
-        // puts a name in the group chat that answers to nobody.
+        email: user.email as string,
+        // Null until their first sign-in; the default is what a null reads as, so a
+        // colleague who never signed in is reached in *some* language (ADR-0034).
+        locale: isLocale(user.locale) ? user.locale : defaultLocale,
+        // A Disabled colleague reads nothing and can act on none of it: no email, and
+        // @-ing them would put a name in the group chat that answers to nobody.
+        disabled: user.disabled_at !== null,
         wecomUserid: user.disabled_at === null ? (user.wecom_userid ?? null) : null,
       },
     ]),

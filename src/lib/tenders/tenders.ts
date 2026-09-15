@@ -10,9 +10,7 @@ import {
   type SessionCookieStore,
 } from "@/lib/supabase/session-client";
 import { isItemOutcome, type ItemOutcome } from "@/lib/tenders/outcome";
-import type { RobotBoundary } from "@/lib/wecom/robot";
-
-import { announceOutcome } from "./outcome-news";
+import { announceOutcome, type OutboundBoundary } from "./outcome-news";
 
 /**
  * Recording a Tender, its Items, and who is working it.
@@ -476,8 +474,8 @@ export async function setItemOutcome(
     decidedAt: Date;
   },
   store: SessionCookieStore,
-  /** The group robot, injected so a test can stand at it (ADR-0012). */
-  robot: RobotBoundary = {},
+  /** Both outbound transports, injected so a test can stand at them (ADR-0012, ADR-0034). */
+  outbound: OutboundBoundary = {},
 ): Promise<TenderResult> {
   const caller = await currentUser(store);
 
@@ -523,7 +521,7 @@ export async function setItemOutcome(
   // decision. The announcement is best effort and never fails the write — see
   // `./outcome-news.ts` for why that is the opposite call from the reminder schedule.
   if (outcome === "won" || outcome === "lost") {
-    await announceOutcome({ itemId, outcome }, robot);
+    await announceOutcome({ itemId, outcome }, outbound);
   }
 
   return { ok: true };

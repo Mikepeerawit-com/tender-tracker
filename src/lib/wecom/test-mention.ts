@@ -5,7 +5,7 @@ import type { SessionCookieStore } from "@/lib/supabase/session-client";
 import { currentUser } from "@/lib/auth/session";
 
 import { webhookFor } from "./group-robot";
-import { testMentionMessage } from "./messages";
+import { testMentionMessage } from "@/lib/messaging/messages";
 import { sendGroupMessages, type RobotBoundary } from "./robot";
 
 /**

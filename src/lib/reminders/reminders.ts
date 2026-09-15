@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createServiceClient } from "@/lib/supabase/service-client";
 import type { createSessionClient } from "@/lib/supabase/session-client";
 
 import {
@@ -133,6 +134,29 @@ export async function rescheduleReminders(
   }
 
   const orphans = existing.filter((row) => !matched.has(row.id)).map((row) => row.id);
+  // A re-dated row is a new promise, and both channels owe it again: the messages that
+  // went out named the old date. Cleared through the **service** client — deliveries
+  // are the cron's bookkeeping, and `reminder_deliveries` deliberately grants a session
+  // nothing but reading its own org's rows. Orphaned rows need nothing here: their
+  // deliveries go with them, `on delete cascade`.
+  //
+  // **Cleared first, alone, and fatally.** There is no transaction spanning the two
+  // clients, so the order decides which way a half-done move fails. Deliveries gone but
+  // dates not yet moved re-sends the old date — a duplicate nudge, the safe direction.
+  // Dates moved with stale deliveries left behind would let the next run settle the
+  // re-armed rows without sending anything, on a write that reported success — and a
+  // user's retry could not repair it, because a date that already matches is skipped.
+  // So a failed clear fails the whole edit, and the user's retry really does retry it.
+  const redated = updates.map(({ id }) => id);
+
+  if (redated.length > 0) {
+    const { error: deliveriesError } = await createServiceClient()
+      .from("reminder_deliveries")
+      .delete()
+      .in("reminder_id", redated);
+
+    if (deliveriesError !== null) return false;
+  }
 
   const results = await Promise.all([
     inserts.length === 0

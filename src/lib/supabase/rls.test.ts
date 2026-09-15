@@ -151,6 +151,75 @@ afterAll(async () => {
   await service.from("orgs").delete().in("id", created(orgs));
 });
 
+describe("reminder_deliveries", () => {
+  // Written only by the cron, through the service role. What a member may do is read
+  // what their own org's runs delivered — and nothing across the boundary (ADR-0034).
+  let reminderId = "";
+
+  beforeAll(async () => {
+    const { data, error } = await service
+      .from("reminders")
+      .insert({
+        org_id: orgs.b,
+        tender_id: tenders.b,
+        milestone: "internal_quote",
+        days_before: 3,
+        due_date: "2026-08-07",
+        // Settled already, so the send suite's concurrent runs — which sweep every
+        // org and deliver by email (ADR-0034) — leave this fixture's rows alone.
+        sent: true,
+      })
+      .select("id")
+      .single();
+
+    if (error) throw error;
+
+    reminderId = data.id as string;
+
+    const { error: deliveryError } = await service.from("reminder_deliveries").insert({
+      reminder_id: reminderId,
+      channel: "email",
+      org_id: orgs.b,
+      delivered_at: "2026-08-10T01:00:00.000Z",
+    });
+
+    if (deliveryError) throw deliveryError;
+  });
+
+  it("hides another org's deliveries", async () => {
+    const client = await signedInAs(members.a.email);
+
+    const { data, error } = await client
+      .from("reminder_deliveries")
+      .select("reminder_id");
+
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
+  });
+
+  it("shows a member what their own org's runs delivered", async () => {
+    const client = await signedInAs(members.b.email);
+
+    const { data, error } = await client.from("reminder_deliveries").select("channel");
+
+    expect(error).toBeNull();
+    expect(data).toEqual([{ channel: "email" }]);
+  });
+
+  it("refuses a member's write even inside the org — only the cron delivers", async () => {
+    const client = await signedInAs(members.b.email);
+
+    const { error } = await client.from("reminder_deliveries").insert({
+      reminder_id: reminderId,
+      channel: "wecom",
+      org_id: orgs.b,
+      delivered_at: "2026-08-10T01:00:00.000Z",
+    });
+
+    expect(error).not.toBeNull();
+  });
+});
+
 describe("row-level security", () => {
   it("shows a member only their own org's rows", async () => {
     const client = await signedInAs(members.a.email);

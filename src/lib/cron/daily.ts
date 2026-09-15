@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { EmailBoundary } from "@/lib/email/send";
 import { fetchDailyRates, type DailyRateFetch, type FxBoundary } from "@/lib/fx/rates";
 import type { RobotBoundary } from "@/lib/wecom/robot";
 
@@ -11,13 +12,17 @@ import { sendDailyPosts, type DailyPostReport } from "@/lib/reminders/send";
  * Digest joins it.
  *
  * A function rather than the body of the route handler, because the two things it does are
- * the two outbound boundaries this project stubs (see the note in `vitest.config.mts`) and
+ * the outbound boundaries this project stubs (see the note in `vitest.config.mts`) and
  * a route handler has nowhere to take them as arguments. The route resolves the instant,
  * checks it is really Vercel Cron calling, and hands off to here.
  */
 
-/** Both stubbed boundaries the run stands at, injected together. */
-export type CronBoundary = { rates?: FxBoundary; robot?: RobotBoundary };
+/** All three stubbed boundaries the run stands at, injected together. */
+export type CronBoundary = {
+  rates?: FxBoundary;
+  robot?: RobotBoundary;
+  email?: EmailBoundary;
+};
 
 export type DailyCronReport = {
   ranAt: string;
@@ -39,7 +44,10 @@ export async function runDailyCron(
   boundary: CronBoundary = {},
 ): Promise<DailyCronReport> {
   const rates = await fetchDailyRates(boundary.rates);
-  const posts = await sendDailyPosts(at, boundary.robot);
+  const posts = await sendDailyPosts(at, {
+    robot: boundary.robot,
+    email: boundary.email,
+  });
 
   return { ranAt: at.toISOString(), rates, posts };
 }

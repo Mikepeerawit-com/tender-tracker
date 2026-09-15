@@ -637,5 +637,51 @@
       "save_failed": "保存失败。数值未被修改，请重试。"
     },
     "percentSign": "%"
+  },
+  "email": {
+    "reminder": {
+      "subject": "【招标跟踪】{reference} · {client} · {title}",
+      "milestone": {
+        "internal_quote": "内部报价截止：{date}（{remaining}）。请打开“我的工作”，为你的每个产品项录入报价，或说明找不到供应商。",
+        "client_submission": "客户投标截止：{date}（{remaining}）。请为每个产品项选定报价，把投标送到客户手上，再回来点“记录投标已送出”。",
+        "submission_missed": "⚠️ 投标已错过！客户投标截止日期 {date} 已过，我方仍未提交。请立即联系客户，问清楚还能不能补交，并把结果记进系统。",
+        "decision_chase": "跟进客户决标：预计决标日期 {date}。请联系客户询问结果，再逐个产品项把裁决记进系统。"
+      },
+      "items": "等待你报价的产品项：",
+      "action": "请进入系统完成以上操作。"
+    },
+    "remaining": {
+      "today": "就是今天",
+      "days": "还剩 {days} 天"
+    },
+    "digest": {
+      "subject": "【招标跟踪】每日摘要：共 {count} 个进行中的招标",
+      "intro": "请在下面找到与你有关的那几条，进入系统处理：参与人录入报价，负责人选定报价并提交投标。",
+      "line": "{reference} · {client} · {title}：{summary}",
+      "next": {
+        "internal_quote": "内部报价截止 {date}（{remaining}）",
+        "client_submission": "客户投标截止 {date}（{remaining}）",
+        "submission_missed": "⚠️ 已错过客户投标截止 {date}，仍未提交",
+        "decision_chase": "等待客户决标，预计 {date}"
+      },
+      "undated": "已提交，等待客户决标（未设预计决标日期）"
+    },
+    "outcome": {
+      "subject": "【招标跟踪】{reference} · {client} · {item} — {verdict}",
+      "verdict": {
+        "won": "中标",
+        "lost": "未中标"
+      },
+      "selected": {
+        "won": "你的报价被选用，并且中标了。",
+        "lost": "本次投标采用的是你的报价，客户最终选择了其他供应商。",
+        "action": "请进入系统打开该产品项，查看这次采用的报价。"
+      },
+      "other": {
+        "selected": "你的报价未被选用，本次投标采用的是 {selectedBy} 的报价。",
+        "unselected": "你的报价未被选用，本次投标未记录选用的报价。",
+        "action": "请进入系统打开该产品项，查看你自己的报价记录。"
+      }
+    }
   }
 }

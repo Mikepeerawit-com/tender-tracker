@@ -30,6 +30,7 @@ type HealthBody = {
   database?: string;
   schema: { expected: string; applied: string | null; behind: number | null };
   appOrigin?: { configured: boolean; origin?: string; error?: string };
+  email?: { configured: boolean; from?: string; error?: string };
   checkedAt: string;
 };
 
@@ -103,5 +104,77 @@ describe("GET /api/health, on a deployment that does not know its own URL", () =
 
     expect(status).toBe(200);
     expect(body.appOrigin).toEqual({ configured: true, origin: configuredOrigin });
+  });
+});
+
+/**
+ * The deployment that cannot mail anybody (ADR-0034) — the seventh fault, and the
+ * email twin of the six above it. The transport itself throws at the first real send,
+ * so this probe is where the gate catches a deployment whose morning run would be the
+ * first to find out.
+ */
+describe("GET /api/health, on a deployment that cannot send email", () => {
+  beforeEach(() => {
+    vi.stubEnv("ALLOW_RUN_INSTANT_HEADER", "true");
+    vi.stubEnv("APP_ORIGIN", configuredOrigin);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("refuses to call itself ok without the key, and names the fault", async () => {
+    vi.stubEnv("RESEND_API_KEY", "");
+
+    const { status, body } = await health();
+
+    expect(status).toBe(503);
+    expect(body.status).toBe("no-email-config");
+    expect(body.email).toMatchObject({ configured: false });
+    expect(body.email?.error).toContain("RESEND_API_KEY");
+  });
+
+  it("treats a missing sender the same way — mail from nowhere is filed as spam", async () => {
+    vi.stubEnv("EMAIL_FROM", "");
+
+    const { body } = await health();
+
+    expect(body.status).toBe("no-email-config");
+    expect(body.email?.error).toContain("EMAIL_FROM");
+  });
+
+  it("refuses a sender the transport would refuse — configured has to mean sendable", async () => {
+    // Set, non-blank, and refused by the provider on every send. `configured: true`
+    // here would let a deployment-wide typo be paid for in settled rows nobody was
+    // ever mailed, because a 4xx closes deliveries (ADR-0034). One policy: this is the
+    // same check sendEmails throws on.
+    vi.stubEnv("EMAIL_FROM", "Tender Tracker reminders@example.test");
+
+    const { status, body } = await health();
+
+    expect(status).toBe(503);
+    expect(body.status).toBe("no-email-config");
+    expect(body.email?.error).toContain("EMAIL_FROM");
+  });
+
+  it("lets the origin fault outrank it, so the reader meets one errand at a time", async () => {
+    vi.stubEnv("APP_ORIGIN", "");
+    vi.stubEnv("RESEND_API_KEY", "");
+
+    const { body } = await health();
+
+    expect(body.status).toBe("no-app-origin");
+    // Not lost, though: the email fault is still named for whoever reads the body.
+    expect(body.email).toMatchObject({ configured: false });
+  });
+
+  it("names the sender on the healthy answer, so a wrong one is visible too", async () => {
+    const { status, body } = await health();
+
+    expect(status).toBe(200);
+    expect(body.email).toEqual({
+      configured: true,
+      from: "Tender Tracker <test@example.test>",
+    });
   });
 });

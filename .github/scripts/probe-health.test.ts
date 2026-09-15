@@ -257,6 +257,13 @@ describe("the six faults stay apart", () => {
       // the catch-all. `redeploy` appears only in the sentence this fault writes.
       /redeploy/i,
     ],
+    [
+      "a deployment that cannot send email",
+      { status: 503, body: { status: "no-email-config", database: "reachable", schema: { expected: "1", applied: "1", behind: 0 }, tables: { probed: "tenders", readable: true }, appOrigin: { configured: true, origin: "https://tenders.example.com" }, email: { configured: false, error: "RESEND_API_KEY is not set, so no reminder email can be sent." } } },
+      // Not /RESEND/: the echoed body already says that. EMAIL_FROM appears only in the
+      // fix sentence this fault writes.
+      /EMAIL_FROM/,
+    ],
   ])("names %s", async (_name, answer, expected) => {
     const { origin } = await serving(answer as Answer);
 

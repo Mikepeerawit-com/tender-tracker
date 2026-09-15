@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { appOrigin, type AppOrigin } from "@/lib/app-links";
+import { emailConfig, type EmailConfig } from "@/lib/email/send";
 import { InvalidRunInstantError, runInstantFrom } from "@/lib/run-instant";
 import { expectedMigrations } from "@/lib/schema/expected-migrations";
 import { createServiceClient } from "@/lib/supabase/service-client";
@@ -28,6 +29,7 @@ export const dynamic = "force-dynamic";
  * | `schema.behind > 0` | Reachable and partly migrated: `applied` names what it holds. `supabase db push`. |
  * | `tables.readable: false` | The schema is there and unreadable; check its grants. |
  * | `no-app-origin` | Nobody set `APP_ORIGIN`, so group messages carry no link into the app. |
+ * | `no-email-config` | `RESEND_API_KEY` or `EMAIL_FROM` is unset, so the morning run would throw at its first email (ADR-0034). Provision Resend and set the sender. |
  *
  * **`no-app-origin` is deliberately not folded into `misconfigured`** (#59). "No Supabase
  * credentials" and "nobody set the app's public URL" are different errands with different
@@ -64,6 +66,11 @@ export async function GET(request: Request): Promise<Response> {
   // expected-migrations read that follows — a probe that names a fact only when it is
   // unhappy about it leaves the reader guessing on the healthy answer.
   const origin = appOrigin();
+  // The same kind of fact for the email transport (ADR-0034): environment only, read
+  // once, reported on every answer. The transport itself throws at the first real
+  // send, so this probe is where a deployment that cannot mail anybody is caught —
+  // before a morning run is the first to find out.
+  const email = emailConfig();
 
   // Read before anything else can fail, so that "what did this build expect?" is
   // answerable in every response below — including the ones where the database never
@@ -80,6 +87,7 @@ export async function GET(request: Request): Promise<Response> {
         error: error instanceof Error ? error.message : String(error),
         schema: unknownSchema("unknown"),
         appOrigin: originReport(origin),
+        email: emailReport(email),
         checkedAt: checkedAt.toISOString(),
       },
       { status: 500 },
@@ -102,6 +110,7 @@ export async function GET(request: Request): Promise<Response> {
         error: error instanceof Error ? error.message : String(error),
         schema: unknownSchema(newest),
         appOrigin: originReport(origin),
+        email: emailReport(email),
         checkedAt: checkedAt.toISOString(),
       },
       { status: 500 },
@@ -123,6 +132,7 @@ export async function GET(request: Request): Promise<Response> {
           ? { ...unknownSchema(newest), error: probe.error }
           : unknownSchema(newest),
         appOrigin: originReport(origin),
+        email: emailReport(email),
         checkedAt: checkedAt.toISOString(),
       },
       { status: 503 },
@@ -140,11 +150,18 @@ export async function GET(request: Request): Promise<Response> {
   // does not go away, it surfaces on the next probe once the schema is level.
   const schemaHealthy = behind === 0 && probe.tables.readable;
   const body = {
-    status: !schemaHealthy ? "degraded" : origin.error === null ? "ok" : "no-app-origin",
+    status: !schemaHealthy
+      ? "degraded"
+      : origin.error !== null
+        ? "no-app-origin"
+        : email.error !== null
+          ? "no-email-config"
+          : "ok",
     database: "reachable",
     schema: { expected: newest, applied: newestOf(probe.applied), behind },
     tables: probe.tables,
     appOrigin: originReport(origin),
+    email: emailReport(email),
     checkedAt: checkedAt.toISOString(),
   };
 
@@ -164,6 +181,19 @@ function originReport(origin: AppOrigin) {
   return origin.error === null
     ? { configured: true, origin: origin.origin }
     : { configured: false, error: origin.error };
+}
+
+/**
+ * What the response says about the email transport's configuration, `appOrigin`'s
+ * twin: the sender is named on success rather than reported as a bare `true`, because
+ * a wrong address on the right domain and the right address on an unverified one look
+ * identical to `configured: true` — and the address is on every email this app sends,
+ * so it is public by construction.
+ */
+function emailReport(email: EmailConfig) {
+  return email.error === null
+    ? { configured: true, from: email.from }
+    : { configured: false, error: email.error };
 }
 
 /** What the schema block says when the database could not be asked. */

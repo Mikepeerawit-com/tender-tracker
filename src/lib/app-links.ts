@@ -31,7 +31,7 @@ import { everything, worklistFilterQuery } from "@/lib/tenders/worklist-filter";
  * Ids, and nothing else. A URL naming a Tender or an Item discloses no more than the
  * message around it already does, and the financial detail stays where ADR-0012 put it:
  * behind login and RLS, in the app the link exists to drive people to. See the financial
- * silence note in `@/lib/wecom/messages.ts`.
+ * silence note in `@/lib/messaging/messages.ts`.
  *
  * **No locale segment** (ADR-0011). Locale is not in the URL, and the reader gets their
  * own stored one on arrival — a link that pinned one would hand every reader in the group

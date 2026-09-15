@@ -9,6 +9,7 @@ import {
   memoryCookieStore,
   type SessionCookieStore,
 } from "@/lib/supabase/session-client";
+import { recordingEmail, type EmailStub } from "@/lib/email/email-stub";
 import { recordingRobot, type RobotStub } from "@/lib/wecom/robot-stub";
 
 import { addAssignee, createTender, setItemOutcome } from "./tenders";
@@ -151,11 +152,12 @@ async function decide(
   itemId: string,
   outcome: string,
   robot: RobotStub,
+  email: EmailStub = recordingEmail(),
 ): Promise<void> {
   const result = await setItemOutcome(
     { itemId, outcome, decidedAt },
     await signedInAs(owner),
-    robot,
+    { robot, email },
   );
 
   if (!result.ok) throw new Error(`could not record the Outcome: ${result.reason}`);
@@ -390,6 +392,93 @@ describe("what stays quiet", () => {
   });
 });
 
+/**
+ * The email the news arrives by (ADR-0034). The group post above is the extra; this is
+ * the floor, and for the customer with no WeCom it is the entire feature.
+ */
+describe("the email the news arrives by", () => {
+  const to = (email: EmailStub, who: { email: string }) =>
+    email.sent.find((sent) => sent.payload.to === who.email)?.payload;
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("still saves the Outcome and posts to the group when email is not configured", async () => {
+    // The transport throws on a blank key, and /api/health is where that deployment
+    // fault is caught — never here, by failing a write that already succeeded, and
+    // never at the group's expense, which is the channel such a deployment still has.
+    const tender = await aTender([nok]);
+
+    await quoteOn(tender.itemId, nok, "Ace Medical");
+
+    vi.stubEnv("RESEND_API_KEY", "");
+
+    const robot = recordingRobot();
+    const result = await setItemOutcome(
+      { itemId: tender.itemId, outcome: "won", decidedAt },
+      await signedInAs(owner),
+      { robot, email: recordingEmail() },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(addressedTo(robot, nok)).toBeDefined();
+  });
+
+  it("mails every Assignee who quoted, each told their own fact", async () => {
+    const tender = await aTender([nok, anong]);
+    const winning = await quoteOn(tender.itemId, nok, "Ace Medical");
+
+    await quoteOn(tender.itemId, anong, "Siam Surgical");
+    await selectQuote(
+      { tenderItemId: tender.itemId, quoteId: winning },
+      await signedInAs(owner),
+    );
+
+    const email = recordingEmail();
+
+    await decide(tender.itemId, "won", recordingRobot(), email);
+
+    // The Assignee we bid hears it was theirs; the other hears whose it was — a
+    // colleague's name, never a supplier's. The Owner did not quote and gets nothing.
+    expect(to(email, nok)?.subject).toContain(client);
+    expect(to(email, nok)?.text).toContain("Your quote was the one we bid");
+    expect(to(email, anong)?.text).toContain("Nok");
+    expect(to(email, owner)).toBeUndefined();
+  });
+
+  it("mails a loss too — the one piece of feedback this app gives must arrive", async () => {
+    const tender = await aTender([nok]);
+
+    await quoteOn(tender.itemId, nok, "Ace Medical");
+
+    const email = recordingEmail();
+
+    await decide(tender.itemId, "lost", recordingRobot(), email);
+
+    expect(to(email, nok)?.subject).toContain("not won");
+    expect(to(email, nok)?.text).toContain("not selected");
+  });
+
+  it("stays silent on every channel for no_bid and cancelled", async () => {
+    // Neither is a verdict on anybody's sourcing, and a channel that speaks about
+    // non-events is one people learn to ignore — inboxes fastest of all.
+    const tender = await aTender([nok]);
+
+    await quoteOn(tender.itemId, nok, "Ace Medical");
+
+    for (const outcome of ["no_bid", "cancelled"]) {
+      const robot = recordingRobot();
+      const email = recordingEmail();
+
+      await decide(tender.itemId, outcome, robot, email);
+
+      expect(mine(robot)).toEqual([]);
+      expect(email.sent.filter((sent) => sent.payload.to.includes(run))).toEqual([]);
+    }
+  });
+});
+
 describe("the in-app rows the bell will read", () => {
   it("writes one per quoter, saying whose Quote we bid", async () => {
     const tender = await aTender([nok, anong]);
@@ -442,7 +531,7 @@ describe("what a failed post costs the person recording the Outcome", () => {
     const result = await setItemOutcome(
       { itemId: tender.itemId, outcome: "won", decidedAt },
       await signedInAs(owner),
-      recordingRobot(500),
+      { robot: recordingRobot(500), email: recordingEmail() },
     );
 
     expect(result.ok).toBe(true);

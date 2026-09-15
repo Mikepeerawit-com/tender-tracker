@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { locales, type Locale } from "@/i18n/config";
+import type { GroupMessage } from "@/lib/wecom/robot";
+
 import * as builders from "./messages";
-import type { GroupMessage } from "./robot";
+import type { EmailContent } from "./messages";
 
 /**
  * What may and may not be said in the WeCom group.
@@ -28,6 +31,9 @@ const fixture = {
   reference: "1042",
   client: "Bangkok Hospital",
   item: "PICC catheter 4Fr",
+  // Widened for the reminder email (ADR-0034), which names the Items its reader still
+  // owes a Quote on. Product names, and nothing a supplier could hide behind.
+  items: ["PICC catheter 4Fr", "Infusion set"],
   title: "Surgical consumables Q3",
   outcome: "won",
   quantity: 12,
@@ -79,14 +85,33 @@ const sentinels: string[] = Object.values(fixture)
   .map(String)
   .filter((value) => value.startsWith("SENTINEL-"));
 
-type Rule = { name: string; offences: (message: GroupMessage) => string[] };
+/** Either transport's product: the robot's message, or an email's subject and body. */
+type Built = GroupMessage | EmailContent;
 
-/** Everything a message carries, mentions included — a sentinel hides just as well there. */
-function everything(message: GroupMessage): string {
-  return [message.content, ...(message.mentions ?? [])].join(" ");
+type Rule = { name: string; offences: (message: Built) => string[] };
+
+function isEmail(message: Built): message is EmailContent {
+  return "subject" in message;
 }
 
-const rules: Rule[] = [
+/** Everything a message carries, mentions included — a sentinel hides just as well there. */
+function everything(message: Built): string {
+  return isEmail(message)
+    ? [message.subject, message.text].join(" ")
+    : [message.content, ...(message.mentions ?? [])].join(" ");
+}
+
+/** What a reader reads, whichever shape carries it. */
+function body(message: Built): string {
+  return isEmail(message) ? [message.subject, message.text].join("\n") : message.content;
+}
+
+/**
+ * The rules that hold on **both** transports, with no per-channel exemption — a guard
+ * with a condition in it stops holding the first time somebody gets the condition wrong
+ * (ADR-0034). A forwarded email is an uncontrolled surface just as the group is.
+ */
+const sharedRules: Rule[] = [
   {
     name: "names no supplier, price, cost or margin",
     offences: (message) =>
@@ -97,26 +122,53 @@ const rules: Rule[] = [
     // Not just the fixture's fields: a hardcoded figure or a currency symbol is the
     // same disclosure by a different route.
     offences: (message) =>
-      message.content.match(/[฿¥$€£]|THB|CNY|USD|EUR|\d+(\.\d+)?\s*%/g) ?? [],
+      body(message).match(/[฿¥$€£]|THB|CNY|USD|EUR|\d+(\.\d+)?\s*%/g) ?? [],
   },
+  {
+    name: "says none of the retired words for a Tender or an Item",
+    // The settled vocabulary (#87, #88). These strings are hardcoded here rather than in
+    // `zh-Hans.json`, so the guard that retired 标书, 条目, 明细 and bare 产品 across the
+    // screens cannot see them — and this is the app's highest-volume Chinese. 标书 is the
+    // bid document *we send back*, and pointed at the opposite end of the exchange from
+    // the client's enquiry it was being used for. Shared with the email rules: retiring
+    // another word must never need the same regex edited twice.
+    offences: (message) => body(message).match(/标书|条目|明细|产品(?!项)/g) ?? [],
+  },
+  {
+    name: "renders every field it reached for",
+    // The fixture is passed to every builder by introspection, so a builder wanting a
+    // field it does not carry would quietly interpolate `undefined` — and a message
+    // full of holes would satisfy every other rule here.
+    offences: (message) =>
+      body(message).includes("undefined") || body(message).trim() === ""
+        ? [body(message)]
+        : [],
+  },
+];
+
+const rules: Rule[] = [
+  ...sharedRules,
   {
     name: "is written in Simplified Chinese",
     // Hardcoded and not switchable: one group, one rendering, read once by everyone.
-    offences: (message) => (/[一-鿿]/.test(message.content) ? [] : [message.content]),
+    offences: (message) => (/[一-鿿]/.test(body(message)) ? [] : [body(message)]),
   },
   {
     name: "uses no markdown",
     // `text` is the only message type that carries a mention, and it renders markdown
     // literally — so formatting here reaches the group as punctuation.
     offences: (message) =>
-      message.content.match(/\*\*|__|\[.+\]\(.+\)|^#{1,6}\s|^[-*]\s/gm) ?? [],
+      body(message).match(/\*\*|__|\[.+\]\(.+\)|^#{1,6}\s|^[-*]\s/gm) ?? [],
   },
   {
     name: "mentions people by userid, never by mobile number",
     // A mis-formatted mobile binds for nobody and still returns errcode 0, so one
-    // mistake makes the whole org silently unreachable at once.
+    // mistake makes the whole org silently unreachable at once. Only group messages
+    // reach this list, so only their mention list is asked.
     offences: (message) =>
-      (message.mentions ?? []).filter((mention) => /^[+\d][\d\s-]{6,}$/.test(mention)),
+      (isEmail(message) ? [] : (message.mentions ?? [])).filter((mention) =>
+        /^[+\d][\d\s-]{6,}$/.test(mention),
+      ),
   },
   {
     name: "asks the reader for something, somewhere in it",
@@ -130,47 +182,103 @@ const rules: Rule[] = [
     // introspecting rule can see; it cannot see a *line* going back to a bare report,
     // because every message carries a 请 somewhere else. That regression is #99's actual
     // one, and it is pinned per line in "the role each reminder line addresses" below.
-    offences: (message) => (message.content.includes("请") ? [] : [message.content]),
-  },
-  {
-    name: "says none of the retired words for a Tender or an Item",
-    // The settled vocabulary (#87, #88). These strings are hardcoded here rather than in
-    // `zh-Hans.json`, so the guard that retired 标书, 条目, 明细 and bare 产品 across the
-    // screens cannot see them — and this is the app's highest-volume Chinese. 标书 is the
-    // bid document *we send back*, and pointed at the opposite end of the exchange from
-    // the client's enquiry it was being used for.
-    offences: (message) => message.content.match(/标书|条目|明细|产品(?!项)/g) ?? [],
-  },
-  {
-    name: "renders every field it reached for",
-    // The fixture is passed to every builder by introspection, so a builder wanting a
-    // field it does not carry would quietly interpolate `undefined` — and a message
-    // full of holes would satisfy every other rule here.
-    offences: (message) =>
-      message.content.includes("undefined") || message.content.trim() === ""
-        ? [message.content]
-        : [],
+    offences: (message) => (body(message).includes("请") ? [] : [body(message)]),
   },
 ];
+
+/**
+ * The email half's own rules, per locale. Everything in {@link sharedRules} applies
+ * verbatim; these replace only the rules that are facts about one language or one
+ * payload shape. The raw-key rule is what holds the builders to the catalogue:
+ * next-intl renders a missing entry as its own key and reports nothing, so a builder
+ * reaching for a key that is not there would otherwise mail somebody
+ * `email.reminder.subject`.
+ */
+function emailRules(locale: Locale): Rule[] {
+  return [
+    ...sharedRules,
+    {
+      name: "speaks the reader's own locale",
+      offences: (message) => {
+        const chinese = /[一-鿿]/.test(body(message));
+
+        return (locale === "zh-Hans") === chinese ? [] : [body(message)];
+      },
+    },
+    {
+      name: "asks the reader for something, somewhere in it",
+      offences: (message) =>
+        (locale === "zh-Hans" ? /请/ : /please/i).test(body(message))
+          ? []
+          : [body(message)],
+    },
+    {
+      // `^[-*]\s` deliberately absent from this one: the reminder email's Item list
+      // is drawn with "- " lines, which are plain text in an inbox where they would
+      // be markdown in a WeCom bubble.
+      name: "uses no markdown — the body ships as plain text",
+      offences: (message) =>
+        body(message).match(/\*\*|__|\[.+\]\(.+\)|^#{1,6}\s/gm) ?? [],
+    },
+    {
+      name: "resolves every catalogue key it reached for",
+      offences: (message) => body(message).match(/\bemail\.[a-z][\w.]*/g) ?? [],
+    },
+  ];
+}
 
 /**
  * Builders differ in what they take, and every one of them is called with the same
  * over-wide fixture. The widening is the point, not a shortcut: a builder this cannot
  * call is a builder this guard cannot see.
+ *
+ * Every builder is called **once per locale**. A group builder ignores the locale and
+ * produces the same message every time — kept once — while an email builder reads it,
+ * which is what puts both of its renderings under every rule with nobody remembering
+ * to add the second language.
  */
-type Builder = (input: typeof fixture) => GroupMessage;
+type Builder = (input: typeof fixture & { locale: Locale }) => Built;
 
 const everyMessage = Object.entries(builders)
   .filter(([, value]) => typeof value === "function")
-  .map(([name, build]) => [name, (build as unknown as Builder)(fixture)] as const);
+  .flatMap(([name, build]) =>
+    locales.map(
+      (locale) =>
+        [name, locale, (build as unknown as Builder)({ ...fixture, locale })] as const,
+    ),
+  );
+
+const groupMessages = everyMessage
+  .filter(([, locale, message]) => !isEmail(message) && locale === locales[0])
+  .map(([name, , message]) => [name, message] as const);
+
+const emailMessages = everyMessage
+  .filter((entry): entry is readonly [string, Locale, EmailContent] =>
+    isEmail(entry[2]),
+  )
+  .map(([name, locale, message]) => [`${name} in ${locale}`, locale, message] as const);
 
 describe("the messages the group robot posts", () => {
   it("has some — an introspecting guard that matches nothing guards nothing", () => {
-    expect(everyMessage.length).toBeGreaterThan(0);
+    expect(groupMessages.length).toBeGreaterThan(0);
   });
 
-  describe.each(everyMessage)("%s", (_name, message) => {
+  describe.each(groupMessages)("%s", (_name, message) => {
     it.each(rules)("$name", (rule) => {
+      expect(rule.offences(message)).toEqual([]);
+    });
+  });
+});
+
+describe("the emails", () => {
+  it("has some, in both locales — the floor is guarded the same way as the group", () => {
+    expect(emailMessages.length).toBeGreaterThan(0);
+    // Every email builder appears once per locale, or a language has escaped the rules.
+    expect(emailMessages.length % locales.length).toBe(0);
+  });
+
+  describe.each(emailMessages)("%s", (_name, locale, message) => {
+    it.each(emailRules(locale))("$name", (rule) => {
       expect(rule.offences(message)).toEqual([]);
     });
   });

@@ -1,19 +1,40 @@
 import "server-only";
 
-import type { ReminderMilestone } from "@/lib/reminders/schedule";
+// From `use-intl/core`, not `next-intl`: the next-intl entry point drags in
+// `next/headers` under the react-server condition, and this module runs on the cron,
+// where there is no request for headers to come from. use-intl is where next-intl's
+// own createTranslator lives; the import goes to the source.
+import { createTranslator } from "use-intl/core";
 
-import type { GroupMessage } from "./robot";
+import { type Locale } from "@/i18n/config";
+import type { ReminderMilestone } from "@/lib/reminders/schedule";
+import type { GroupMessage } from "@/lib/wecom/robot";
+import en from "@/messages/en.json";
+import zhHans from "@/messages/zh-Hans.json";
 
 /**
- * Every message the group robot posts, in hardcoded Simplified Chinese.
+ * Every message this app sends out, on either transport (ADR-0034): the group robot's
+ * posts, and the emails that are the floor under them. One builder set, two shapes —
+ * a {@link GroupMessage} for the robot, an {@link EmailContent} for the transport in
+ * `@/lib/email/send` — and one guard: `messages.test.ts` calls every export here by
+ * introspection, so the rules below hold on both transports with no per-channel
+ * exemption.
  *
- * ## Why this text is outside next-intl
+ * ## Why the group half is outside next-intl, and the email half is not
  *
- * These are broadcast into one WeCom group and rendered once, for everyone in it. There
- * is no reader whose locale could select between two versions — a per-user translation
- * would have to pick one anyway, and would pick it from whoever the message happened to
- * be *about*. This is the app's highest-volume output and it is not a screen, so it sits
- * outside the i18n system entirely rather than being half-inside it.
+ * The group posts are broadcast into one WeCom group and rendered once, for everyone in
+ * it. There is no reader whose locale could select between two versions — a per-user
+ * translation would have to pick one anyway, and would pick it from whoever the message
+ * happened to be *about*. So that half stays hardcoded Simplified Chinese, outside the
+ * i18n system entirely rather than half-inside it (ADR-0012).
+ *
+ * An email has exactly one reader, and this app already knows their locale: it is on
+ * their user row, the same posture the Theme takes under ADR-0024. The condition
+ * ADR-0012 named as the reason to stay outside the catalogue is not met by email, so
+ * email does not stay outside it — subjects and bodies are catalogue entries in both
+ * locales, under the same parity test as every screen (ADR-0034). The builders resolve
+ * the catalogue against an **explicit locale per recipient**, because the cron has no
+ * request for an ambient one to ride in on.
  *
  * ## Financial silence
  *
@@ -488,4 +509,227 @@ export function otherQuotesOutcomeMessage({
     ].join("\n"),
     mentions,
   };
+}
+
+/** One email's text: a subject and a plain-text body. The transport adds the address. */
+export type EmailContent = { subject: string; text: string };
+
+/**
+ * The catalogue, resolved against the reader's own locale rather than a request's.
+ *
+ * Static imports of both files, so the builders stay synchronous pure functions the
+ * introspection guard can call — and so a missing entry fails the catalogue parity
+ * test rather than a morning run.
+ */
+const catalogues = { en, "zh-Hans": zhHans } as const;
+
+/**
+ * Loosely typed on purpose. The app declares no global `IntlMessages`, so next-intl
+ * cannot type these keys — and half of them are assembled from a milestone at runtime
+ * anyway, which no literal type would cover. What holds the keys to the catalogue
+ * instead is the introspection guard: a builder reaching for a missing entry renders
+ * the raw key, and the guard's raw-key rule goes red on it in both locales.
+ */
+type EmailTranslator = (key: string, values?: Record<string, string | number>) => string;
+
+function emailText(locale: Locale): EmailTranslator {
+  return createTranslator({
+    locale,
+    messages: catalogues[locale],
+    namespace: "email",
+  }) as unknown as EmailTranslator;
+}
+
+/** `（就是今天）`'s email twin, in the reader's own words. */
+function remainingIn(t: EmailTranslator, daysLeft: number): string {
+  return daysLeft === 0 ? t("remaining.today") : t("remaining.days", { days: daysLeft });
+}
+
+/**
+ * One Tender's reminders for one reader — the email twin of {@link reminderMessage}.
+ *
+ * Collapsed the same way (every milestone the Tender owes this reader, one message) and
+ * personal in a way the group post cannot be: `milestones` here are only the ones that
+ * address *this* reader, and `items` names the Items still awaiting their Quote — an
+ * Assignee acting on the email should not have to open the app to find out what it is
+ * about. Empty when no internal-quote line is owed, and the section simply does not
+ * appear.
+ *
+ * The product names are the same disclosure the group post already makes — the message
+ * names the Tender, the client and the Item, never a price or a supplier — and the
+ * introspection guard holds this builder to exactly that.
+ */
+export function reminderEmail({
+  locale,
+  reference,
+  client,
+  title,
+  milestones,
+  items,
+  link,
+}: {
+  locale: Locale;
+  reference: string;
+  client: string;
+  title: string;
+  milestones: DueMilestone[];
+  items: string[];
+  link: string | null;
+}): EmailContent {
+  const t = emailText(locale);
+
+  return {
+    subject: t("reminder.subject", { reference, client, title }),
+    text: [
+      ...milestones.map(({ milestone, date, daysLeft }) =>
+        t(`reminder.milestone.${milestone}`, {
+          date,
+          remaining: remainingIn(t, daysLeft),
+        }),
+      ),
+      ...(items.length > 0
+        ? [t("reminder.items"), ...items.map((item) => `- ${item}`)]
+        : []),
+      t("reminder.action"),
+      ...linkLine(link),
+    ].join("\n"),
+  };
+}
+
+/**
+ * The daily summary as one reader's email — the twin of {@link digestMessage}, scoped
+ * to a reader the group post never had.
+ *
+ * **It names nobody.** It goes out every morning whether or not anything has changed,
+ * and a daily message that named people is a nag, not a summary — the person who has to
+ * act on a Tender is named in the app (and in the reminder emails, which are the
+ * messages somebody has to act on).
+ *
+ * **No truncation.** The group post budgets its bytes because WeCom refuses a `text`
+ * message over 2048 of them, whole; an email has no such cap, so every open Tender is
+ * listed and there is nothing to count as omitted.
+ */
+export function digestEmail({
+  locale,
+  tenders,
+  link,
+}: {
+  locale: Locale;
+  tenders: DigestLine[];
+  link: string | null;
+}): EmailContent {
+  const t = emailText(locale);
+
+  return {
+    subject: t("digest.subject", { count: tenders.length }),
+    text: [
+      t("digest.intro"),
+      ...tenders.map(({ reference, client, title, next }) =>
+        t("digest.line", {
+          reference,
+          client,
+          title,
+          summary:
+            next === null
+              ? t("digest.undated")
+              : t(`digest.next.${next.milestone}`, {
+                  date: next.date,
+                  remaining: remainingIn(t, next.daysLeft),
+                }),
+        }),
+      ),
+      ...linkLine(link),
+    ].join("\n"),
+  };
+}
+
+/**
+ * The news, for the Assignee whose Quote we actually bid — the email twin of
+ * {@link selectedQuoteOutcomeMessage}, and split from the other readers' email for the
+ * same reason that one gives: the two audiences are being told different facts.
+ */
+export function selectedQuoteOutcomeEmail({
+  locale,
+  reference,
+  client,
+  item,
+  outcome,
+  link,
+}: {
+  locale: Locale;
+  reference: string;
+  client: string;
+  item: string;
+  outcome: AnnouncedOutcome;
+  link: string | null;
+}): EmailContent {
+  const t = emailText(locale);
+
+  return {
+    subject: outcomeSubject(t, { reference, client, item, outcome }),
+    text: [
+      t(`outcome.selected.${outcome}`),
+      t("outcome.selected.action"),
+      ...linkLine(link),
+    ].join("\n"),
+  };
+}
+
+/**
+ * The news, for everybody else who quoted the Item — the email twin of
+ * {@link otherQuotesOutcomeMessage}. `selectedBy` names a **colleague**, never a
+ * supplier, and the instruction stops at naming who we bid, for the reasons that
+ * builder records (ADR-0020).
+ */
+export function otherQuotesOutcomeEmail({
+  locale,
+  reference,
+  client,
+  item,
+  outcome,
+  selectedBy,
+  link,
+}: {
+  locale: Locale;
+  reference: string;
+  client: string;
+  item: string;
+  outcome: AnnouncedOutcome;
+  selectedBy: string | null;
+  link: string | null;
+}): EmailContent {
+  const t = emailText(locale);
+
+  return {
+    subject: outcomeSubject(t, { reference, client, item, outcome }),
+    text: [
+      selectedBy === null
+        ? t("outcome.other.unselected")
+        : t("outcome.other.selected", { selectedBy }),
+      t("outcome.other.action"),
+      ...linkLine(link),
+    ].join("\n"),
+  };
+}
+
+/**
+ * The subject both outcome emails share — not exported, so the guard does not count it
+ * as a builder, and so the two that are exported cannot drift into naming the same Item
+ * differently. {@link outcomeHead}'s twin.
+ */
+function outcomeSubject(
+  t: EmailTranslator,
+  {
+    reference,
+    client,
+    item,
+    outcome,
+  }: { reference: string; client: string; item: string; outcome: AnnouncedOutcome },
+): string {
+  return t("outcome.subject", {
+    reference,
+    client,
+    item,
+    verdict: t(`outcome.verdict.${outcome}`),
+  });
 }

@@ -10,10 +10,11 @@ import { captureWindow, phone } from "./src/test/phone.mts";
  * Two seams, told apart by the file extension.
  *
  * **`.test.ts` — server.** Route handlers and server actions, run against the real local
- * Postgres that `supabase start` brings up. Nothing is mocked but the two outbound
- * boundaries (the WeCom robot webhook, the Frankfurter rate fetch), because the riskiest
- * logic here — derived progress, the overdue conditions, the reminder engine's state
- * across runs — does not survive being lifted out of the database.
+ * Postgres that `supabase start` brings up. Nothing is mocked but the three outbound
+ * boundaries (the WeCom robot webhook, the Resend email send, the Frankfurter rate
+ * fetch), because the riskiest logic here — derived progress, the overdue conditions,
+ * the reminder engine's state across runs — does not survive being lifted out of the
+ * database.
  *
  * **`.test.tsx` — the browser half.** The few behaviours that exist only once a component
  * is interactive, such as a Margin recomputing as digits are typed into the row. These
@@ -190,6 +191,12 @@ function localSupabaseEnv(): Record<string, string> {
     // same reason: /api/health compares it against what the database says it holds, and
     // a suite that left it unset would be testing a probe that expects nothing.
     EXPECTED_SCHEMA_MIGRATIONS: migrationsOnDiskEnv(),
+    // The email transport reads both at the first real send and throws on a blank
+    // (ADR-0034) — and every real send in a test is answered by the recording stub, so
+    // these never reach Resend. The one test about the blank-key throw stubs them back
+    // out with `vi.stubEnv`.
+    RESEND_API_KEY: "re_test_key_never_sent_anywhere",
+    EMAIL_FROM: "Tender Tracker <test@example.test>",
   };
 }
 

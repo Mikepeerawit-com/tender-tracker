@@ -1,7 +1,11 @@
 import "server-only";
 
+import type { SendOutcome } from "@/lib/messaging/send-outcome";
+
 /**
- * The WeCom group-robot webhook: the one outbound integration in v1.
+ * The WeCom group-robot webhook: one transport of two, and the extra rather than the
+ * floor (ADR-0034) — an org that sets one up gets the group post as well as the email
+ * every org gets.
  *
  * A plain HTTPS POST to a URL the org owns. No access token, no app credentials, no
  * OAuth, no domain of ours — it is the single WeCom surface exempt from every gate this
@@ -29,30 +33,21 @@ import "server-only";
 export type GroupMessage = { content: string; mentions?: string[] };
 
 /**
- * What happened to one send. Failure is always retryable: WeCom's throttle response is
- * unmeasured, so nothing here distinguishes "will never work" from "try again", and
- * ADR-0005's catch-up semantics recover an unsent row on the next run for free.
- *
- * `errcode` is null when the call never got far enough to receive one.
- *
- * `detail` is **upstream's words, never ours** — WeCom's `errcode`/`errmsg`, an HTTP
- * status, or the transport's own error. It reaches an Org Admin's screen, and a screen
- * is translated (ADR-0011); English sentences composed here would arrive untranslated
- * on a zh-Hans screen and escape the message catalogue's parity test entirely. So the
- * wording a human reads lives in `src/messages/`, and this carries only the protocol
- * facts that catalogue cannot know.
+ * The shared outcome type is `@/lib/messaging/send-outcome`, and **this transport never
+ * reports `retryable: false`**: WeCom's throttle response is unmeasured, so nothing here
+ * distinguishes "will never work" from "try again", and ADR-0005's catch-up semantics
+ * recover an unsent row on the next run for free. The non-retryable case belongs to
+ * email, whose provider states a rejection outright.
  */
-export type SendOutcome =
-  | { ok: true }
-  | { ok: false; retryable: true; errcode: number | null; detail: string };
+export type { SendOutcome };
 
 /**
  * The outbound boundary, injected so tests can stand at it.
  *
  * Deliberately not a global `fetch` stub: the send path is reached from server actions
  * that also talk to Postgres over HTTP, and stubbing `fetch` globally would take
- * `supabase-js` down with it. This is one of exactly two stubbed outbound boundaries in
- * the project — see the note in vitest.config.mts.
+ * `supabase-js` down with it. This is one of exactly three stubbed outbound boundaries
+ * in the project — see the note in vitest.config.mts.
  */
 export type RobotBoundary = {
   fetch?: typeof globalThis.fetch;

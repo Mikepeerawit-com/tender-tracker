@@ -186,4 +186,14 @@ if [ "$origin_configured" = "false" ]; then
     "${origin_error} Set APP_ORIGIN on the deployment to the app's absolute https origin with no trailing slash — see .env.example — and redeploy, because env vars added after a build need one."
 fi
 
+# Same `tostring`, same reason as the origin's: `false` is the value this branch exists
+# to catch, and `//` would report it as absent.
+email_configured=$(printf '%s' "$body" | jq -r '.email.configured | tostring')
+
+if [ "$email_configured" = "false" ]; then
+  email_error=$(printf '%s' "$body" | jq -r '.email.error // "unknown"')
+  fail "${label} cannot send email, and email is the floor every Reminder arrives by (ADR-0034)." \
+    "${email_error} Provision the Resend integration (\`vercel integration add resend/resend-email\` supplies RESEND_API_KEY), set EMAIL_FROM to a sender on the verified domain, and redeploy — env vars added after a build need one."
+fi
+
 fail "${label} answered ${code} with status '${status}'." "${url}"

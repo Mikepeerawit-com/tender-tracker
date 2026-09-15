@@ -637,5 +637,51 @@
       "save_failed": "That could not be saved. The figure is unchanged — try again."
     },
     "percentSign": "%"
+  },
+  "email": {
+    "reminder": {
+      "subject": "[Tender Tracker] {reference} · {client} · {title}",
+      "milestone": {
+        "internal_quote": "Internal quote deadline: {date} ({remaining}). Please open My Work and enter a quote for each of your items, or record that no supplier could be found.",
+        "client_submission": "Client submission deadline: {date} ({remaining}). Please select a quote for each item, deliver the bid to the client, then come back and record the submission as sent.",
+        "submission_missed": "⚠️ Submission missed! The client submission deadline {date} has passed and nothing was submitted. Please contact the client at once to ask whether a late submission is still possible, and record the result.",
+        "decision_chase": "Chase the client's decision: expected decision date {date}. Please ask the client for the result, then record each item's outcome."
+      },
+      "items": "Items awaiting your quote:",
+      "action": "Please go to the app and act on the above."
+    },
+    "remaining": {
+      "today": "due today",
+      "days": "{days, plural, one {# day left} other {# days left}}"
+    },
+    "digest": {
+      "subject": "[Tender Tracker] Daily summary: {count, plural, one {# tender} other {# tenders}} in progress",
+      "intro": "Please find the tenders that concern you and act on them in the app: assignees enter quotes, owners select quotes and submit the bid.",
+      "line": "{reference} · {client} · {title}: {summary}",
+      "next": {
+        "internal_quote": "internal quote deadline {date} ({remaining})",
+        "client_submission": "client submission deadline {date} ({remaining})",
+        "submission_missed": "⚠️ client submission deadline {date} missed, nothing submitted",
+        "decision_chase": "awaiting the client's decision, expected {date}"
+      },
+      "undated": "submitted, awaiting the client's decision (no expected date set)"
+    },
+    "outcome": {
+      "subject": "[Tender Tracker] {reference} · {client} · {item} — {verdict}",
+      "verdict": {
+        "won": "won",
+        "lost": "not won"
+      },
+      "selected": {
+        "won": "Your quote was the one we bid, and the bid won.",
+        "lost": "The bid used your quote; the client chose another supplier.",
+        "action": "Please open the item in the app to see the quote that was used."
+      },
+      "other": {
+        "selected": "Your quote was not selected; the bid used {selectedBy}'s quote.",
+        "unselected": "Your quote was not selected, and no quote was recorded as used for this bid.",
+        "action": "Please open the item in the app to review your own quotes."
+      }
+    }
   }
 }

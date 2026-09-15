@@ -1,12 +1,20 @@
 import "server-only";
 
+import { defaultLocale, isLocale, type Locale } from "@/i18n/config";
 import { appLinks } from "@/lib/app-links";
 import { daysBetween, todayIn } from "@/lib/calendar-date";
 import { digestFor } from "@/lib/digest/digest";
+import { sendEmails, type EmailBoundary, type EmailMessage } from "@/lib/email/send";
+import type { SendOutcome } from "@/lib/messaging/send-outcome";
+import {
+  digestEmail,
+  reminderEmail,
+  reminderMessage,
+  type DueMilestone,
+} from "@/lib/messaging/messages";
 import { tenderOutcome, type ItemOutcome } from "@/lib/tenders/outcome";
 import { createServiceClient } from "@/lib/supabase/service-client";
 import { webhookFor } from "@/lib/wecom/group-robot";
-import { reminderMessage, type DueMilestone } from "@/lib/wecom/messages";
 import { sendGroupMessages, type GroupMessage, type RobotBoundary } from "@/lib/wecom/robot";
 
 import {
@@ -18,7 +26,14 @@ import {
 
 /**
  * The send half of the daily cron: everything owed, collapsed into as few messages as it
- * can honestly be, posted, and only then marked done.
+ * can honestly be, sent on every channel the org has, and only then marked done.
+ *
+ * **Two transports since ADR-0034.** Email is the floor — every Reminder and the Digest
+ * reach their people by email, for every org, with nothing to configure — and the Group
+ * Robot is the extra an org with a webhook gets as well. What a message may say does
+ * not vary by channel (the introspection guard in `@/lib/messaging/messages.test.ts`
+ * covers both); what language it is in does — the group post is one rendering for
+ * everyone, an email is its one reader's own locale.
  *
  * **The Digest rides in the same batch**, last, and it is why this file is named for the
  * run rather than for the reminders it is mostly about. It lives under `reminders/`
@@ -48,33 +63,53 @@ import {
  *    for a Tender, across missed days *and* across every milestone. Ten Tenders after a
  *    three-day outage is ~10 messages; a run that looped the rows instead would post ~60
  *    against a cap of 20 a minute.
- * 5. **Never mark `sent` on a non-zero errcode** — {@link settle}. Every failure from
- *    the robot is retryable by construction, so the row is left alone and rule 1 recovers
- *    it on the next run for free.
+ * 5. **Never mark `sent` while a channel still owes** — {@link settle}, and since
+ *    ADR-0034 the per-channel `reminder_deliveries` rows beside it. Every failure from
+ *    the robot is retryable by construction, and a retryable email failure is treated
+ *    the same way: the row is left alone and rule 1 recovers it on the next run for
+ *    free, with the delivery rows keeping the retry surgical — the channel that already
+ *    succeeded is not sent again. The one exception is email's non-retryable refusal
+ *    (a rejected address), which closes that delivery rather than queueing a retry
+ *    that cannot succeed.
  *
  * The run instant is a parameter (ADR-0010). Which day it is, is then a question only the
  * org's timezone can answer: Vercel runs UTC, and a server-local boundary would fire the
  * whole night's reminders seven hours early for everybody in Bangkok.
  */
 
+/** One figure per transport — "did anybody get chased this morning" has one answer each. */
+export type ChannelCounts = { wecom: number; email: number };
+
+/** Both stubbed outbound boundaries the run stands at, injected together. */
+export type PostBoundary = { robot?: RobotBoundary; email?: EmailBoundary };
+
 /** What one run did, in the terms the rules are stated in. */
 export type DailyPostReport = {
   /** Orgs with something to post — a reminder owed, a Digest, or both. */
   orgs: number;
   /**
-   * Messages handed to the robot, Digests included.
+   * Messages handed to each transport, Digests included.
    *
-   * Everything in one org's run is one paced batch, so this is the figure the
-   * 20-per-minute cap is about as well as the one rule 4 is about.
+   * `wecom` is one org's run as one paced batch, so it is the figure the 20-per-minute
+   * cap is about as well as the one rule 4 is about. `email` counts one per recipient —
+   * the collapse of rule 4 still holds per reader, but a reader is not a group.
    */
-  messages: number;
-  /** Digests the robot accepted — at most one per org, and none for an org with nothing open. */
-  digests: number;
-  /** Rows this run finished with: posted, or suppressed as no longer worth posting. */
+  messages: ChannelCounts;
+  /**
+   * Digests each transport accepted. On WeCom at most one per org; by email one per
+   * member — and none anywhere for an org with nothing open.
+   */
+  digests: ChannelCounts;
+  /** Rows this run finished with: delivered everywhere owed, or no longer worth posting. */
   closed: number;
-  /** Rows deliberately left for the next run because the send did not succeed. */
+  /** Rows deliberately left for the next run because a send did not succeed. */
   retrying: number;
-  /** Orgs passed over because nobody has set up a Group Robot yet. */
+  /**
+   * Orgs that have no Group Robot. **Information, never a skip** (ADR-0034): such an
+   * org is complete on email alone, and nothing in this report implies nothing was
+   * sent to it — the count exists because "set a webhook and the group is told too"
+   * is the one thing an operator might act on.
+   */
   unconfigured: number;
 };
 
@@ -96,16 +131,30 @@ type TenderRow = {
   expected_decision_date: string | null;
   submitted_at: string | null;
   owner_user_id: string;
-  items: { id: string; outcome: ItemOutcome | null }[];
+  items: { id: string; outcome: ItemOutcome | null; product_name: string }[];
 };
 
-/** One Tender's whole share of this run: what to post, and which rows it settles. */
+/**
+ * One reader's share of one Tender's morning: the milestone lines that address them,
+ * and — for the internal quote deadline — the Items still awaiting their Quote, so the
+ * email can name them and its reader need not open the app to find out what it means.
+ */
+type RecipientShare = { milestones: DueMilestone[]; items: string[] };
+
+/** One Tender's whole share of this run: what to send on each channel, and which rows it settles. */
 type TenderBatch = {
   message: GroupMessage;
-  /** Rows that are only finished once the message is accepted (rule 5). */
-  liveIds: string[];
+  /** Who the email transport writes to — the same audiences the @-list collapses. */
+  recipients: Map<string, RecipientShare>;
+  /** What every recipient's email says about which Tender. */
+  facts: { reference: string; client: string; title: string; link: string | null };
+  /** Rows that are only finished once every channel the org has has succeeded. */
+  live: ReminderRow[];
   notifications: NotificationRow[];
 };
+
+/** The two transports a Reminder can leave on. `reminder_deliveries.channel` verbatim. */
+type Channel = "email" | "wecom";
 
 type NotificationRow = {
   org_id: string;
@@ -125,7 +174,7 @@ type NotificationRow = {
  */
 export async function sendDailyPosts(
   at: Date,
-  boundary: RobotBoundary = {},
+  boundary: PostBoundary = {},
 ): Promise<DailyPostReport> {
   const service = createServiceClient();
   const { data: orgs } = await service
@@ -135,8 +184,8 @@ export async function sendDailyPosts(
 
   const report: DailyPostReport = {
     orgs: 0,
-    messages: 0,
-    digests: 0,
+    messages: { wecom: 0, email: 0 },
+    digests: { wecom: 0, email: 0 },
     closed: 0,
     retrying: 0,
     unconfigured: 0,
@@ -148,8 +197,10 @@ export async function sendDailyPosts(
     if (orgReport === null) continue;
 
     report.orgs += 1;
-    report.messages += orgReport.messages;
-    report.digests += orgReport.digests;
+    report.messages.wecom += orgReport.messages.wecom;
+    report.messages.email += orgReport.messages.email;
+    report.digests.wecom += orgReport.digests.wecom;
+    report.digests.email += orgReport.digests.email;
     report.closed += orgReport.closed;
     report.retrying += orgReport.retrying;
     report.unconfigured += orgReport.unconfigured;
@@ -160,12 +211,21 @@ export async function sendDailyPosts(
 
 type OrgReport = Omit<DailyPostReport, "orgs">;
 
-/** One org's run, or null when it had nothing to say at all. */
+/**
+ * One org's run, or null when it had nothing to say at all.
+ *
+ * Two transports, one set of rows (ADR-0034). **Email is the floor** — every org has
+ * it, with nothing to configure — and the Group Robot is the extra an org with a
+ * webhook gets as well. A `reminder_deliveries` row records each Tender batch's
+ * success per channel, which is what stops a transport that already succeeded from
+ * sending again when the other one is retried; a row settles (rule 5's `sent`) only
+ * once every channel the org actually has has succeeded.
+ */
 async function sendOrgPosts(
   org: OrgRow,
   today: string,
   at: Date,
-  boundary: RobotBoundary,
+  boundary: PostBoundary,
 ): Promise<OrgReport | null> {
   const due = await dueReminders(org.id, today);
   // Owed whether or not a reminder is. "What is going on right now" is asked every
@@ -175,13 +235,13 @@ async function sendOrgPosts(
   if (due.length === 0 && digest === null) return null;
 
   // Every row this run has finished with, reported the same way whether the run finished
-  // with it because the message went out or because there was no longer one to send.
-  // Anything `closeOut` could not write is counted as retrying rather than as closed —
+  // with it because the messages went out or because there was no longer one to send.
+  // Anything `settle` could not write is counted as retrying rather than as closed —
   // it really will come back tomorrow, and a report that said otherwise would be the one
   // place in this file that lies about what happened.
   const report: OrgReport = {
-    messages: 0,
-    digests: 0,
+    messages: { wecom: 0, email: 0 },
+    digests: { wecom: 0, email: 0 },
     closed: 0,
     retrying: 0,
     unconfigured: 0,
@@ -190,53 +250,341 @@ async function sendOrgPosts(
 
   await settle(settled, at, report);
 
+  // Which channels this org has, resolved before the sends rather than after them: an
+  // org with no robot is no longer passed over — email is the floor — but which rows
+  // count as finished depends on which channels exist. `unconfigured` survives as
+  // information (there is no group to also tell), never as a skip.
+  const webhook = await webhookFor(org.id);
+  const channels: Channel[] = webhook === null ? ["email"] : ["email", "wecom"];
+
+  if (webhook === null) report.unconfigured = 1;
+
+  // What earlier runs already finished, per row — and, folded over each batch, per
+  // channel. A batch is done on a channel when every row it carries is, which after a
+  // partial morning (email out, robot refused) is exactly the state that must not be
+  // re-sent when the other transport retries.
+  const delivered = await deliveriesFor(
+    batches.flatMap((batch) => batch.live.map((row) => row.id)),
+  );
+  const doneBefore = (batch: TenderBatch, channel: Channel) =>
+    batch.live.every((row) => delivered.get(row.id)?.has(channel));
+  const completed = new Map<TenderBatch, Set<Channel>>(
+    batches.map((batch) => [
+      batch,
+      new Set(channels.filter((channel) => doneBefore(batch, channel))),
+    ]),
+  );
+
+  const members = await activeMembers(org.id);
+
+  // ---- Email, the floor. ----
+  //
+  // One paced batch per org here too, the Digest's emails last, for rule 4's reason
+  // restated per reader: the reminders are the messages somebody has to act on, and
+  // the summary is the context around them.
+  const emailOwed = batches
+    .filter((batch) => !completed.get(batch)!.has("email"))
+    .map((batch) => ({ batch, emails: reminderEmailsFor(batch, members) }));
+  // Rendered once per locale rather than once per member: forty members share at most
+  // two renderings, and only the address differs.
+  const digestRendered = new Map<Locale, ReturnType<typeof digestEmail>>();
+  const digestEmails: EmailMessage[] =
+    digest === null
+      ? []
+      : [...members.values()].map((member) => {
+          const rendered =
+            digestRendered.get(member.locale) ??
+            digestEmail({
+              locale: member.locale,
+              tenders: digest.lines,
+              link: digest.link,
+            });
+
+          digestRendered.set(member.locale, rendered);
+
+          return { to: member.email, ...rendered };
+        });
+  const emails = [
+    ...emailOwed.flatMap(({ emails: batchEmails }) => batchEmails),
+    ...digestEmails,
+  ];
+
+  // The transport throws on a blank key or sender rather than reporting success, and
+  // `/api/health` is where that configuration fault is caught (ADR-0034). What the
+  // throw must not cost is the *other* channel: a deployment upgraded before the email
+  // env landed still owes its group posts, so the fault is logged, every email-owed
+  // row is left for rule 1's retry — which recovers them for free once the env is set
+  // — and the morning carries on to the robot.
+  let emailOutcomes: SendOutcome[] | null;
+
+  try {
+    emailOutcomes = await sendEmails(emails, boundary.email);
+  } catch (cause) {
+    emailOutcomes = null;
+    console.warn(
+      `Email is not configured, so this run sent none: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+  }
+
+  if (emailOutcomes !== null) {
+    let cursor = 0;
+
+    for (const { batch, emails: batchEmails } of emailOwed) {
+      const outcomes = emailOutcomes.slice(cursor, cursor + batchEmails.length);
+
+      cursor += batchEmails.length;
+
+      // The channel closes unless something is worth retrying. Every acceptance is
+      // done; a non-retryable refusal will be refused identically tomorrow (ADR-0034),
+      // so queueing it would buy a daily failure and nothing else — it is logged below
+      // and the delivery closes. Granularity is the batch, deliberately: one reader's
+      // retryable failure holds the whole Tender's email leg open, and the readers who
+      // already got theirs are mailed again with it tomorrow — a duplicate nudge, the
+      // safe direction, and the same trade the settle-write failure documents.
+      if (outcomes.every((outcome) => outcome.ok || !outcome.retryable)) {
+        completed.get(batch)!.add("email");
+      }
+
+      // A batch with nobody reachable — every recipient Disabled, or a milestone with
+      // no audience at all — closes the same way: there is nothing this channel owes.
+      // On an org with a robot the group still hears the unmentioned post; on one
+      // without, this line is the only record that a deadline passed with nobody to
+      // tell, so it is written where an operator can find it.
+      if (batchEmails.length === 0) {
+        console.warn(
+          `Reminder for tender ${batch.facts.reference} has no reachable email recipient; the email channel closes with nothing sent.`,
+        );
+      }
+    }
+
+    // Reminder and Digest emails alike. The address, never the content: this line
+    // reaches the deployment's logs, and the message body is the org's business. A
+    // rejected address is the single most likely reason a customer says the reminders
+    // do not work (ADR-0034), so it is the one fact worth a line an operator can grep
+    // for — and a member whose only mail this morning was the summary is exactly the
+    // reader a reminder-only log would go quiet about. No claim about retrying: a
+    // rejection in a batch held open by a retryable neighbour is re-attempted with it,
+    // and tomorrow's Digest goes out regardless.
+    for (const [index, outcome] of emailOutcomes.entries()) {
+      if (outcome.ok || outcome.retryable) continue;
+
+      console.warn(`Email to ${emails[index].to} was rejected: ${outcome.detail}`);
+    }
+
+    // The Digest is the one message with no row to leave unsent. There is nothing to
+    // catch up: it is about today, and tomorrow's is the whole of what it had to say,
+    // one day fresher — so a refusal is counted and nothing is retried.
+    report.digests.email = emailOutcomes
+      .slice(cursor)
+      .filter((outcome) => outcome.ok).length;
+    report.messages.email = emails.length;
+  }
+
+  // ---- The Group Robot, the extra. ----
+  //
   // **One paced batch per org, the Digest last.** Not a second call, and this is the
   // acceptance criterion rather than tidiness: pacing keeps no state across calls
   // (ADR-0012), so a Digest posted separately would arrive with none of the ~3s
   // separation the reminders were just paced to respect — on precisely the morning a
   // catch-up run has spent the whole minute's budget on them.
-  //
-  // Last, because the reminders are the messages somebody has to act on and the Digest
-  // is the context around them.
-  const messages = [
-    ...batches.map((batch) => batch.message),
-    ...(digest === null ? [] : [digest]),
-  ];
+  let robotAccepted: TenderBatch[] = [];
 
-  if (messages.length === 0) return report;
+  if (webhook !== null) {
+    const robotOwed = batches.filter((batch) => !completed.get(batch)!.has("wecom"));
+    const messages = [
+      ...robotOwed.map((batch) => batch.message),
+      ...(digest === null ? [] : [digest.post]),
+    ];
+    const outcomes =
+      messages.length === 0
+        ? []
+        : await sendGroupMessages(webhook, messages, boundary.robot);
 
-  // Resolved after the work above, so an org with a full queue and no robot is reported
-  // as unconfigured rather than as a failed send — only one of those is worth retrying,
-  // and the fix for the other is one screen away.
-  const webhook = await webhookFor(org.id);
-  const owedRows = (owed: TenderBatch[]) =>
-    owed.reduce((total, batch) => total + batch.liveIds.length, 0);
+    // Rule 5: only what WeCom accepted is finished. Everything else is left exactly as
+    // it was, and rule 1's `<=` query picks it up again tomorrow. The reminders come
+    // first in the batch, so an outcome and a batch share an index.
+    robotAccepted = robotOwed.filter((_batch, index) => outcomes[index]?.ok);
 
-  if (webhook === null) {
-    report.retrying += owedRows(batches);
-    report.unconfigured = 1;
+    for (const batch of robotAccepted) completed.get(batch)!.add("wecom");
 
-    return report;
+    report.digests.wecom =
+      digest !== null && outcomes[robotOwed.length]?.ok === true ? 1 : 0;
+    report.messages.wecom = messages.length;
   }
 
-  const outcomes = await sendGroupMessages(webhook, messages, boundary);
+  // What this run finished on each channel, written before `sent` is touched: these
+  // rows are what stop tomorrow's retry of the *other* channel from re-sending this
+  // one. Failing to write one fails in the safe direction — a duplicate nudge, never
+  // a missed one — the same trade `settle` documents.
+  await recordDeliveries(
+    batches.filter(
+      (batch) => completed.get(batch)!.has("email") && !doneBefore(batch, "email"),
+    ),
+    "email",
+    org.id,
+    at,
+  );
+  await recordDeliveries(robotAccepted, "wecom", org.id, at);
 
-  // Rule 5: only what WeCom accepted is finished. Everything else is left exactly as it
-  // was, and rule 1's `<=` query picks it up again tomorrow. The reminders come first in
-  // the batch, so an outcome and a batch share an index.
-  const accepted = batches.filter((_batch, index) => outcomes[index]?.ok);
+  // The bell rows ride a milestone's **first completion** on any channel: a milestone
+  // whose rows already went out somewhere wrote its rows that morning, and one that
+  // failed retryably everywhere comes back tomorrow, rows and all. Judged per
+  // milestone rather than per batch, because a batch straddles runs: a
+  // client-submission row falling due days after the internal-quote rows were
+  // half-delivered still owes the Owner their first and only bell row. Completion
+  // rather than success on purpose — a channel closed by a rejected address settles
+  // its rows, and the bell row is then the only trace of the reminder anywhere, which
+  // is outcome-news's argument applied here: skipping it would leave the reader told
+  // by nothing at all.
+  await writeNotifications(
+    batches
+      .filter((batch) => completed.get(batch)!.size > 0)
+      .flatMap((batch) => {
+        const told = new Set(
+          batch.live
+            .filter((row) => (delivered.get(row.id)?.size ?? 0) > 0)
+            .map((row) => row.milestone),
+        );
 
-  await writeNotifications(accepted.flatMap((batch) => batch.notifications));
-  await settle(accepted.flatMap((batch) => batch.liveIds), at, report);
+        return batch.notifications.filter(
+          (row) => !told.has(row.type.slice("reminder:".length) as ReminderMilestone),
+        );
+      }),
+  );
 
-  report.messages = messages.length;
-  // The Digest is the one message with no row to leave unsent. There is nothing to
-  // catch up: it is about today, and tomorrow's is the whole of what it had to say, one
-  // day fresher — so a refusal is counted and nothing is retried.
-  report.digests = digest !== null && outcomes[batches.length]?.ok === true ? 1 : 0;
-  report.retrying += owedRows(batches.filter((batch) => !accepted.includes(batch)));
+  // A row settles only once every channel the org has is done with it — `sent` keeps
+  // its meaning of "nothing further is owed on this row" (ADR-0034). Everything else
+  // is deliberately left for rule 1's `<=` query, and the deliveries above are what
+  // make that retry surgical rather than a re-send of the whole morning.
+  const finished = batches.filter((batch) =>
+    channels.every((channel) => completed.get(batch)!.has(channel)),
+  );
+
+  await settle(
+    finished.flatMap((batch) => batch.live.map((row) => row.id)),
+    at,
+    report,
+  );
+
+  report.retrying += batches
+    .filter((batch) => !finished.includes(batch))
+    .reduce((total, batch) => total + batch.live.length, 0);
 
   return report;
+}
+
+/** Everybody in the org who can still be written to, with the locale their email reads in. */
+type Member = { email: string; locale: Locale };
+
+/**
+ * A **Disabled** user is sent nothing on any channel — revoking access revokes it
+ * everywhere — so they are absent from this map rather than filtered at each use. The
+ * address comes from the user row, which already carries a unique, non-null email; the
+ * locale is null until their first sign-in, and `defaultLocale` is what a null reads
+ * as, so an invited colleague who has never signed in is still reached in *some*
+ * language rather than silenced by a preference nobody has expressed.
+ */
+async function activeMembers(orgId: string): Promise<Map<string, Member>> {
+  const { data } = await createServiceClient()
+    .from("users")
+    .select("id, email, locale")
+    .eq("org_id", orgId)
+    .is("disabled_at", null);
+
+  return new Map(
+    (data ?? []).map((user) => [
+      user.id,
+      {
+        email: user.email as string,
+        locale: isLocale(user.locale) ? user.locale : defaultLocale,
+      },
+    ]),
+  );
+}
+
+/**
+ * One Tender's reminder emails: one per recipient, in their own locale, carrying only
+ * the milestone lines that address them — the email twin of the one collapsed group
+ * message, minus the halves that are somebody else's.
+ */
+function reminderEmailsFor(
+  batch: TenderBatch,
+  members: Map<string, Member>,
+): EmailMessage[] {
+  return [...batch.recipients].flatMap(([userId, share]) => {
+    const member = members.get(userId);
+
+    if (member === undefined) return [];
+
+    return [
+      {
+        to: member.email,
+        ...reminderEmail({
+          locale: member.locale,
+          reference: batch.facts.reference,
+          client: batch.facts.client,
+          title: batch.facts.title,
+          milestones: share.milestones,
+          items: share.items,
+          link: batch.facts.link,
+        }),
+      },
+    ];
+  });
+}
+
+/** Which channels have already succeeded, per still-owed reminder row. */
+async function deliveriesFor(
+  reminderIds: string[],
+): Promise<Map<string, Set<Channel>>> {
+  if (reminderIds.length === 0) return new Map();
+
+  const { data } = await createServiceClient()
+    .from("reminder_deliveries")
+    .select("reminder_id, channel")
+    .in("reminder_id", reminderIds)
+    .overrideTypes<{ reminder_id: string; channel: Channel }[], { merge: false }>();
+
+  const delivered = new Map<string, Set<Channel>>();
+
+  for (const row of data ?? []) {
+    delivered.set(
+      row.reminder_id,
+      (delivered.get(row.reminder_id) ?? new Set()).add(row.channel),
+    );
+  }
+
+  return delivered;
+}
+
+/**
+ * Mark every row of these batches delivered on one channel, as at `at`.
+ *
+ * Upserted with duplicates ignored rather than inserted: a batch's rows can straddle
+ * runs — yesterday's rows delivered, today the Tender owes one more and the batch is
+ * re-sent whole — and refusing the whole write over the rows that were already there
+ * would lose the ones that were not.
+ */
+async function recordDeliveries(
+  batches: TenderBatch[],
+  channel: Channel,
+  orgId: string,
+  at: Date,
+): Promise<void> {
+  const rows = batches.flatMap((batch) =>
+    batch.live.map((row) => ({
+      reminder_id: row.id,
+      channel,
+      org_id: orgId,
+      delivered_at: at.toISOString(),
+    })),
+  );
+
+  if (rows.length === 0) return;
+
+  await createServiceClient()
+    .from("reminder_deliveries")
+    .upsert(rows, { onConflict: "reminder_id,channel", ignoreDuplicates: true });
 }
 
 /**
@@ -399,6 +747,7 @@ function tenderMessage(
   const milestones: DueMilestone[] = [];
   const mentions: string[] = [];
   const notifications: NotificationRow[] = [];
+  const shares = new Map<string, RecipientShare>();
 
   for (const milestone of owed) {
     const date = dateFor(milestone, deadlines(tender));
@@ -413,22 +762,49 @@ function tenderMessage(
 
     // Everybody this line could have been addressed to has answered, so it would tell
     // the group nothing. A Tender with nobody to address at all is the opposite case and
-    // still posts, unmentioned: nobody working it is the news.
+    // still posts, unmentioned: nobody working it is the news — news the group can hear
+    // and email cannot, because an email with no addressee is not a message.
     if (recipients.length === 0 && addressable.length > 0) continue;
 
-    milestones.push({
+    const line: DueMilestone = {
       milestone,
       date,
       // Negative on `submission_missed`, whose whole point is a date already behind us —
       // and which is the one milestone whose line does not read this.
       daysLeft: daysBetween(today, date),
-    });
+    };
+
+    milestones.push(line);
 
     mentions.push(
       ...recipients
         .map((userId) => userids.get(userId) ?? "")
         .filter((userid) => userid !== ""),
     );
+
+    // The same audience, kept by identity for the email transport: each reader gets
+    // the lines that address *them*, where the group message carries every line and
+    // one @-list. For the internal quote deadline the share also names the Items this
+    // person still owes — the same set their bell rows point at.
+    for (const userId of recipients) {
+      const share = shares.get(userId) ?? { milestones: [], items: [] };
+
+      share.milestones.push(line);
+
+      if (milestone === "internal_quote") {
+        share.items.push(
+          ...tender.items
+            .filter(
+              (item) =>
+                sourcing.assignees.get(item.id)?.includes(userId) &&
+                !sourcing.noSupplierFound.get(item.id)?.has(userId),
+            )
+            .map((item) => item.product_name),
+        );
+      }
+
+      shares.set(userId, share);
+    }
 
     notifications.push(
       ...notificationsFor(orgId, tender, milestone, date, recipients, sourcing),
@@ -439,6 +815,10 @@ function tenderMessage(
   // it is the group's attention spent on a line with no fact in it.
   if (milestones.length === 0) return null;
 
+  // The Tender, which is the only destination the collapsing above leaves: one message
+  // covers every milestone this Tender owes and every day the run missed.
+  const link = appLinks().tender(tender.id);
+
   return {
     message: reminderMessage({
       reference: tender.reference,
@@ -448,11 +828,16 @@ function tenderMessage(
       // Deduped: an Owner who is also the only Assignee owing a Quote would otherwise be
       // @-ed twice in one message for two different reasons.
       mentions: [...new Set(mentions)],
-      // The Tender, which is the only destination the collapsing above leaves: one
-      // message covers every milestone this Tender owes and every day the run missed.
-      link: appLinks().tender(tender.id),
+      link,
     }),
-    liveIds: live.map((row) => row.id),
+    recipients: shares,
+    facts: {
+      reference: tender.reference,
+      client: tender.client_name,
+      title: tender.title,
+      link,
+    },
+    live,
     notifications,
   };
 }
@@ -522,7 +907,7 @@ function notificationsFor(
  * rather than three more branches spread across the file.
  *
  * **`audience` is said twice: here, and in the message.** Since #99 each milestone line in
- * `@/lib/wecom/messages.ts` names the role it is addressed to — 参与人 for the internal
+ * `@/lib/messaging/messages.ts` names the role it is addressed to — 参与人 for the internal
  * quote deadline, 负责人 for the other three — so that somebody @-ed about a Tender owing
  * two milestones can tell which half is theirs. **Changing an `audience` below means
  * changing that sentence too**, or the message @s one person and instructs another.
@@ -682,7 +1067,7 @@ async function tendersById(ids: string[]): Promise<Map<string, TenderRow>> {
     .select(
       "id, reference, client_name, title, internal_quote_deadline, " +
         "client_submission_deadline, expected_decision_date, submitted_at, " +
-        "owner_user_id, items:tender_items(id, outcome)",
+        "owner_user_id, items:tender_items(id, outcome, product_name)",
     )
     .in("id", ids)
     .overrideTypes<TenderRow[], { merge: false }>();

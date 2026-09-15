@@ -125,6 +125,7 @@ describe("the v1 schema", () => {
     "no_supplier_found",
     "fx_rates",
     "reminders",
+    "reminder_deliveries",
     "notifications",
   ];
 
@@ -728,6 +729,74 @@ describe("reminders", () => {
     const { error } = await service
       .from("reminders")
       .insert(reminder({ milestone: "sourcing_overdue", days_before: 0 }));
+
+    expect(error).not.toBeNull();
+  });
+});
+
+describe("reminder_deliveries", () => {
+  // A reminder of this suite's own, so the delivery rows here cannot collide with the
+  // ones the send suite's runs write against its orgs.
+  let reminderId = "";
+
+  beforeAll(async () => {
+    reminderId = await insert("reminders", {
+      org_id: fixture.orgId,
+      tender_id: fixture.tenderId,
+      milestone: "internal_quote",
+      days_before: 3,
+      due_date: "2026-08-07",
+      // Settled already, so the send suite's runs — which sweep every org, this
+      // fixture's included, and write email deliveries as they go (ADR-0034) — can
+      // never race the inserts below for the same primary key.
+      sent: true,
+    });
+  });
+
+  function delivery(overrides: Record<string, unknown> = {}) {
+    return {
+      reminder_id: reminderId,
+      channel: "email",
+      org_id: fixture.orgId,
+      delivered_at: "2026-08-10T01:00:00Z",
+      ...overrides,
+    };
+  }
+
+  // First, while the table holds nothing for this reminder — after a success the same
+  // row would trip the primary key before the null could be noticed.
+  it("requires the instant — the run passes it in, the database never invents one", async () => {
+    const { error } = await service
+      .from("reminder_deliveries")
+      .insert(delivery({ delivered_at: null }));
+
+    expect(error?.message).toContain("delivered_at");
+  });
+
+  it("records one Reminder's success on one channel", async () => {
+    const { error } = await service.from("reminder_deliveries").insert(delivery());
+
+    expect(error).toBeNull();
+  });
+
+  it("refuses a second success on the same channel — that is what stops a re-send", async () => {
+    const { error } = await service.from("reminder_deliveries").insert(delivery());
+
+    expect(error?.message).toContain("reminder_deliveries_pkey");
+  });
+
+  it("keeps the channels apart — the other transport's success is its own row", async () => {
+    const { error } = await service
+      .from("reminder_deliveries")
+      .insert(delivery({ channel: "wecom" }));
+
+    expect(error).toBeNull();
+  });
+
+  it("rejects a channel that is neither email nor wecom", async () => {
+    const { error } = await service
+      .from("reminder_deliveries")
+      .insert(delivery({ channel: "line" }));
 
     expect(error).not.toBeNull();
   });

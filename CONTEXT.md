@@ -241,7 +241,6 @@ that would need a price is still a message that should be a link.
 _Label_: not named on a screen as a channel — a Reminder is a Reminder, and which
 transport carried it is not the reader's business.
 _Avoid_: notification email, mail, transactional email, alerts
-_Not built yet_: the Group Robot is still the only transport in the code.
 
 **Group Robot**:
 The WeCom webhook a notification may *also* leave through — one URL, posting into one
@@ -443,7 +442,9 @@ _Avoid_: admin, owner, superuser, manager
 
 **Invite**:
 The email an Org Admin sends to bring someone into *their* organisation. The only way a
-Membership of an existing organisation is ever created, and the only email the app sends.
+Membership of an existing organisation is ever created. It leaves through Supabase
+Auth's own mailer rather than the app's Email transport — the one email that does,
+since ADR-0034 made Email the floor for Reminders, the Digest and Outcome News.
 Scanning a WeCom QR code never creates an account. Signing up creates a new, empty
 organisation and never joins an existing one — so no stranger can put themselves inside
 another org's prices (ADR-0017). An Invite grants Membership only; becoming an Org Admin
